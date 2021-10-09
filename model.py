@@ -3,8 +3,8 @@
 # system.
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
-from dataclasses import dataclass
 import numpy as np
+np.set_printoptions(precision=4, suppress=True)
 
 ########## Classes #####################################################
 class SwarmSpecs:
@@ -38,15 +38,18 @@ class Swarm:
     """This class holds current state of swarm of milirobots."""
     
     def __init__(self, position, angle, mode, specs: SwarmSpecs):
-        if (position.shape[0]//2 != specs.n_robot):
+        self.specs = specs
+        self.reset_state(position, angle, mode)
+
+    def reset_state(self,position, angle, mode):
+        if (position.shape[0]//2 != self.specs.n_robot):
             error_message = """Position does not match number of the robots."""
             raise ValueError(error_message)
         self.position = position
         self.angle = angle
         self.mode = mode
-        self.specs = specs
-        
-    def update_state(self, u, is_rotation = None):
+
+    def update_state(self, u, is_rotation = False):
         """This function updates the position, angle, and mode of swarm
         of milirobots based on given input and mode.
         The function receives up to two inputs.
@@ -59,7 +62,7 @@ class Swarm:
         u = u.astype(float)
         rotations = 0
         B = self.specs.B
-        if is_rotation is None:
+        if is_rotation is False:
             mode = self.mode
         else:
             mode = 0
@@ -75,20 +78,104 @@ class Swarm:
 
         u[0] = -r*np.sin(theta)
         u[1] = r*np.cos(theta)
+        # Update states of swarm of milirobots
         self.position = self.position + np.dot(B[mode,:,:],u)
         self.angle = theta
         if mode == 0:
             # If there are rotations, calculate mode after rotations.
-            self.mode = (self.mode + rotations - 1)%(self.specs.n_mode - 1) + 1
+            self.mode = int((self.mode + rotations - 1)%(self.specs.n_mode - 1) + 1)
+    
+    def simulate(self, input_series, position = None,
+                 angle = None, mode = None):
+        if (input_series.ndim != 2):
+            raise ValueError('Input series should be a 2D numpy array')
+        if position is None:
+            position = self.position
+        if angle is None:
+            angle = self.angle
+        if mode is None:
+            mode = self.mode
+        
+        self.reset_state(position, angle, mode)
+        Position = self.position.reshape(-1,1)
+        Angle = self.angle
+        Mode = self.mode
+        Input = np.array([], dtype=float).reshape(input_series.shape[0],0)
+
+        for section in range(input_series.shape[1]):
+            current_r = input_series[0,section]
+            current_angle = input_series[1,section]
+            current_input_mode = input_series[2,section]
+            steps = int(current_r//self.specs.rotation_distance)
+            rem_r =  current_r%self.specs.rotation_distance
+            if current_input_mode == 0:
+                is_rotation = True
+            else: 
+                is_rotation = False
+            # Implementing current input section in smaller steps
+            for step in range(1,steps+1):
+                step_input = np.array([self.specs.rotation_distance,
+                                       current_angle, current_input_mode]).T
+                Input = np.hstack((Input,step_input.reshape(-1,1)))
+                # Applying current step
+                self.update_state(step_input[:2], is_rotation)
+                Position = np.hstack((Position,self.position.reshape(-1,1)))
+                Angle = np.hstack((Angle,self.angle))
+                Mode = np.hstack((Mode,self.mode))
+            # Implementing remainder of section
+            step_input = np.array([rem_r,
+                                   current_angle, current_input_mode]).T
+            Input = np.hstack((Input,step_input.reshape(-1,1)))
+
+            self.update_state(step_input[:2], is_rotation)
+            Position = np.hstack((Position,self.position.reshape(-1,1)))
+            Angle = np.hstack((Angle,self.angle))
+            Mode = np.hstack((Mode,self.mode))
+            # Changing to next mode if needed
+            if (section+1 < input_series.shape[1]):
+                # If this is not last section.
+                if (current_input_mode != input_series[2, section +1] and
+                     input_series[2, section +1] != 0):
+                    # If there was a mode change, go to next mode.
+                    is_rotation = True
+                    step_input = np.array([self.specs.rotation_distance,
+                                           current_angle, 0]).T
+                    Input = np.hstack((Input,step_input.reshape(-1,1)))
+                    print(self.position)
+                    self.update_state(step_input[:2], is_rotation)
+                    print(self.position)
+                    Position = np.hstack((Position,
+                                          self.position.reshape(-1,1)))
+                    Angle = np.hstack((Angle,self.angle))
+                    Mode = np.hstack((Mode,self.mode))
+        mode_change_index = np.where(Input[2,:-1] != Input[2,1:])[0]+1
+        return (Position, Angle, Mode, Input, mode_change_index)
 
 
 ########## test section ################################################
 if __name__ == '__main__':
     swarm_specs = SwarmSpecs(np.array([[9,7,5,3],[3,5,7,9],[3,2,6,9]]), 5, 10)
-    swarm = Swarm(np.array([0,0,1,1,2,2,3,3]), 10, 2.0, swarm_specs)
-    print(swarm.specs.pivot_seperation)
-    print(swarm.specs.beta)
-    print(swarm.specs.B)
-    print(swarm.mode)
-    swarm.update_state(np.array([25,10]),1)
-    print(swarm.mode)
+    swarm = Swarm(np.array([0,0,10,0,20,0,30,0]), 0, 1, swarm_specs)
+    #input_series = np.array([[100,np.pi/4,1]]).T
+    input_series = np.array([[100,np.pi/4,1],
+                             [53.2, 4.15, 2],
+                             [3.251,5.325,2],
+                             [35.214,.354,3],
+                             [50,3.24,1]]).T
+    sim = swarm.simulate(input_series)
+    #print(swarm.specs.pivot_seperation)
+    #print(swarm.specs.beta)
+    #print(swarm.specs.B)
+    #print(swarm.mode)
+    #print(swarm.specs.beta)
+    print(sim[4])
+    print(sim[0][:,np.concatenate(([0],sim[4],[-1]))].T)
+    #print(sim[0][:,[19,20,21,22]].T)
+    #print(sim[4])
+    #print(np.floor(swarm.specs.rotation_distance/swarm.specs.rotation_distance))
+    #print(sim[0][:,-1])
+    #swarm.reset_state(sim[0][:,-1], sim[1][-1],sim[2][-1])
+    #u = np.array([swarm.specs.rotation_distance,swarm.angle,0])
+    #swarm.update_state(u[:2],True)
+    #print(swarm.position)
+
