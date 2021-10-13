@@ -237,7 +237,37 @@ class Swarm:
         # plot the figure
         self.__simplot_plot(ax, plot_length)
         return fig, ax
+    
+    def __animate(self, i, ax):
+        ax.clear()
+        self.__simplot_set(ax)
+        self.__simplot_plot(ax, i)
 
+    def simanimation(self,input_series, anim_length = 10000,
+                     position = None,
+                    angle = None, mode = None):
+        """This function produces an animation from swarm transition
+        for a given logical input series and specified length."""
+        if (input_series.ndim != 2):
+            raise ValueError('Input series should be a 2D numpy array')
+        if position is None:
+            position = self.position
+        if angle is None:
+            angle = self.angle
+        if mode is None:
+            mode = self.mode
+        # Update the states
+        self.reset_state(position, angle, mode)
+        # Simulate the system
+        self.simulate(input_series)
+        anim_length = min(anim_length, self.__simulate_result[0].shape[1])
+        # Set the figure properties
+        fig, ax = plt.subplots(constrained_layout=True)
+        self.__simplot_set(ax)
+        # Animating
+        anim = animation.FuncAnimation(fig, self.__animate, fargs=(ax,),
+                              interval=500, frames=range(1,anim_length+1))
+        return anim
 
 ########## test section ################################################
 if __name__ == '__main__':
@@ -268,6 +298,6 @@ if __name__ == '__main__':
     #swarm.update_state(u[:2],True)
     #print(swarm.position)
     length = 1000
-    swarm.simplot(input_series,length)
-    #anim = swarm.simanimation(input_series,length)
+    #swarm.simplot(input_series,length)
+    anim = swarm.simanimation(input_series,length)
 
