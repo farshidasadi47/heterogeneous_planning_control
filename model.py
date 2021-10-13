@@ -113,15 +113,19 @@ class Swarm:
         Input = np.array([], dtype=float).reshape(input_series.shape[0],0)
 
         for section in range(input_series.shape[1]):
-            current_r = input_series[0,section]
-            current_angle = input_series[1,section]
             current_input_mode = input_series[2,section]
-            steps = int(current_r//self.specs.rotation_distance)
-            rem_r =  current_r%self.specs.rotation_distance
             if current_input_mode == 0:
                 is_rotation = True
             else: 
                 is_rotation = False
+                if current_input_mode != self.mode:
+                    print("Input series section: {:02d} has incompatible mode".
+                          format(section + 1))
+                    break
+            current_r = input_series[0,section]
+            current_angle = input_series[1,section]
+            steps = int(current_r//self.specs.rotation_distance)
+            rem_r =  current_r%self.specs.rotation_distance
             # Implementing current input section in smaller steps
             for step in range(1,steps+1):
                 step_input = np.array([self.specs.rotation_distance,
@@ -141,7 +145,7 @@ class Swarm:
             Position = np.hstack((Position,self.position.reshape(-1,1)))
             Angle = np.hstack((Angle,self.angle))
             Mode = np.hstack((Mode,self.mode))
-            # Changing to next mode if needed
+            """ # Changing to next mode if needed
             if (section+1 < input_series.shape[1]):
                 # If this is not last section.
                 if (current_input_mode != input_series[2, section +1] and
@@ -155,13 +159,13 @@ class Swarm:
                     Position = np.hstack((Position,
                                           self.position.reshape(-1,1)))
                     Angle = np.hstack((Angle,self.angle))
-                    Mode = np.hstack((Mode,self.mode))
+                    Mode = np.hstack((Mode,self.mode)) """
         mode_change_index = np.where(Input[2,:-1] != Input[2,1:])[0]+1
         mode_change_index = np.concatenate(([0],mode_change_index,
                                             [Position.shape[1]-1]))
         self.__simulate_result = (Position, Angle, Mode,
                                   Input, mode_change_index)
-    
+
     def __simplot_set(self, ax):
         """Sets the plot configuration. """
         self.__colors = ['k','r','b','g','m']
@@ -231,6 +235,7 @@ class Swarm:
         self.reset_state(position, angle, mode)
         # Simulate the system
         self.simulate(input_series)
+        print(self.__simulate_result[0][:,self.__simulate_result[4]].T)
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
         self.__simplot_set(ax)
@@ -276,8 +281,11 @@ if __name__ == '__main__':
     #input_series = np.array([[100,np.pi/4,1]]).T
     input_series = np.array([[50,np.pi/4,1],
                              [100,-np.pi/2,1],
+                             [5,-np.pi/2,0],
                              [20,np.pi,2],
+                             [5,np.pi,0],
                              [25,np.pi/2,3],
+                             [5,np.pi/2,0],
                              [20,np.pi,1],
                              ]).T
     #sim = swarm.simulate(input_series)
@@ -298,6 +306,7 @@ if __name__ == '__main__':
     #swarm.update_state(u[:2],True)
     #print(swarm.position)
     length = 1000
-    #swarm.simplot(input_series,length)
-    anim = swarm.simanimation(input_series,length)
+    swarm.simplot(input_series,length)
+    #print(swarm.__simulate_result[0][:,swarm.__simulate_result[4]].T)
+    #anim = swarm.simanimation(input_series,length)
 
