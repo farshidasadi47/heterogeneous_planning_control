@@ -19,6 +19,7 @@ class Planner():
         self.swarm = swarm
         self.robot_combinations = self.__set_robot_combinations()
         self.mode_sequence = self.__set_mode_sequence()
+        self.d_min = 10
         self.x_final = None
         self.n_inner = n_inner
         self.n_outer = n_outer
@@ -83,9 +84,25 @@ class Planner():
             P[2*robot,1] = ca.SX.sym('xf_{:02d}'.format(robot))
             P[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
         return X, U, P
+    
+    def f(self,state,control,mode):
+        """Defines swarm transition for CASADI."""
+        B = self.swarm.specs.B
+        next_state = state + ca.mtimes(B[mode,:,:],control)
+        return next_state
 
-    def set_constraint(self):
-        pass
+    def build_optimization(self):
+        """This function builds optimization objective, constraints,
+        and var bounds."""
+        X = self.X
+        U = self.U
+        P = self.P
+        d_min  = self.d_min
+        rotation_distance = self.swarm.specs.rotation_distance
+        obj = 0
+        g = []
+        g += [P[:,0] - X[:,0]]
+        return g
 
 ########## test section ################################################
 if __name__ == '__main__':
@@ -98,10 +115,17 @@ if __name__ == '__main__':
     #print(planner.swarm.specs.B)
     #print(planner.swarm.specs.beta)
     #print(planner.robot_combinations)
-    #print(planner.mode_sequence)
-    print(planner.X.T)
-    print(planner.U.T)
-    print(planner.P.T)
+    print(planner.mode_sequence)
+    print(planner.build_optimization())
+    #print(planner.X.T)
+    #print(planner.U.T)
+    #print(planner.P.T)
+    
+    x = ca.SX.sym('x',4*2)
+    u = ca.SX.sym('u',2)
+    i = 2
+    print(planner.swarm.specs.B[i,:,:])
+    print(planner.f(x,u,i))
 """     print(planner.swarm.specs.n_robot)
     print(planner.swarm.specs.n_mode)
     print(planner.n_inner)
