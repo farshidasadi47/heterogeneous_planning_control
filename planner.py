@@ -26,8 +26,7 @@ class Planner():
         self.lb_space_x = -105
         self.ub_space_y = 85
         self.lb_space_y = -85
-        self.X, self.U = self.__construct_vars()
-        self.P = None
+        self.X, self.U, self.P = self.__construct_vars()
     
     def set_space_limit(self, ubx, lbx, uby, lby):
         """Sets space boundary limits and updates the bands in
@@ -59,6 +58,7 @@ class Planner():
         n_robot = self.swarm.specs.n_robot
         X = ca.SX.sym('x',2*n_robot,n_outer*(n_inner+1)*(n_mode-1))
         U = ca.SX.sym('u',2,n_outer*(n_inner+1)*(n_mode-1))
+        P = ca.SX.sym('p',2*n_robot,2)
         counter = 0
         for i_outer in range(n_outer):
             for mode in range(1,n_mode):
@@ -77,7 +77,12 @@ class Planner():
                     U[0,counter] = ca.SX.sym('r_'+varstr+rob_str)
                     U[1,counter] = ca.SX.sym('t_'+varstr+rob_str)
                     counter += 1
-        return X, U
+        for robot in range(n_robot):
+            P[2*robot,0] = ca.SX.sym('xi_{:02d}'.format(robot))
+            P[2*robot + 1,0] = ca.SX.sym('yi_{:02d}'.format(robot))
+            P[2*robot,1] = ca.SX.sym('xf_{:02d}'.format(robot))
+            P[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
+        return X, U, P
 
     def set_constraint(self):
         pass
@@ -96,6 +101,7 @@ if __name__ == '__main__':
     #print(planner.mode_sequence)
     print(planner.X.T)
     print(planner.U.T)
+    print(planner.P.T)
 """     print(planner.swarm.specs.n_robot)
     print(planner.swarm.specs.n_mode)
     print(planner.n_inner)
