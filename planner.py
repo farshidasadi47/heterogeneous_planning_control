@@ -141,28 +141,59 @@ class Planner():
         g_shooting += [P[:,0] - X[:,0]]
         g_inter_robot = []
         counter = 0
+        counter_u = 0
         for i_outer in range(n_outer):
-            if i_outer == n_outer:
-                n_inner = n_inner -1
             for mode in range(1,n_mode):
-                mode = mode_sequence[mode]
+                # Maps to mode sequence
+                mode_mapped = mode_sequence[mode]
                 for i_inner in range(n_inner):
                     st = X[:,counter]
+                    control = U[:,counter_u]
                     st_next = X[:,counter+1]
-                    control = U[:,counter]
+                    g_shooting += self.get_constraint_shooting(st_next, st,
+                                                               control,
+                                                               mode_mapped)
+                    counter += 1
+                    counter_u += 1
+                if mode < n_mode -1:
+                    # If this is not last mode of this loop, then
+                    # Take one rotation in the last input direction.
+                    # else do nothing and proceed to outer loop transition.
+                    mode = 0
+                    st = X[:,counter]
+                    control[0] = rotation_distance
+                    st_next = X[:,counter+1]
                     g_shooting += self.get_constraint_shooting(st_next, st,
                                                                control, mode)
                     counter += 1
-                mode = 0
 
-        return 0
+            if (i_outer < n_outer -1):
+                # If this is not the last outer loop
+                # Take multiple of n_mode-1 rotations plus one rotation
+                mode = 0
+                st = X[:,counter]
+                control = U[:,counter_u]
+                control[0] = ((n_mode-1)*rotation_distance*control[0]
+                              + rotation_distance)
+                st_next = X[:,counter+1]
+                g_shooting += self.get_constraint_shooting(st_next, st,
+                                                           control, mode)
+                counter += 1
+                counter_u += 1
+        # Take last step
+        st = X[:,counter]
+        control = U[:,counter_u]
+        control[0] = (n_mode-1)*rotation_distance*control[0]+rotation_distance
+        st_next = P[:,1]
+        g_shooting += self.get_constraint_shooting(st_next, st,
+                                                   control, mode)
+        return g_shooting
 
 ########## test section ################################################
 if __name__ == '__main__':
-    swarm_specs = model.SwarmSpecs(np.array([[9,7,5,3],[3,5,7,9],[3,2,6,9]]),
+    swarm_specs = model.SwarmSpecs(np.array([[9,7,5],[5,7,9]]),
                                    5, 10)
-    swarm = model.Swarm(np.array([0,0,10,0,20,0,30,0]), 0, 1, swarm_specs)
-    swarm.mode = 3
+    swarm = model.Swarm(np.array([0,0,10,0,20,0]), 0, 1, swarm_specs)
     planner = Planner(swarm)
 
     #print(planner.swarm.position)
@@ -171,16 +202,18 @@ if __name__ == '__main__':
     #print(planner.robot_combinations)
     #print(planner.mode_sequence)
     #print(planner.build_optimization())
-    print(planner.X.T)
-    print(planner.U.T)
-    print(planner.P.T)
-    
+    #print(planner.X.T)
+    #print(planner.U.T)
+    #print(planner.P.T)
+    g_shooting = planner.build_optimization()
+    print(g_shooting[12])
+    #print(len(g_shooting))
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
     #i = 2
     #print(planner.swarm.specs.B[i,:,:])
     #print(planner.f(x,u,i))
-    print(planner.swarm.specs.n_robot)
-    print(planner.swarm.specs.n_mode)
-    print(planner.n_inner)
-    print(planner.n_outer)
+    #print(planner.swarm.specs.n_robot)
+    #print(planner.swarm.specs.n_mode)
+    #print(planner.n_inner)
+    #print(planner.n_outer)
