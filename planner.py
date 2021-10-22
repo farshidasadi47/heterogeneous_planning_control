@@ -59,12 +59,16 @@ class Planner():
         n_outer = self.n_outer
         n_mode = self.swarm.specs.n_mode
         n_robot = self.swarm.specs.n_robot
+        mode_sequence = self.mode_sequence
         X = ca.SX.sym('x',2*n_robot,n_outer*(n_inner+1)*(n_mode-1))
-        U = ca.SX.sym('u',2,n_outer*(n_inner+1)*(n_mode-1))
+        U = ca.SX.sym('u',2,n_outer*((n_inner)*(n_mode-1) + 1))
         P = ca.SX.sym('p',2*n_robot,2)
         counter = 0
+        counter_u = 0
         for i_outer in range(n_outer):
             for mode in range(1,n_mode):
+                # Maps to current mode sequence.
+                mode = mode_sequence[mode]
                 for i_inner in range(n_inner+1):
                     varstr ='{:02d}_{:02d}_{:02d}'.format(i_outer,mode,i_inner)
                     for robot in range(n_robot):
@@ -72,14 +76,19 @@ class Planner():
                         X[2*robot,counter] = ca.SX.sym('x_'+varstr+rob_str)
                         X[2*robot + 1,counter] = ca.SX.sym('y_'+varstr+rob_str)
                     if i_inner == n_inner:
-                    # if this is last steps of this mode use rotation
-                        i_inner = 0
-                        mode = 0
-                        varstr ='{:02d}_{:02d}_{:02d}'.format(i_outer,
-                                                              mode,i_inner)
-                    U[0,counter] = ca.SX.sym('r_'+varstr+rob_str)
-                    U[1,counter] = ca.SX.sym('t_'+varstr+rob_str)
+                    # if this is last steps of this mode, rotate for one
+                    # step and only consider resulted X
+                        counter += 1
+                        break
+                    U[0,counter_u] = ca.SX.sym('r_'+varstr)
+                    U[1,counter_u] = ca.SX.sym('t_'+varstr)
                     counter += 1
+                    counter_u += 1
+            varstr = '{:02d}_{:02d}_00'.format(i_outer,0)
+            U[0,counter_u] = ca.SX.sym('r_'+varstr)
+            U[1,counter_u] = ca.SX.sym('t_'+varstr)
+            counter_u += 1
+
         for robot in range(n_robot):
             P[2*robot,0] = ca.SX.sym('xi_{:02d}'.format(robot))
             P[2*robot + 1,0] = ca.SX.sym('yi_{:02d}'.format(robot))
@@ -153,24 +162,25 @@ if __name__ == '__main__':
     swarm_specs = model.SwarmSpecs(np.array([[9,7,5,3],[3,5,7,9],[3,2,6,9]]),
                                    5, 10)
     swarm = model.Swarm(np.array([0,0,10,0,20,0,30,0]), 0, 1, swarm_specs)
+    swarm.mode = 3
     planner = Planner(swarm)
 
     #print(planner.swarm.position)
     #print(planner.swarm.specs.B)
     #print(planner.swarm.specs.beta)
     #print(planner.robot_combinations)
-    print(planner.mode_sequence)
-    print(planner.build_optimization())
-    #print(planner.X.T)
-    #print(planner.U.T)
-    #print(planner.P.T)
+    #print(planner.mode_sequence)
+    #print(planner.build_optimization())
+    print(planner.X.T)
+    print(planner.U.T)
+    print(planner.P.T)
     
-    x = ca.SX.sym('x',4*2)
-    u = ca.SX.sym('u',2)
-    i = 2
-    print(planner.swarm.specs.B[i,:,:])
-    print(planner.f(x,u,i))
-"""     print(planner.swarm.specs.n_robot)
+    #x = ca.SX.sym('x',4*2)
+    #u = ca.SX.sym('u',2)
+    #i = 2
+    #print(planner.swarm.specs.B[i,:,:])
+    #print(planner.f(x,u,i))
+    print(planner.swarm.specs.n_robot)
     print(planner.swarm.specs.n_mode)
     print(planner.n_inner)
-    print(planner.n_outer) """
+    print(planner.n_outer)
