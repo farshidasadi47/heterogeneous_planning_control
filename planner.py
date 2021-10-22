@@ -17,7 +17,7 @@ class Planner():
 
     def __init__(self, swarm: model.Swarm, n_inner = 2, n_outer = 2):
         self.swarm = swarm
-        self.robot_combinations = self.__set_robot_combinations()
+        self.robot_pairs = self.__set_robot_pairs()
         self.mode_sequence = self.__set_mode_sequence()
         self.d_min = 10
         self.x_final = None
@@ -37,11 +37,11 @@ class Planner():
         self.ub_space_y = uby
         self.lb_space_y = lby
     
-    def __set_robot_combinations(self):
-        """Gives possible robot combinations for constraints
+    def __set_robot_pairs(self):
+        """Gives possible unique robot pairs for constraints
         construction."""
-        robot_combinations = combinations(range(self.swarm.specs.n_robot),2)
-        return list(robot_combinations)
+        robot_pairs = combinations(range(self.swarm.specs.n_robot),2)
+        return list(robot_pairs)
     
     def __set_mode_sequence(self):
         """Gives the current mode sequence."""
@@ -52,7 +52,9 @@ class Planner():
         return list(mode_sequence)
     
     def __construct_vars(self):
-        """Constructing casadi symbolic variables for optimization."""
+        """Constructing casadi symbolic variables for optimization.
+        
+        """
         n_inner = self.n_inner
         n_outer = self.n_outer
         n_mode = self.swarm.specs.n_mode
@@ -91,18 +93,60 @@ class Planner():
         next_state = state + ca.mtimes(B[mode,:,:],control)
         return next_state
 
+    def get_constraint_inter_robot(self,x,u):
+        """Returns inter-robot constraints.
+        
+        It uses u = [r, theta] as input."""
+        g = []
+        dm = self.d_min
+        uh = ca.vertcat(-ca.sin(u[1]), ca.cos(u[1]))
+        for pair in self.robot_pairs:
+            zi = x[2*pair[0]:2*pair[0]+2]
+            zj = x[2*pair[1]:2*pair[1]+2]
+            g += [ca.dot(zi-zj,zi-zj) - ca.dot(zi-zj,uh) - dm**2]
+        return g
+    
+    def get_constraint_shooting(self,x_next, x, u, mode):
+        """Returns constraint resulted from multiple shooting."""
+        B = self.swarm.specs.B[mode,:,:]
+        ur = ca.vertcat(-u[0]*ca.sin(u[1]), u[0]*ca.cos(u[1]))
+        g = []
+        g += [x_next - x - ca.mtimes(B,ur)]
+        return g
+
     def build_optimization(self):
         """This function builds optimization objective, constraints,
         and var bounds."""
+        mode_sequence = self.mode_sequence
+        n_mode = self.swarm.specs.n_mode
+        n_robot = self.swarm.specs.n_robot
+        n_inner = self.n_inner
+        n_outer = self.n_outer
         X = self.X
         U = self.U
         P = self.P
         d_min  = self.d_min
         rotation_distance = self.swarm.specs.rotation_distance
         obj = 0
-        g = []
-        g += [P[:,0] - X[:,0]]
-        return g
+        g_shooting = []
+        g_shooting += [P[:,0] - X[:,0]]
+        g_inter_robot = []
+        counter = 0
+        for i_outer in range(n_outer):
+            if i_outer == n_outer:
+                n_inner = n_inner -1
+            for mode in range(1,n_mode):
+                mode = mode_sequence[mode]
+                for i_inner in range(n_inner):
+                    st = X[:,counter]
+                    st_next = X[:,counter+1]
+                    control = U[:,counter]
+                    g_shooting += self.get_constraint_shooting(st_next, st,
+                                                               control, mode)
+                    counter += 1
+                mode = 0
+
+        return 0
 
 ########## test section ################################################
 if __name__ == '__main__':
