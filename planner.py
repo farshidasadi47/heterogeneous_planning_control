@@ -28,7 +28,6 @@ class Planner():
         self.ub_space_y = 85
         self.lb_space_y = -85
         self.X, self.U, self.P = self.__construct_vars()
-        self.discrete = None
     
     def set_space_limit(self, ubx, lbx, uby, lby):
         """Sets space boundary limits and updates the bands in
@@ -97,7 +96,7 @@ class Planner():
             P[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
         return X, U, P
     
-    def f(self,state,control,mode):
+    def __f(self,state,control,mode):
         """Defines swarm transition for CASADI."""
         B = self.swarm.specs.B
         next_state = state + ca.mtimes(B[mode,:,:],control)
@@ -201,7 +200,45 @@ class Planner():
         """This function returns optimization flatten variable, its
         bounds, and the discrete vector that indicates integer
         variables."""
-        pass
+        U = self.U
+        X = self.X
+        P  = self.P
+        n_inner = self.n_inner
+        n_outer = self.n_outer
+        n_robot = self.swarm.specs.n_robot
+        n_mode = self.swarm.specs.n_mode
+        optim_var = ca.vertcat(ca.reshape(U,-1,1), ca.reshape(X,-1,1))
+        # CASADI vert cat does column wise operation.
+        # Bounds related to U
+        discrete_U = []
+        lbu = []
+        ubu = []
+        for i_outer in range(n_outer):
+            for mode in range(1,n_mode):
+                for i_inner in range(n_inner):
+                    discrete_U += [False]*2
+                    lbu += [0,0]
+                    ubu += [np.inf,2*np.pi]
+            discrete_U += [True,False]
+            lbu += [0,0]
+            ubu += [np.inf,2*np.pi]
+        # Bounds related to X
+        discrete_X = []
+        lbxx = []
+        ubxx =[]
+        for i_outer in range(n_outer):
+            for mode in range(1,n_mode):
+                for i_inner in range(n_inner+1):
+                    discrete_X += [False]*2*n_robot
+                    lbxx += [self.lb_space_x, self.lb_space_y]*n_robot
+                    ubxx += [self.ub_space_x, self.ub_space_y]*n_robot
+        # concatenating X and U bounds
+        discrete = discrete_U + discrete_X
+        lbx = np.array(lbu + lbxx)
+        ubx = np.array(ubu + ubxx)
+        return optim_var, lbx, ubx, discrete
+    
+    
 
 ########## test section ################################################
 if __name__ == '__main__':
@@ -220,10 +257,9 @@ if __name__ == '__main__':
     #print(planner.U.T)
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
-    print(g[23])
-    print(len(g))
-    print(lbg)
-    print(ubg)
+    optim_var, lbx, ubx, discrete = planner.get_optim_vars()
+    for i in discrete:
+        print(i)
 
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
