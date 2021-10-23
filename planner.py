@@ -28,6 +28,7 @@ class Planner():
         self.ub_space_y = 85
         self.lb_space_y = -85
         self.X, self.U, self.P = self.__construct_vars()
+        self.discrete = None
     
     def set_space_limit(self, ubx, lbx, uby, lby):
         """Sets space boundary limits and updates the bands in
@@ -123,9 +124,8 @@ class Planner():
         g += [x_next - x - ca.mtimes(B,ur)]
         return g
 
-    def build_optimization(self):
-        """This function builds optimization objective, constraints,
-        and var bounds."""
+    def get_constraints(self):
+        """This function builds constraints of optimization."""
         mode_sequence = self.mode_sequence
         n_mode = self.swarm.specs.n_mode
         n_robot = self.swarm.specs.n_robot
@@ -153,6 +153,8 @@ class Planner():
                     g_shooting += self.get_constraint_shooting(st_next, st,
                                                                control,
                                                                mode_mapped)
+                    g_inter_robot += self.get_constraint_inter_robot(st_next,
+                                                                     control)
                     counter += 1
                     counter_u += 1
                 if mode < n_mode -1:
@@ -187,7 +189,19 @@ class Planner():
         st_next = P[:,1]
         g_shooting += self.get_constraint_shooting(st_next, st,
                                                    control, mode)
-        return g_shooting
+        g = (g_shooting + g_inter_robot)
+        # upper bound on g
+        lbg = np.hstack((np.zeros(len(g_shooting)),
+                         np.zeros(len(g_inter_robot)) ))
+        ubg = np.hstack((np.zeros(len(g_shooting)),
+                         np.inf*np.ones(len(g_inter_robot)) ))
+        return g, lbg, ubg
+
+    def get_optim_vars(self):
+        """This function returns optimization flatten variable, its
+        bounds, and the discrete vector that indicates integer
+        variables."""
+        pass
 
 ########## test section ################################################
 if __name__ == '__main__':
@@ -205,9 +219,12 @@ if __name__ == '__main__':
     #print(planner.X.T)
     #print(planner.U.T)
     #print(planner.P.T)
-    g_shooting = planner.build_optimization()
-    print(g_shooting[12])
-    #print(len(g_shooting))
+    g, lbg, ubg = planner.get_constraints()
+    print(g[23])
+    print(len(g))
+    print(lbg)
+    print(ubg)
+
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
     #i = 2
