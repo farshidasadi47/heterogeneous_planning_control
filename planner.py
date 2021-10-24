@@ -28,6 +28,11 @@ class Planner():
         self.ub_space_y = 85
         self.lb_space_y = -85
         self.X, self.U, self.P = self.__construct_vars()
+        self.lbg, self.ubg = [None]*2
+        self.lbx, self.ubx = [None]*2
+        self.solver = None
+        self.xi = self.swarm.position
+        self.xf = None
     
     def set_space_limit(self, ubx, lbx, uby, lby):
         """Sets space boundary limits and updates the bands in
@@ -267,7 +272,27 @@ class Planner():
             solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
         else:
             opts = {}
+        self.lbg, self.ubg = lbg, ubg
+        self.lbx, self.ubx = lbx, ubx
+        self.discrete = discrete
+        self.solver = solver
         return solver
+    
+    def solve_optimization(self, xf, is_discrete=False, is_sparse=False):
+        """Solves the optimization problem, sorts and post processes the
+        answer and returns the answer.
+        """
+        lbx, ubx = self.lbx, self.ubx
+        lbg, ubg = self.lbg, self.ubg
+        solver = self.solver
+        xi = self.xi
+
+        U0 = ca.DM.zeros(self.U.shape)
+        X0 = ca.DM.zeros(self.X.shape)
+        x0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
+        p = np.hstack((xi, xf))
+        sol = solver(x0 = x0, lbx = lbx, ubx = ubx, lbg = lbg, ubg = ubg, p = p)
+        return sol
         
 
 
@@ -290,10 +315,12 @@ if __name__ == '__main__':
     #print(planner.U.T)
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
-    optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
-    obj = planner.get_objective(sparse = False)
-    nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    solver = planner.get_optimization()
+    #optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
+    #obj = planner.get_objective(sparse = False)
+    #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
+    #solver = planner.get_optimization()
+    #xf = np.array([0,0,-10,0,-20,0])
+    #sol = planner.solve_optimization(xf)
 
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
