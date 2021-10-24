@@ -188,7 +188,7 @@ class Planner():
         st_next = P[:,1]
         g_shooting += self.get_constraint_shooting(st_next, st,
                                                    control, mode)
-        g = (g_shooting + g_inter_robot)
+        g = ca.vertcat(*(g_shooting + g_inter_robot))
         # upper bound on g
         lbg = np.hstack((np.zeros(len(g_shooting)),
                          np.zeros(len(g_inter_robot)) ))
@@ -236,11 +236,15 @@ class Planner():
         discrete = discrete_U + discrete_X
         lbx = np.array(lbu + lbxx)
         ubx = np.array(ubu + ubxx)
-        return optim_var, lbx, ubx, discrete
-    
+        # concatenating optimization parameter
+        p = ca.reshape(P, -1, 1)
+        return optim_var, lbx, ubx, discrete, p
+
     def get_objective(self, sparse = False):
-        """Returns second norm of travelled distance at each step
-        as objective value of the problem."""
+        """Returns objective function for optimization.
+        If sparse = True, then it returns first norm objective function
+        that favors sparsity.
+        """
         r = self.U[0,:].T
         obj = 0
         if sparse is False:
@@ -248,6 +252,24 @@ class Planner():
         else:
             obj = ca.norm_1(r)
         return obj
+
+    def get_optimization(self, is_discrete = False, is_sparse = False):
+        """Sets up and returns a CASADI optimization object."""
+        g, lbg, ubg = self.get_constraints()
+        optim_var, lbx, ubx, discrete, p = self.get_optim_vars()
+        obj = self.get_objective(is_sparse)
+        nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
+        if is_discrete is False:
+            # Use ipopt solver and consider all variables as continuous.
+            opts = {}
+            opts['ipopt.print_level'] = 0
+            opts['print_time'] = 0
+            solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
+        else:
+            opts = {}
+        return solver
+        
+
 
 
 
@@ -268,7 +290,10 @@ if __name__ == '__main__':
     #print(planner.U.T)
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
-    optim_var, lbx, ubx, discrete = planner.get_optim_vars()
+    optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
+    obj = planner.get_objective(sparse = False)
+    nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
+    solver = planner.get_optimization()
 
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
