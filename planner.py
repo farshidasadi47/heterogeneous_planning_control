@@ -195,10 +195,12 @@ class Planner():
                                                    control, mode)
         g = ca.vertcat(*(g_shooting + g_inter_robot))
         # upper bound on g
-        lbg = np.hstack((np.zeros(len(g_shooting)),
-                         np.zeros(len(g_inter_robot)) ))
-        ubg = np.hstack((np.zeros(len(g_shooting)),
-                         np.inf*np.ones(len(g_inter_robot)) ))
+        n_g_shooting = ca.vertcat(*g_shooting).shape[0]
+        n_g_inter_robot = ca.vertcat(*g_inter_robot).shape[0]
+        lbg = np.hstack((np.zeros(n_g_shooting),
+                         np.zeros(n_g_inter_robot) ))
+        ubg = np.hstack((np.zeros(n_g_shooting),
+                         np.inf*np.ones(n_g_inter_robot) ))
         return g, lbg, ubg
 
     def get_optim_vars(self):
