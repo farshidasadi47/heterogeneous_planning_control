@@ -238,7 +238,18 @@ class Planner():
         ubx = np.array(ubu + ubxx)
         return optim_var, lbx, ubx, discrete
     
-    
+    def get_objective(self, sparse = False):
+        """Returns second norm of travelled distance at each step
+        as objective value of the problem."""
+        r = self.U[0,:].T
+        obj = 0
+        if sparse is False:
+            obj += ca.sum1(r*r)
+        else:
+            obj = ca.norm_1(r)
+        return obj
+
+
 
 ########## test section ################################################
 if __name__ == '__main__':
@@ -258,8 +269,6 @@ if __name__ == '__main__':
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
     optim_var, lbx, ubx, discrete = planner.get_optim_vars()
-    for i in discrete:
-        print(i)
 
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
