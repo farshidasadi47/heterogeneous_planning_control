@@ -23,10 +23,10 @@ class Planner():
         self.x_final = None
         self.n_inner = n_inner
         self.n_outer = n_outer
-        self.ub_space_x = 105
-        self.lb_space_x = -105
-        self.ub_space_y = 85
-        self.lb_space_y = -85
+        self.ub_space_x = np.inf #105
+        self.lb_space_x = -np.inf #-105
+        self.ub_space_y = np.inf #85
+        self.lb_space_y = -np.inf #-85
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
@@ -162,8 +162,8 @@ class Planner():
                     counter += 1
                     counter_u += 1
                 if mode < n_mode -1:
-                    # If this is not last mode of this loop, then
-                    # Take one rotation in the last input direction.
+                    # If this is not last mode of current outer loop,
+                    # then take one rotation in the last input direction.
                     # else do nothing and proceed to outer loop transition.
                     mode = 0
                     st = X[:,counter]
@@ -189,7 +189,7 @@ class Planner():
         # Take last step
         st = X[:,counter]
         control = U[:,counter_u]
-        control[0] = (n_mode-1)*rotation_distance*control[0]+rotation_distance
+        control[0] = rotation_distance*control[0]
         st_next = P[:,1]
         g_shooting += self.get_constraint_shooting(st_next, st,
                                                    control, mode)
@@ -269,8 +269,8 @@ class Planner():
         if is_discrete is False:
             # Use ipopt solver and consider all variables as continuous.
             opts = {}
-            opts['ipopt.print_level'] = 0
-            opts['print_time'] = 0
+            #opts['ipopt.print_level'] = 0
+            #opts['print_time'] = 0
             solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
         else:
             opts = {}
@@ -279,7 +279,56 @@ class Planner():
         self.discrete = discrete
         self.solver = solver
         return solver
-    
+    def __post_process_u(self,sol):
+        """Post processes the solution and adds intermediate steps."""
+        mode_sequence = self.mode_sequence
+        rotation_distance = self.swarm.specs.rotation_distance
+        n_inner = self.n_inner
+        n_outer = self.n_outer
+        n_robot = self.swarm.specs.n_robot
+        n_mode = self.swarm.specs.n_mode
+        U_sol = sol['x'][:2*n_outer*((n_inner)*(n_mode-1) + 1)]
+        X_sol = sol['x'][2*n_outer*((n_inner)*(n_mode-1) + 1):]
+        U_sol = ca.reshape(U_sol,2,-1).full()
+        X_sol = ca.reshape(X_sol,2*n_robot,-1).full()
+        U = np.zeros((3,n_outer*(n_inner+1)*(n_mode-1)))
+        counter = 0
+        counter_u = 0
+        for i_outer in range(n_outer):
+            for mode in range(1,n_mode):
+                mode_mapped = mode_sequence[mode]
+                for i_inner in range(n_inner):
+                    U[:2,counter_u] = U_sol[:,counter]
+                    U[2,counter_u] = mode_mapped
+                    counter += 1
+                    counter_u += 1
+                if mode < n_mode -1:
+                    # if this is not the last iteration of this outer loop
+                    U[0,counter_u] = rotation_distance
+                    U[1,counter_u] = U_sol[1,counter -1]
+                    U[2,counter_u] = 0
+                    counter_u +=1
+                else:
+                    # if this is last iteration of current outer loop
+                    if i_outer< n_outer -1:
+                        # if this is not last outer loop
+                        U[0,counter_u] = ((n_mode - 1)
+                                           *rotation_distance
+                                           *U_sol[0,counter]
+                                          + rotation_distance)
+                        U[1,counter_u] = U_sol[1,counter]
+                        U[2,counter_u] = 0
+                        counter += 1
+                        counter_u += 1
+                    else:
+                        # if this is last outer loop
+                        U[0,counter_u] = rotation_distance*U_sol[0,counter]
+                        U[1,counter_u] = U_sol[1,counter]
+                        U[2,counter_u] = 0
+                        pass
+        return U_sol, X_sol, U
+
+
     def solve_optimization(self, xf, is_discrete=False, is_sparse=False):
         """Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
@@ -294,7 +343,9 @@ class Planner():
         x0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
         p = np.hstack((xi, xf))
         sol = solver(x0 = x0, lbx = lbx, ubx = ubx, lbg = lbg, ubg = ubg, p = p)
-        return sol
+        # recovering the solution in appropriate format
+        U_sol, X_sol, U = self.__post_process_u(sol)
+        return sol, U_sol, X_sol, U
         
 
 
@@ -302,10 +353,10 @@ class Planner():
 
 ########## test section ################################################
 if __name__ == '__main__':
-    swarm_specs = model.SwarmSpecs(np.array([[9,7,5],[5,7,9]]),
+    swarm_specs = model.SwarmSpecs(np.array([[10,5,3],[3,5,10]]),
                                    5, 10)
     swarm = model.Swarm(np.array([0,0,10,0,20,0]), 0, 1, swarm_specs)
-    planner = Planner(swarm)
+    planner = Planner(swarm, n_inner = 2, n_outer = 2)
 
     #print(planner.swarm.position)
     #print(planner.swarm.specs.B)
@@ -317,13 +368,14 @@ if __name__ == '__main__':
     #print(planner.U.T)
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
-    #optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
-    #obj = planner.get_objective(sparse = False)
-    #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    #solver = planner.get_optimization()
-    #xf = np.array([0,0,-10,0,-20,0])
-    #sol = planner.solve_optimization(xf)
+    optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
+    obj = planner.get_objective(sparse = False)
+    nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
+    solver = planner.get_optimization()
+    xf = np.array([0,40,10,40,20,40])
+    sol, U_sol, X_sol, U = planner.solve_optimization(xf)
 
+    anim = swarm.simanimation(U,1000)
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
     #i = 2

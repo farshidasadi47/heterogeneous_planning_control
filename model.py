@@ -306,7 +306,7 @@ if __name__ == '__main__':
     #swarm.update_state(u[:2],True)
     #print(swarm.position)
     length = 1000
-    swarm.simplot(input_series,length)
+    #swarm.simplot(input_series,length)
     #print(swarm.__simulate_result[0][:,swarm.__simulate_result[4]].T)
-    #anim = swarm.simanimation(input_series,length)
+    anim = swarm.simanimation(input_series,length)
 
