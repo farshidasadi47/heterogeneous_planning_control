@@ -65,13 +65,22 @@ class Planner():
         n_mode = self.swarm.specs.n_mode
         n_robot = self.swarm.specs.n_robot
         mode_sequence = self.mode_sequence
-        X = ca.SX.sym('x',2*n_robot,n_outer*n_inner*(n_mode-1))
+        X = ca.SX.sym('x',2*n_robot,n_outer*(n_inner*(n_mode-1) + 1))
         U = ca.SX.sym('u',2,n_outer*(n_inner*(n_mode-1) + 1))
         P = ca.SX.sym('p',2*n_robot,2)
         counter = 0
         counter_u = 0
-        # Building X and U
+        # Build X and U.
         for i_outer in range(n_outer):
+            # Construct position in the start of outer loop.
+            mode = 0
+            varstr ='{:02d}_{:02d}_{:02d}'.format(i_outer,mode,0)
+            for robot in range(n_robot):
+                rob_str = '_{:02d}'.format(robot)
+                X[2*robot,counter] = ca.SX.sym('x_'+varstr+rob_str)
+                X[2*robot + 1,counter] = ca.SX.sym('y_'+varstr+rob_str)
+            counter += 1
+            # Construct position and control for current outer loop.
             for mode in range(1,n_mode):
                 # Maps to current mode sequence.
                 mode = mode_sequence[mode]
@@ -86,6 +95,7 @@ class Planner():
                     U[1,counter_u] = ca.SX.sym('dy_'+varstr)
                     counter += 1
                     counter_u += 1
+            # Construct control to go for next outer loop.
             varstr = '{:02d}_{:02d}_00'.format(i_outer,0)
             U[0,counter_u] = ca.SX.sym('dx_'+varstr)
             U[1,counter_u] = ca.SX.sym('dy_'+varstr)
@@ -160,44 +170,32 @@ class Planner():
                     g_shooting += self.get_constraint_shooting(st_next, st,
                                                                control,
                                                                mode_mapped)
-                    g_inter_robot += self.get_constraint_inter_robot(st_next,
-                                                                     control)
+                    g_inter_robot += self.get_constraint_inter_robot(st,
+                                                                     control,
+                                                                   mode_mapped)
                     counter += 1
                     counter_u += 1
-                if mode < n_mode -1:
-                    # If this is not last mode of current outer loop,
-                    # then take one rotation in the last input direction.
-                    # else do nothing and proceed to outer loop transition.
-                    mode = 0
-                    st = X[:,counter]
-                    control[0] = rotation_distance
-                    st_next = X[:,counter+1]
-                    g_shooting += self.get_constraint_shooting(st_next, st,
-                                                               control, mode)
-                    counter += 1
 
             if (i_outer < n_outer -1):
-                # If this is not the last outer loop
-                # Take multiple of n_mode-1 rotations plus one rotation
+                # If this is not the last outer loop,
+                # take rotation  steps
                 mode = 0
                 st = X[:,counter]
                 control = U[:,counter_u]
-                control[0] = ((n_mode-1)*rotation_distance*control[0]
-                              + rotation_distance)
                 st_next = X[:,counter+1]
                 g_shooting += self.get_constraint_shooting(st_next, st,
                                                            control, mode)
                 counter += 1
                 counter_u += 1
-        # Take last step
+        # Take last step.
+        mode = 0
         st = X[:,counter]
         control = U[:,counter_u]
-        control[0] = rotation_distance*control[0]
         st_next = P[:,1]
         g_shooting += self.get_constraint_shooting(st_next, st,
                                                    control, mode)
         g = ca.vertcat(*(g_shooting + g_inter_robot))
-        # upper bound on g
+        # Configure bounds of g
         n_g_shooting = ca.vertcat(*g_shooting).shape[0]
         n_g_inter_robot = ca.vertcat(*g_inter_robot).shape[0]
         lbg = np.hstack((np.zeros(n_g_shooting),
