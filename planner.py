@@ -105,25 +105,30 @@ class Planner():
         next_state = state + ca.mtimes(B[mode,:,:],control)
         return next_state
 
-    def get_constraint_inter_robot(self,x,u):
+    def get_constraint_inter_robot(self,x,u,mode):
         """Returns inter-robot constraints.
         
         It uses u = [r, theta] as input."""
         g = []
         dm = self.d_min
-        uh = ca.vertcat(-ca.sin(u[1]), ca.cos(u[1]))
+        beta = self.swarm.specs.beta[mode,:]
+        dx = u[0]
+        dy = u[1]
         for pair in self.robot_pairs:
             zi = x[2*pair[0]:2*pair[0]+2]
             zj = x[2*pair[1]:2*pair[1]+2]
-            g += [ca.dot(zi-zj,zi-zj) - ca.dot(zi-zj,uh) - dm**2]
+            a = zi[0]-zj[0]
+            b = zi[1] - zj[1]
+            bij = beta[pair[0]] - beta[pair[1]]
+            g += [bij*(a*dx+b*dy)
+                  +ca.fabs(bij*ca.sqrt(a**2+b**2-dm**2)*(-b*dx+a*dy)/dm)]
         return g
     
     def get_constraint_shooting(self,x_next, x, u, mode):
         """Returns constraint resulted from multiple shooting."""
         B = self.swarm.specs.B[mode,:,:]
-        ur = ca.vertcat(-u[0]*ca.sin(u[1]), u[0]*ca.cos(u[1]))
         g = []
-        g += [x_next - x - ca.mtimes(B,ur)]
+        g += [x_next - x - ca.mtimes(B,u)]
         return g
 
     def get_constraints(self):
