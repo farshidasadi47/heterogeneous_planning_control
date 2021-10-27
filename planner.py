@@ -23,10 +23,10 @@ class Planner():
         self.x_final = None
         self.n_inner = n_inner
         self.n_outer = n_outer
-        self.ub_space_x = np.inf #105
-        self.lb_space_x = -np.inf #-105
-        self.ub_space_y = np.inf #85
-        self.lb_space_y = -np.inf #-85
+        self.ub_space_x = 105
+        self.lb_space_x = -105
+        self.ub_space_y = 85
+        self.lb_space_y = -85
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
@@ -153,7 +153,6 @@ class Planner():
         P = self.P
         d_min  = self.d_min
         rotation_distance = self.swarm.specs.rotation_distance
-        obj = 0
         g_shooting = []
         g_shooting += [P[:,0] - X[:,0]]
         g_inter_robot = []
@@ -217,7 +216,7 @@ class Planner():
         n_mode = self.swarm.specs.n_mode
         optim_var = ca.vertcat(ca.reshape(U,-1,1), ca.reshape(X,-1,1))
         # CASADI vert cat does column wise operation.
-        # Bounds related to U
+        # Configure bounds for U.
         discrete_U = []
         lbu = []
         ubu = []
@@ -225,18 +224,28 @@ class Planner():
             for mode in range(1,n_mode):
                 for i_inner in range(n_inner):
                     discrete_U += [False]*2
-                    lbu += [0,0]
-                    ubu += [np.inf,2*np.pi]
-            discrete_U += [True,False]
-            lbu += [0,0]
-            ubu += [np.inf,2*np.pi]
-        # Bounds related to X
+                    lbu += [-(self.ub_space_x - self.lb_space_x),
+                            -(self.ub_space_y - self.lb_space_y)]
+                    ubu += [self.ub_space_x - self.lb_space_x,
+                            self.ub_space_y - self.lb_space_y]
+            # Configure bounds for last step in current outer loop.
+            discrete_U += [False,False]
+            lbu += [-(self.ub_space_x - self.lb_space_x),
+                    -(self.ub_space_y - self.lb_space_y)]
+            ubu += [self.ub_space_x - self.lb_space_x,
+                    self.ub_space_y - self.lb_space_y]
+        # Configure bounds related to X.
         discrete_X = []
         lbxx = []
         ubxx =[]
         for i_outer in range(n_outer):
+            # Configure bounds for initial X in the current outer loop.
+            discrete_X += [False]*2*n_robot
+            lbxx += [self.lb_space_x, self.lb_space_y]*n_robot
+            ubxx += [self.ub_space_x, self.ub_space_y]*n_robot
+            # Configure bounds for the rest of X in current outer loop.
             for mode in range(1,n_mode):
-                for i_inner in range(n_inner+1):
+                for i_inner in range(n_inner):
                     discrete_X += [False]*2*n_robot
                     lbxx += [self.lb_space_x, self.lb_space_y]*n_robot
                     ubxx += [self.ub_space_x, self.ub_space_y]*n_robot
@@ -368,8 +377,8 @@ if __name__ == '__main__':
     #print(planner.X.T)
     #print(planner.U.T)
     #print(planner.P.T)
-    #g, lbg, ubg = planner.get_constraints()
-    #optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
+    g, lbg, ubg = planner.get_constraints()
+    optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
     #obj = planner.get_objective(sparse = False)
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
     #solver = planner.get_optimization()
