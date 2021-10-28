@@ -257,17 +257,22 @@ class Planner():
         p = ca.reshape(P, -1, 1)
         return optim_var, lbx, ubx, discrete, p
 
-    def get_objective(self, sparse = False):
+    def get_objective(self, sparse = False, no_objective = False):
         """Returns objective function for optimization.
         If sparse = True, then it returns first norm objective function
         that favors sparsity.
         """
-        r = self.U[0,:].T
+        U = self.U
         obj = 0
-        if sparse is False:
-            obj += ca.sum1(r*r)
-        else:
-            obj = ca.norm_1(r)
+        for i in range(U.shape[1]):
+            u = U[:,i]
+            if sparse is False:
+                obj += ca.sum1(u*u)
+            else:
+                obj += ca.norm_1(u)
+        
+        if no_objective is True:
+            obj = 0
         return obj
 
     def get_optimization(self, is_discrete = False, is_sparse = False):
@@ -379,7 +384,7 @@ if __name__ == '__main__':
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
     optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
-    #obj = planner.get_objective(sparse = False)
+    obj = planner.get_objective(sparse = True, no_objective=False)
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
     #solver = planner.get_optimization()
     #xf = np.array([0,40,10,40,20,40])
