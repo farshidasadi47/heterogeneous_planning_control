@@ -275,11 +275,12 @@ class Planner():
             obj = 0
         return obj
 
-    def get_optimization(self, is_discrete = False, is_sparse = False):
+    def get_optimization(self, is_discrete = False, is_sparse = False,
+                         no_objective = False):
         """Sets up and returns a CASADI optimization object."""
         g, lbg, ubg = self.get_constraints()
         optim_var, lbx, ubx, discrete, p = self.get_optim_vars()
-        obj = self.get_objective(is_sparse)
+        obj = self.get_objective(is_sparse, no_objective)
         nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
         if is_discrete is False:
             # Use ipopt solver and consider all variables as continuous.
@@ -289,6 +290,7 @@ class Planner():
             solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
         else:
             opts = {}
+            solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
         self.lbg, self.ubg = lbg, ubg
         self.lbx, self.ubx = lbx, ubx
         self.discrete = discrete
@@ -386,7 +388,8 @@ if __name__ == '__main__':
     optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
     obj = planner.get_objective(sparse = True, no_objective=False)
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    #solver = planner.get_optimization()
+    solver = planner.get_optimization(is_discrete = False, is_sparse = False,
+                                      no_objective = False)
     #xf = np.array([0,40,10,40,20,40])
     #sol, U_sol, X_sol, U = planner.solve_optimization(xf)
 
