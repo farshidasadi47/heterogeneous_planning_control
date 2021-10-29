@@ -7,6 +7,7 @@ from itertools import combinations
 from collections import deque
 
 import numpy as np
+import numpy.matlib
 import casadi as ca
 
 import model
@@ -23,10 +24,10 @@ class Planner():
         self.x_final = None
         self.n_inner = n_inner
         self.n_outer = n_outer
-        self.ub_space_x = 105
-        self.lb_space_x = -105
-        self.ub_space_y = 85
-        self.lb_space_y = -85
+        self.ub_space_x = np.inf#105
+        self.lb_space_x = -np.inf#-105
+        self.ub_space_y = np.inf#85
+        self.lb_space_y = -np.inf#-85
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
@@ -290,12 +291,43 @@ class Planner():
             solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
         else:
             opts = {}
-            solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
+            opts["qpsol"] = "qpoases"
+            solver = ca.nlpsol('solver', 'sqpmethod', nlp_prob, opts)
         self.lbg, self.ubg = lbg, ubg
         self.lbx, self.ubx = lbx, ubx
         self.discrete = discrete
         self.solver = solver
         return solver
+
+    def __cartesian_to_polar(self,z):
+        """Converts cartesian to polar coordinate."""
+        z = complex(z[0],z[1])
+        z = np.array([np.abs(z), np.angle(z)-np.pi/2])
+        return z
+
+    def __accurate_rotation(self,u):
+        """This function gets a desired rotation and returns a sequence
+        of two pure steps of rotations that produce the desired movement
+        in rotation mode."""
+        rotation_distance = self.swarm.specs.rotation_distance
+        r = np.linalg.norm(u)
+        r1 = max(np.floor(r/rotation_distance)*rotation_distance,
+                 rotation_distance)
+        r2 = rotation_distance
+        teta = ca.SX.sym('t',2)
+        f1 = -r1*ca.sin(teta[0])-r2*ca.sin(teta[1]) - u[0]
+        f2 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[1]
+        f = ca.Function('g',[teta],[ca.vertcat(*[f1,f2])])
+        F = ca.rootfinder('F','newton',f)
+        teta_value = F(np.random.rand(2))
+        u_possible = np.zeros((2,2))
+        u_possible[0,0] = -r1*np.sin(teta_value[0])
+        u_possible[1,0] = r1*np.cos(teta_value[0])
+        u_possible[0,1] = -r2*np.sin(teta_value[1])
+        u_possible[1,1] = r2*np.cos(teta_value[1])
+        return u_possible
+
+
     def __post_process_u(self,sol):
         """Post processes the solution and adds intermediate steps."""
         mode_sequence = self.mode_sequence
@@ -308,43 +340,74 @@ class Planner():
         X_sol = sol['x'][2*n_outer*((n_inner)*(n_mode-1) + 1):]
         U_sol = ca.reshape(U_sol,2,-1).full()
         X_sol = ca.reshape(X_sol,2*n_robot,-1).full()
-        U = np.zeros((3,n_outer*(n_inner+1)*(n_mode-1)))
+        UZ = np.zeros((3,1+n_outer*(n_inner+1)*(n_mode-1)))
+        U = np.zeros_like(UZ)
+        # recovering input with transitions
         counter = 0
         counter_u = 0
+        rotation_remainder = np.zeros(2)
         for i_outer in range(n_outer):
             for mode in range(1,n_mode):
+                # map the mode to the current swarm mode sequence.
                 mode_mapped = mode_sequence[mode]
                 for i_inner in range(n_inner):
-                    U[:2,counter_u] = U_sol[:,counter]
-                    U[2,counter_u] = mode_mapped
+                    UZ[:2,counter_u] = U_sol[:,counter]
+                    UZ[2,counter_u] = mode_mapped
                     counter += 1
-                    counter_u += 1
-                if mode < n_mode -1:
-                    # if this is not the last iteration of this outer loop
-                    U[0,counter_u] = rotation_distance
-                    U[1,counter_u] = U_sol[1,counter -1]
-                    U[2,counter_u] = 0
                     counter_u +=1
-                else:
-                    # if this is last iteration of current outer loop
-                    if i_outer< n_outer -1:
-                        # if this is not last outer loop
-                        U[0,counter_u] = ((n_mode - 1)
-                                           *rotation_distance
-                                           *U_sol[0,counter]
-                                          + rotation_distance)
-                        U[1,counter_u] = U_sol[1,counter]
-                        U[2,counter_u] = 0
-                        counter += 1
-                        counter_u += 1
+                
+                if mode < n_mode - 1:
+                    # If we are not in the last mode of current
+                    # outer loop. Then, do one rotation to change mode.
+                    mode = 0
+                    u_last = U_sol[:,counter-1]
+                    r_last = np.linalg.norm(u_last)
+                    if r_last == 0:
+                        # Take a predefined transition if last step
+                        # is zero input.
+                        UZ[0,counter_u] = rotation_distance
+                        UZ[1,counter_u] = 0
+                        UZ[2,counter_u] = mode
                     else:
-                        # if this is last outer loop
-                        U[0,counter_u] = rotation_distance*U_sol[0,counter]
-                        U[1,counter_u] = U_sol[1,counter]
-                        U[2,counter_u] = 0
-                        pass
-        return U_sol, X_sol, U
-
+                        # Take one rotation in the direction of
+                        # last input.
+                        UZ[0,counter_u] = u_last[0]*rotation_distance/r_last
+                        UZ[1,counter_u] = u_last[1]*rotation_distance/r_last
+                        UZ[2,counter_u] = mode
+                    # Keep track of rotations done.
+                    rotation_remainder += UZ[:2,counter_u]
+                    counter_u += 1
+                else:
+                    # if this is last mode of current outer loop.
+                    break
+            # Take rotation corresponding the current outer loop.
+            mode = 0
+            u_last = U_sol[:,counter] - rotation_remainder
+            r_last = np.linalg.norm(u_last)
+            r_possible = (round((r_last-rotation_distance)
+                                /((n_mode-1)*rotation_distance))
+                          *(n_mode-1)*rotation_distance)
+            r_possible = r_possible + rotation_distance
+            # Take one rotation in the direction of
+            # last input.
+            UZ[0,counter_u] = u_last[0]*r_possible/r_last
+            UZ[1,counter_u] = u_last[1]*r_possible/r_last
+            UZ[2,counter_u] = mode
+            # Update remainder of rotation.
+            rotation_remainder = -(u_last - UZ[:2,counter_u])
+            counter += 1
+            counter_u += 1
+        # Refine the last step into two acceptable rotations
+        UZ[:2,-2:] = self.__accurate_rotation(u_last)
+        # Calculate the corresponding polar coordinate inputs.
+        U = UZ
+        for i in range(UZ.shape[1]):
+            U[:2,i] = self.__cartesian_to_polar(UZ[:2,i])
+            if U[2,i] == 0:
+                # If this is rotation round it for numerical purposes.
+                U[0,i] = round(U[0,i])
+        
+        return U_sol, X_sol, UZ,  U
 
     def solve_optimization(self, xf, is_discrete=False, is_sparse=False):
         """Solves the optimization problem, sorts and post processes the
@@ -356,24 +419,22 @@ class Planner():
         xi = self.xi
 
         U0 = ca.DM.zeros(self.U.shape)
-        X0 = ca.DM.zeros(self.X.shape)
+        X0 = ca.DM(np.matlib.repmat(xi,self.X.shape[1],1).T)
+
         x0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
         p = np.hstack((xi, xf))
         sol = solver(x0 = x0, lbx = lbx, ubx = ubx, lbg = lbg, ubg = ubg, p = p)
+        #sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
         # recovering the solution in appropriate format
-        U_sol, X_sol, U = self.__post_process_u(sol)
-        return sol, U_sol, X_sol, U
+        U_sol, X_sol, UZ, U = self.__post_process_u(sol)
+        return sol, U_sol, X_sol, UZ, U
         
-
-
-
-
 ########## test section ################################################
 if __name__ == '__main__':
-    swarm_specs = model.SwarmSpecs(np.array([[10,5,3],[3,5,10]]),
+    swarm_specs = model.SwarmSpecs(np.array([[10,5]]),
                                    5, 10)
-    swarm = model.Swarm(np.array([0,0,10,0,20,0]), 0, 1, swarm_specs)
-    planner = Planner(swarm, n_inner = 2, n_outer = 2)
+    swarm = model.Swarm(np.array([0,0,40,0]), 0, 1, swarm_specs)
+    planner = Planner(swarm, n_inner = 3, n_outer = 1)
 
     #print(planner.swarm.position)
     #print(planner.swarm.specs.B)
@@ -386,14 +447,14 @@ if __name__ == '__main__':
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
     optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
-    obj = planner.get_objective(sparse = True, no_objective=False)
+    obj = planner.get_objective(sparse = False, no_objective=False)
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
     solver = planner.get_optimization(is_discrete = False, is_sparse = False,
                                       no_objective = False)
-    #xf = np.array([0,40,10,40,20,40])
-    #sol, U_sol, X_sol, U = planner.solve_optimization(xf)
-
-    #anim = swarm.simanimation(U,1000)
+    xf = np.array([0,0,0,10])
+    sol, U_sol, X_sol, UZ, U = planner.solve_optimization(xf)
+    anim = swarm.simanimation(U,1000)
+    #swarm.simplot(U,10000)
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
     #i = 2
