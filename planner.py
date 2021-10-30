@@ -132,7 +132,9 @@ class Planner():
             b = zi[1] - zj[1]
             bij = beta[pair[0]] - beta[pair[1]]
             g += [bij*(a*dx+b*dy)
-                  +ca.fabs(bij*ca.sqrt(a**2+b**2-dm**2)*(-b*dx+a*dy)/dm)]
+                  +ca.fabs(bij*ca.sqrt(ca.fabs(a**2+b**2-dm**2))
+                   *(-b*dx+a*dy)/dm),
+                  a**2+b**2-dm**2]
         return g
     
     def get_constraint_shooting(self,x_next, x, u, mode):
@@ -455,8 +457,8 @@ if __name__ == '__main__':
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
     solver = planner.get_optimization(is_discrete = False, is_sparse = False,
                                       no_objective = False)
-    xf = np.array([0,0,0,10])
-    sol, U_sol, X_sol, UZ, U = planner.solve_optimization(xf, no_boundary=True)
+    xf = np.array([0,0,0,20])
+    sol, U_sol, X_sol, UZ, U = planner.solve_optimization(xf, no_boundary=False)
     anim = swarm.simanimation(U,1000)
     #swarm.simplot(U,10000)
     #x = ca.SX.sym('x',4*2)
