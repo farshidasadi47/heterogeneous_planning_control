@@ -165,7 +165,24 @@ class Swarm:
                                             [Position.shape[1]-1]))
         self.__simulate_result = (Position, Angle, Mode,
                                   Input, mode_change_index)
+    
+    def simulate_simple(self, input_series):
+        """Simulates the swarm for a given simple series of input."""
+        if (input_series.ndim != 2):
+            raise ValueError('Input series should be a 2D numpy array')
+        
+        Position = self.position.reshape(-1,1)
+        U = input_series[:2.:]
+        X = np.zeros_like(U)
+        X[:,0] = Position
+        
+        for i in range(input_series.shape[1]-1):
+            mode = input_series[2,i]
+            X[:,i+1] = X[:,i] + np.dot(self.specs.B[mode,:,:],U[:,i])
+        
+        return X, U
 
+    
     def __simplot_set(self, ax):
         """Sets the plot configuration. """
         self.__colors = ['k','r','b','g','m']
