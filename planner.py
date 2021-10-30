@@ -24,10 +24,10 @@ class Planner():
         self.x_final = None
         self.n_inner = n_inner
         self.n_outer = n_outer
-        self.ub_space_x = np.inf#105
-        self.lb_space_x = -np.inf#-105
-        self.ub_space_y = np.inf#85
-        self.lb_space_y = -np.inf#-85
+        self.ub_space_x = 105
+        self.lb_space_x = -105
+        self.ub_space_y = 85
+        self.lb_space_y = -85
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
@@ -409,7 +409,8 @@ class Planner():
         
         return U_sol, X_sol, UZ,  U
 
-    def solve_optimization(self, xf, is_discrete=False, is_sparse=False):
+    def solve_optimization(self, xf, is_discrete=False, is_sparse=False,
+                           no_boundary = False):
         """Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
         """
@@ -423,8 +424,11 @@ class Planner():
 
         x0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
         p = np.hstack((xi, xf))
-        sol = solver(x0 = x0, lbx = lbx, ubx = ubx, lbg = lbg, ubg = ubg, p = p)
-        #sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
+        if no_boundary is False:
+            sol = solver(x0 = x0, lbx = lbx, ubx = ubx,
+                         lbg = lbg, ubg = ubg, p = p)
+        else:
+            sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
         # recovering the solution in appropriate format
         U_sol, X_sol, UZ, U = self.__post_process_u(sol)
         return sol, U_sol, X_sol, UZ, U
@@ -452,7 +456,7 @@ if __name__ == '__main__':
     solver = planner.get_optimization(is_discrete = False, is_sparse = False,
                                       no_objective = False)
     xf = np.array([0,0,0,10])
-    sol, U_sol, X_sol, UZ, U = planner.solve_optimization(xf)
+    sol, U_sol, X_sol, UZ, U = planner.solve_optimization(xf, no_boundary=True)
     anim = swarm.simanimation(U,1000)
     #swarm.simplot(U,10000)
     #x = ca.SX.sym('x',4*2)
