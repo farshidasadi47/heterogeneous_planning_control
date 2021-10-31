@@ -296,8 +296,12 @@ class Planner():
             solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
         else:
             opts = {}
-            opts["qpsol"] = "qpoases"
-            solver = ca.nlpsol('solver', 'sqpmethod', nlp_prob, opts)
+            opts["knitro.algorithm"] = 0  # automatic
+            opts["knitro.ms_enable"] = 1
+            opts["knitro.convex"] = 0  # non convex
+            opts["knitro.bar_feasible"] = 3  # emphasize feasibility
+
+            solver = ca.nlpsol('solver', 'knitro', nlp_prob, opts)
         self.lbg, self.ubg = lbg, ubg
         self.lbx, self.ubx = lbx, ubx
         self.discrete = discrete
@@ -319,13 +323,18 @@ class Planner():
         if r>0:
             r1 = max(np.floor(r/rotation_distance)*rotation_distance,
                      rotation_distance)
-            r2 = rotation_distance
-            teta = ca.SX.sym('t',2)
-            f1 = -r1*ca.sin(teta[0])-r2*ca.sin(teta[1]) - u[0]
-            f2 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[1]
-            f = ca.Function('g',[teta],[ca.vertcat(*[f1,f2])])
-            F = ca.rootfinder('F','newton',f)
-            teta_value = F(np.random.rand(2))
+            if r%rotation_distance > 0:
+                r2 = rotation_distance
+                teta = ca.SX.sym('t',2)
+                f1 = -r1*ca.sin(teta[0])-r2*ca.sin(teta[1]) - u[0]
+                f2 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[1]
+                f = ca.Function('g',[teta],[ca.vertcat(*[f1,f2])])
+                F = ca.rootfinder('F','newton',f)
+                teta_value = F(np.random.rand(2))
+            else:
+                r2 = 0
+                teta_value = np.zeros(2)
+                teta_value[0] = self._Planner__cartesian_to_polar(u)[1]
             u_possible = np.zeros((2,2))
             u_possible[0,0] = -r1*np.sin(teta_value[0])
             u_possible[1,0] = r1*np.cos(teta_value[0])
@@ -418,9 +427,59 @@ class Planner():
                 U[0,i] = round(U[0,i])
         
         return U_sol, X_sol, UZ,  U
+    
+    def solve_unconstrained(self,xi,xf):
+        """This function solved the unconstrained case from
+        controllability analysis and adjusts it for the problem setting,
+        to be used as initial guess."""
+        mode_sequence = self.mode_sequence
+        n_mode = self.swarm.specs.n_mode
+        n_robot = self.swarm.specs.n_robot
+        n_inner = self.n_inner
+        n_outer = self.n_outer
+        B = np.zeros((2*n_robot,2*n_mode))
+        for mode in range(n_mode):
+            mapped_mode = mode_sequence[mode]
+            B[:,2*mapped_mode:2*mapped_mode +2] = self.swarm.specs.B[mode,:,:]
+        u_unc = np.dot(np.linalg.inv(B),xf - xi)
+        u_unc = np.reshape(u_unc,(2,-1)).T
+        u = np.zeros_like(u_unc)
+        u[:,-1] = u_unc[:,0]/(n_outer)
+        u[:,:-1] = u_unc[:,1:]/(n_inner*n_outer)
+        
+        U = np.empty((2,0),float)
+        for i in range(n_mode-1):
+            U = np.hstack( (U, np.tile(u[:,i][np.newaxis].T,(1,n_inner)) ) )
+        U = np.hstack( (U, u[:,-1][np.newaxis].T ) )
+        U_sol = U
+        for i in range(n_outer - 1):
+            U_sol = np.hstack( (U_sol,U) )
+        #
+        X_sol = np.zeros((2*n_robot, U_sol.shape[1]))
+        X_sol[:,0] = xi
+        counter = 0
+        for i_outer in range(n_outer):
+            for mode in range(1,n_mode):
+                mapped_mode = mode_sequence[mode]
+                for i_inner in range(n_inner):
+                    X_sol[:,counter + 1] = (X_sol[:,counter]
+                     + np.dot(self.swarm.specs.B[mapped_mode,:,:],
+                       U_sol[:,counter]))
+                    counter += 1
+            if i_outer < n_outer - 1:
+                mode = 0
+                X_sol[:,counter + 1] = (X_sol[:,counter]
+                     + np.dot(self.swarm.specs.B[mode,:,:],
+                       U_sol[:,counter]))
+            counter += 1
+        sol = {}
+        sol['x']  = np.hstack((U_sol.T.flatten(), X_sol.T.flatten()))
+
+        return sol
 
     def solve_optimization(self, xf, is_discrete=False, is_sparse=False,
-                           no_boundary = False):
+                           no_boundary = False,
+                           unconstrained = False):
         """Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
         """
@@ -428,26 +487,33 @@ class Planner():
         lbg, ubg = self.lbg, self.ubg
         solver = self.solver
         xi = self.xi
+        self.xf = xf
 
         U0 = ca.DM.zeros(self.U.shape)
         X0 = ca.DM(np.matlib.repmat(xi,self.X.shape[1],1).T)
 
         x0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
+        #sol0 = self.solve_unconstrained(xi,xf)
+        #x0 = sol0['x']
         p = np.hstack((xi, xf))
-        if no_boundary is False:
-            sol = solver(x0 = x0, lbx = lbx, ubx = ubx,
-                         lbg = lbg, ubg = ubg, p = p)
+        if unconstrained is False:
+            if no_boundary is False:
+                sol = solver(x0 = x0, lbx = lbx, ubx = ubx,
+                             lbg = lbg, ubg = ubg, p = p)
+            else:
+                sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
         else:
-            sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
+            sol = sol0
         # recovering the solution in appropriate format
+        P_sol = np.vstack((xi,xf)).T
         U_sol, X_sol, UZ, U = self.__post_process_u(sol)
-        return sol, U_sol, X_sol, UZ, U
+        return sol, U_sol, X_sol, P_sol, UZ, U
         
 ########## test section ################################################
 if __name__ == '__main__':
-    swarm_specs = model.SwarmSpecs(np.array([[10,5]]),
+    swarm_specs = model.SwarmSpecs(np.array([[10,7,5],[5,7,10]]),
                                    5, 10)
-    swarm = model.Swarm(np.array([0,0,40,0]), 0, 1, swarm_specs)
+    swarm = model.Swarm(np.array([0,0,20,0,40,0]), 0, 1, swarm_specs)
     planner = Planner(swarm, n_inner = 3, n_outer = 1)
 
     #print(planner.swarm.position)
@@ -460,13 +526,16 @@ if __name__ == '__main__':
     #print(planner.U.T)
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
+    G = ca.Function('g',[planner.X,planner.U,planner.P],[g])
     optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
-    obj = planner.get_objective(sparse = False, no_objective=True)
+    obj = planner.get_objective(sparse = False, no_objective=False)
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    solver = planner.get_optimization(is_discrete = False, is_sparse = False,
-                                      no_objective = True)
-    xf = np.array([0,0,0,20])
-    sol, U_sol, X_sol, UZ, U = planner.solve_optimization(xf, no_boundary=False)
+    solver = planner.get_optimization(is_discrete = True, is_sparse = False,
+                                      no_objective = False)
+    xf = np.array([0,0,-40,0,-20,0])
+    sol, U_sol, X_sol, P_sol, UZ, U = planner.solve_optimization(xf,
+                                                          no_boundary=True,
+                                                          unconstrained=False)
     anim = swarm.simanimation(U,1000)
     #swarm.simplot(U,10000)
     #x = ca.SX.sym('x',4*2)
