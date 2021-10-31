@@ -144,7 +144,7 @@ class Planner():
         g += [x_next - x - ca.mtimes(B,u)]
         return g
 
-    def get_constraints(self):
+    def get_constraints(self, no_objective = False):
         """This function builds constraints of optimization."""
         mode_sequence = self.mode_sequence
         n_mode = self.swarm.specs.n_mode
@@ -190,12 +190,13 @@ class Planner():
                 counter += 1
                 counter_u += 1
         # Take last step.
-        mode = 0
-        st = X[:,counter]
-        control = U[:,counter_u]
-        st_next = P[:,1]
-        g_shooting += self.get_constraint_shooting(st_next, st,
-                                                   control, mode)
+        if no_objective is False:
+            mode = 0
+            st = X[:,counter]
+            control = U[:,counter_u]
+            st_next = P[:,1]
+            g_shooting += self.get_constraint_shooting(st_next, st,
+                                                       control, mode)
         g = ca.vertcat(*(g_shooting + g_inter_robot))
         # Configure bounds of g
         n_g_shooting = ca.vertcat(*g_shooting).shape[0]
@@ -266,6 +267,8 @@ class Planner():
         that favors sparsity.
         """
         U = self.U
+        X = self.X
+        P = self.P
         obj = 0
         for i in range(U.shape[1]):
             u = U[:,i]
@@ -275,13 +278,13 @@ class Planner():
                 obj += ca.norm_1(u)
         
         if no_objective is True:
-            obj = 0
+            obj = ca.norm_1((X[:,-1] - P[:,-1]))
         return obj
 
     def get_optimization(self, is_discrete = False, is_sparse = False,
                          no_objective = False):
         """Sets up and returns a CASADI optimization object."""
-        g, lbg, ubg = self.get_constraints()
+        g, lbg, ubg = self.get_constraints(no_objective)
         optim_var, lbx, ubx, discrete, p = self.get_optim_vars()
         obj = self.get_objective(is_sparse, no_objective)
         nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
@@ -313,20 +316,23 @@ class Planner():
         in rotation mode."""
         rotation_distance = self.swarm.specs.rotation_distance
         r = np.linalg.norm(u)
-        r1 = max(np.floor(r/rotation_distance)*rotation_distance,
-                 rotation_distance)
-        r2 = rotation_distance
-        teta = ca.SX.sym('t',2)
-        f1 = -r1*ca.sin(teta[0])-r2*ca.sin(teta[1]) - u[0]
-        f2 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[1]
-        f = ca.Function('g',[teta],[ca.vertcat(*[f1,f2])])
-        F = ca.rootfinder('F','newton',f)
-        teta_value = F(np.random.rand(2))
-        u_possible = np.zeros((2,2))
-        u_possible[0,0] = -r1*np.sin(teta_value[0])
-        u_possible[1,0] = r1*np.cos(teta_value[0])
-        u_possible[0,1] = -r2*np.sin(teta_value[1])
-        u_possible[1,1] = r2*np.cos(teta_value[1])
+        if r>0:
+            r1 = max(np.floor(r/rotation_distance)*rotation_distance,
+                     rotation_distance)
+            r2 = rotation_distance
+            teta = ca.SX.sym('t',2)
+            f1 = -r1*ca.sin(teta[0])-r2*ca.sin(teta[1]) - u[0]
+            f2 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[1]
+            f = ca.Function('g',[teta],[ca.vertcat(*[f1,f2])])
+            F = ca.rootfinder('F','newton',f)
+            teta_value = F(np.random.rand(2))
+            u_possible = np.zeros((2,2))
+            u_possible[0,0] = -r1*np.sin(teta_value[0])
+            u_possible[1,0] = r1*np.cos(teta_value[0])
+            u_possible[0,1] = -r2*np.sin(teta_value[1])
+            u_possible[1,1] = r2*np.cos(teta_value[1])
+        else:
+            u_possible = np.zeros((2,2))
         return u_possible
 
 
@@ -379,22 +385,24 @@ class Planner():
                     # Keep track of rotations done.
                     rotation_remainder += UZ[:2,counter_u]
                     counter_u += 1
-                else:
-                    # if this is last mode of current outer loop.
-                    break
             # Take rotation corresponding the current outer loop.
             mode = 0
             u_last = U_sol[:,counter] - rotation_remainder
             r_last = np.linalg.norm(u_last)
-            r_possible = (round((r_last-rotation_distance)
-                                /((n_mode-1)*rotation_distance))
-                          *(n_mode-1)*rotation_distance)
-            r_possible = r_possible + rotation_distance
-            # Take one rotation in the direction of
-            # last input.
-            UZ[0,counter_u] = u_last[0]*r_possible/r_last
-            UZ[1,counter_u] = u_last[1]*r_possible/r_last
-            UZ[2,counter_u] = mode
+            if r_last > 0 :
+                r_possible = (round((r_last-rotation_distance)
+                                    /((n_mode-1)*rotation_distance))
+                              *(n_mode-1)*rotation_distance)
+                r_possible = r_possible + rotation_distance
+                # Take one rotation in the direction of
+                # last input.
+                UZ[0,counter_u] = u_last[0]*r_possible/r_last
+                UZ[1,counter_u] = u_last[1]*r_possible/r_last
+                UZ[2,counter_u] = mode
+            else:
+                UZ[0,counter_u] = 0
+                UZ[1,counter_u] = 0
+                UZ[2,counter_u] = mode
             # Update remainder of rotation.
             rotation_remainder = -(u_last - UZ[:2,counter_u])
             counter += 1
@@ -402,7 +410,7 @@ class Planner():
         # Refine the last step into two acceptable rotations
         UZ[:2,-2:] = self.__accurate_rotation(u_last)
         # Calculate the corresponding polar coordinate inputs.
-        U = UZ
+        U[2,:] = UZ[2,:]
         for i in range(UZ.shape[1]):
             U[:2,i] = self.__cartesian_to_polar(UZ[:2,i])
             if U[2,i] == 0:
@@ -453,10 +461,10 @@ if __name__ == '__main__':
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
     optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
-    obj = planner.get_objective(sparse = False, no_objective=False)
+    obj = planner.get_objective(sparse = False, no_objective=True)
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
     solver = planner.get_optimization(is_discrete = False, is_sparse = False,
-                                      no_objective = False)
+                                      no_objective = True)
     xf = np.array([0,0,0,20])
     sol, U_sol, X_sol, UZ, U = planner.solve_optimization(xf, no_boundary=False)
     anim = swarm.simanimation(U,1000)
