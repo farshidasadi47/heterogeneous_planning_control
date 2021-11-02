@@ -297,7 +297,7 @@ class Planner():
         else:
             opts = {}
             opts["knitro.algorithm"] = 0  # automatic
-            opts["knitro.ms_enable"] = 1
+            opts["knitro.ms_enable"] = 0
             opts["knitro.convex"] = 0  # non convex
             opts["knitro.bar_feasible"] = 3  # emphasize feasibility
 

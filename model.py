@@ -183,13 +183,14 @@ class Swarm:
         return X, U
 
     
-    def __simplot_set(self, ax):
+    def __simplot_set(self, ax, no_boundary = False):
         """Sets the plot configuration. """
         self.__colors = ['k','r','b','g','m']
         self.__markers = ['o','s','P','h','*']
         plt.sca(ax)
-        plt.ylim([-85,85])
-        plt.xlim([-105,105])
+        if no_boundary is False:
+            plt.ylim([-85,85])
+            plt.xlim([-105,105])
         plt.title('Swarm transition')
         plt.xlabel('x axis')
         plt.ylabel('y axis')
@@ -236,7 +237,7 @@ class Swarm:
 
     def simplot(self, input_series, plot_length = 10000,
                 position = None,
-                angle = None, mode = None):
+                angle = None, mode = None, no_boundary = False):
         """Plots the swarm motion for a given logical series of input.
         """
         if (input_series.ndim != 2):
@@ -255,19 +256,19 @@ class Swarm:
         print(self.__simulate_result[0][:,self.__simulate_result[4]].T)
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
-        self.__simplot_set(ax)
+        self.__simplot_set(ax, no_boundary)
         # plot the figure
         self.__simplot_plot(ax, plot_length)
         return fig, ax
     
-    def __animate(self, i, ax):
+    def __animate(self, i, ax, no_boundary):
         ax.clear()
-        self.__simplot_set(ax)
+        self.__simplot_set(ax, no_boundary)
         self.__simplot_plot(ax, i)
 
     def simanimation(self,input_series, anim_length = 10000,
                      position = None,
-                    angle = None, mode = None):
+                    angle = None, mode = None, no_boundary = False):
         """This function produces an animation from swarm transition
         for a given logical input series and specified length."""
         if (input_series.ndim != 2):
@@ -285,9 +286,9 @@ class Swarm:
         anim_length = min(anim_length, self.__simulate_result[0].shape[1])
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
-        self.__simplot_set(ax)
+        self.__simplot_set(ax, no_boundary)
         # Animating
-        anim = animation.FuncAnimation(fig, self.__animate, fargs=(ax,),
+        anim = animation.FuncAnimation(fig, self.__animate, fargs=(ax,no_boundary),
                               interval=500, frames=range(1,anim_length+1))
         return anim
 
