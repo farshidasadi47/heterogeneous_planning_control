@@ -144,7 +144,7 @@ class Planner():
         g += [x_next - x - ca.mtimes(B,u)]
         return g
 
-    def get_constraints(self, no_objective = False):
+    def get_constraints(self):
         """This function builds constraints of optimization."""
         mode_sequence = self.mode_sequence
         n_mode = self.swarm.specs.n_mode
@@ -190,13 +190,12 @@ class Planner():
                 counter += 1
                 counter_u += 1
         # Take last step.
-        if no_objective is False:
-            mode = 0
-            st = X[:,counter]
-            control = U[:,counter_u]
-            st_next = P[:,1]
-            g_shooting += self.get_constraint_shooting(st_next, st,
-                                                       control, mode)
+        mode = 0
+        st = X[:,counter]
+        control = U[:,counter_u]
+        st_next = P[:,1]
+        g_shooting += self.get_constraint_shooting(st_next, st,
+                                                   control, mode)
         g = ca.vertcat(*(g_shooting + g_inter_robot))
         # Configure bounds of g
         n_g_shooting = ca.vertcat(*g_shooting).shape[0]
@@ -261,7 +260,7 @@ class Planner():
         p = ca.reshape(P, -1, 1)
         return optim_var, lbx, ubx, discrete, p
 
-    def get_objective(self, sparse = False, no_objective = False):
+    def get_objective(self):
         """Returns objective function for optimization.
         If sparse = True, then it returns first norm objective function
         that favors sparsity.
@@ -272,23 +271,17 @@ class Planner():
         obj = 0
         for i in range(U.shape[1]):
             u = U[:,i]
-            if sparse is False:
-                obj += ca.sum1(u*u)
-            else:
-                obj += ca.norm_1(u)
-        
-        if no_objective is True:
-            obj = ca.norm_1((X[:,-1] - P[:,-1]))
+            obj += ca.sum1(u*u)
+
         return obj
 
-    def get_optimization(self, is_discrete = False, is_sparse = False,
-                         no_objective = False):
+    def get_optimization(self, solver_name = 'ipopt', no_boundary = False):
         """Sets up and returns a CASADI optimization object."""
-        g, lbg, ubg = self.get_constraints(no_objective)
+        g, lbg, ubg = self.get_constraints()
         optim_var, lbx, ubx, discrete, p = self.get_optim_vars()
-        obj = self.get_objective(is_sparse, no_objective)
+        obj = self.get_objective()
         nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-        if is_discrete is False:
+        if solver_name == "ipopt":
             # Use ipopt solver and consider all variables as continuous.
             opts = {}
             #opts['ipopt.print_level'] = 0
@@ -297,7 +290,7 @@ class Planner():
         else:
             opts = {}
             opts["knitro.algorithm"] = 0  # automatic
-            opts["knitro.ms_enable"] = 0
+            opts["knitro.ms_enable"] = 1
             opts["knitro.convex"] = 0  # non convex
             opts["knitro.bar_feasible"] = 3  # emphasize feasibility
 
@@ -477,9 +470,7 @@ class Planner():
 
         return sol
 
-    def solve_optimization(self, xf, is_discrete=False, is_sparse=False,
-                           no_boundary = False,
-                           unconstrained = False):
+    def solve_optimization(self, xf, no_boundary = False):
         """Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
         """
@@ -491,19 +482,14 @@ class Planner():
 
         U0 = ca.DM.zeros(self.U.shape)
         X0 = ca.DM(np.matlib.repmat(xi,self.X.shape[1],1).T)
-
         x0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
-        #sol0 = self.solve_unconstrained(xi,xf)
-        #x0 = sol0['x']
         p = np.hstack((xi, xf))
-        if unconstrained is False:
-            if no_boundary is False:
-                sol = solver(x0 = x0, lbx = lbx, ubx = ubx,
-                             lbg = lbg, ubg = ubg, p = p)
-            else:
-                sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
+
+        if no_boundary is False:
+            sol = solver(x0 = x0, lbx = lbx, ubx = ubx,
+                         lbg = lbg, ubg = ubg, p = p)
         else:
-            sol = sol0
+            sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
         # recovering the solution in appropriate format
         P_sol = np.vstack((xi,xf)).T
         U_sol, X_sol, UZ, U = self.__post_process_u(sol)
@@ -528,14 +514,12 @@ if __name__ == '__main__':
     g, lbg, ubg = planner.get_constraints()
     G = ca.Function('g',[planner.X,planner.U,planner.P],[g])
     optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
-    obj = planner.get_objective(sparse = False, no_objective=False)
+    obj = planner.get_objective()
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    solver = planner.get_optimization(is_discrete = True, is_sparse = False,
-                                      no_objective = False)
+    solver = planner.get_optimization(solver_name='ipot', no_boundary=False)
     xf = np.array([0,0,-40,0,-20,0])
     sol, U_sol, X_sol, P_sol, UZ, U = planner.solve_optimization(xf,
-                                                          no_boundary=True,
-                                                          unconstrained=False)
+                                                          no_boundary=True)
     anim = swarm.simanimation(U,1000)
     #swarm.simplot(U,10000)
     #x = ca.SX.sym('x',4*2)
