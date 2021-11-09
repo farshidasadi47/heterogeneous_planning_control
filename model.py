@@ -183,12 +183,12 @@ class Swarm:
         return X, U
 
     
-    def __simplot_set(self, ax, no_boundary = False):
+    def __simplot_set(self, ax, boundary = False):
         """Sets the plot configuration. """
         self.__colors = ['k','r','b','g','m']
         self.__markers = ['o','s','P','h','*']
         plt.sca(ax)
-        if no_boundary is False:
+        if boundary is True:
             plt.ylim([-85,85])
             plt.xlim([-105,105])
         plt.title('Swarm transition')
@@ -237,7 +237,7 @@ class Swarm:
 
     def simplot(self, input_series, plot_length = 10000,
                 position = None,
-                angle = None, mode = None, no_boundary = False):
+                angle = None, mode = None, boundary = False):
         """Plots the swarm motion for a given logical series of input.
         """
         if (input_series.ndim != 2):
@@ -253,22 +253,21 @@ class Swarm:
         self.reset_state(position, angle, mode)
         # Simulate the system
         self.simulate(input_series)
-        print(self.__simulate_result[0][:,self.__simulate_result[4]].T)
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
-        self.__simplot_set(ax, no_boundary)
+        self.__simplot_set(ax, boundary)
         # plot the figure
         self.__simplot_plot(ax, plot_length)
         return fig, ax
     
-    def __animate(self, i, ax, no_boundary):
+    def __animate(self, i, ax, boundary):
         ax.clear()
-        self.__simplot_set(ax, no_boundary)
+        self.__simplot_set(ax, boundary)
         self.__simplot_plot(ax, i)
 
     def simanimation(self,input_series, anim_length = 10000,
                      position = None,
-                    angle = None, mode = None, no_boundary = False):
+                    angle = None, mode = None, boundary = False):
         """This function produces an animation from swarm transition
         for a given logical input series and specified length."""
         if (input_series.ndim != 2):
@@ -286,9 +285,9 @@ class Swarm:
         anim_length = min(anim_length, self.__simulate_result[0].shape[1])
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
-        self.__simplot_set(ax, no_boundary)
+        self.__simplot_set(ax, boundary)
         # Animating
-        anim = animation.FuncAnimation(fig, self.__animate, fargs=(ax,no_boundary),
+        anim = animation.FuncAnimation(fig, self.__animate, fargs=(ax,boundary),
                               interval=500, frames=range(1,anim_length+1))
         return anim
 
@@ -326,5 +325,5 @@ if __name__ == '__main__':
     length = 1000
     #swarm.simplot(input_series,length)
     #print(swarm.__simulate_result[0][:,swarm.__simulate_result[4]].T)
-    anim = swarm.simanimation(input_series,length)
+    anim = swarm.simanimation(input_series,length,boundary=True)
 

@@ -159,7 +159,7 @@ class Planner():
             g += [zi-zj]
         return g
 
-    def get_constraints(self, no_boundary = False):
+    def get_constraints(self, boundary = False):
         """This function builds constraints of optimization."""
         mode_sequence = self.mode_sequence
         n_mode = self.swarm.specs.n_mode
@@ -217,13 +217,8 @@ class Planner():
         n_g_shooting = ca.vertcat(*g_shooting).shape[0]
         n_g_inter_robot = ca.vertcat(*g_inter_robot).shape[0]
         n_g_distance = ca.vertcat(*g_distance).shape[0]
-        if no_boundary is True:
-            g = ca.vertcat(*(g_shooting + g_inter_robot))
-            lbg = np.hstack((np.zeros(n_g_shooting),
-                             np.zeros(n_g_inter_robot) ))
-            ubg = np.hstack((np.zeros(n_g_shooting),
-                             np.inf*np.ones(n_g_inter_robot) ))
-        else:
+        if boundary is True:
+            # With constraint related to space boundary
             g = ca.vertcat(*(g_shooting + g_inter_robot + g_distance))
             delgd = np.array([self.ub_space_x - self.lb_space_x,
                               self.ub_space_y - self.lb_space_y])
@@ -233,9 +228,16 @@ class Planner():
             ubg = np.hstack((np.zeros(n_g_shooting),
                              np.inf*np.ones(n_g_inter_robot),
                              np.repeat(delgd,n_g_distance/2) ))
+        else:
+            # Without constrait related to space boundary
+            g = ca.vertcat(*(g_shooting + g_inter_robot))
+            lbg = np.hstack((np.zeros(n_g_shooting),
+                             np.zeros(n_g_inter_robot) ))
+            ubg = np.hstack((np.zeros(n_g_shooting),
+                             np.inf*np.ones(n_g_inter_robot) ))
         return g, lbg, ubg
 
-    def get_optim_vars(self,no_boundary = False):
+    def get_optim_vars(self,boundary = False):
         """This function returns optimization flatten variable and its
         bounds."""
         U = self.U
@@ -250,7 +252,7 @@ class Planner():
         # Configure bounds for U.
         lbu = []
         ubu = []
-        if no_boundary is False:
+        if boundary is True:
             # Respects space boundary
             lbuu = [-(self.ub_space_x - self.lb_space_x),
                     -(self.ub_space_y - self.lb_space_y)]
@@ -295,10 +297,10 @@ class Planner():
 
         return obj
 
-    def get_optimization(self, solver_name = 'ipopt', no_boundary = False):
+    def get_optimization(self, solver_name = 'ipopt', boundary = False):
         """Sets up and returns a CASADI optimization object."""
-        g, lbg, ubg = self.get_constraints()
-        optim_var, lbx, ubx, p = self.get_optim_vars()
+        g, lbg, ubg = self.get_constraints(boundary)
+        optim_var, lbx, ubx, p = self.get_optim_vars(boundary)
         obj = self.get_objective()
         nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
         _solver = self.solver_opt[solver_name]
@@ -505,7 +507,7 @@ class Planner():
         sol['x']  = np.hstack((U_sol.T.flatten(), X_sol.T.flatten()))
         return sol
 
-    def solve_optimization(self, xf, no_boundary = False):
+    def solve_optimization(self, xf, boundary = False):
         """Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
         """
@@ -520,7 +522,7 @@ class Planner():
         x0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
         p = np.hstack((xi, xf))
 
-        if no_boundary is False:
+        if boundary is True:
             sol = solver(x0 = x0, lbx = lbx, ubx = ubx,
                          lbg = lbg, ubg = ubg, p = p)
         else:
@@ -546,16 +548,16 @@ if __name__ == '__main__':
     #print(planner.X.T)
     #print(planner.U.T)
     #print(planner.P.T)
-    g, lbg, ubg = planner.get_constraints()
+    g, lbg, ubg = planner.get_constraints(boundary=False)
     G = ca.Function('g',[planner.X,planner.U,planner.P],[g])
-    optim_var, lbx, ubx, p = planner.get_optim_vars(no_boundary=True)
+    optim_var, lbx, ubx, p = planner.get_optim_vars(boundary=True)
     obj = planner.get_objective()
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    solver = planner.get_optimization(solver_name='knitro', no_boundary=False)
+    solver = planner.get_optimization(solver_name='knitro', boundary=False)
     xf = np.array([0,0,-40,0,-20,0])
     sol, U_sol, X_sol, P_sol, UZ, U = planner.solve_optimization(xf,
-                                                          no_boundary=True)
-    anim = swarm.simanimation(U,1000,no_boundary=True)
+                                                          boundary=False)
+    anim = swarm.simanimation(U,1000,boundary=False)
     #swarm.simplot(U,10000)
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
