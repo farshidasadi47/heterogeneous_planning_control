@@ -235,10 +235,9 @@ class Planner():
                              np.repeat(delgd,n_g_distance/2) ))
         return g, lbg, ubg
 
-    def get_optim_vars(self):
-        """This function returns optimization flatten variable, its
-        bounds, and the discrete vector that indicates integer
-        variables."""
+    def get_optim_vars(self,no_boundary = False):
+        """This function returns optimization flatten variable and its
+        bounds."""
         U = self.U
         X = self.X
         P  = self.P
@@ -249,45 +248,37 @@ class Planner():
         optim_var = ca.vertcat(ca.reshape(U,-1,1), ca.reshape(X,-1,1))
         # CASADI vert cat does column wise operation.
         # Configure bounds for U.
-        discrete_U = []
         lbu = []
         ubu = []
-        for i_outer in range(n_outer):
-            for mode in range(1,n_mode):
-                for i_inner in range(n_inner):
-                    discrete_U += [False]*2
-                    lbu += [-(self.ub_space_x - self.lb_space_x),
-                            -(self.ub_space_y - self.lb_space_y)]
-                    ubu += [self.ub_space_x - self.lb_space_x,
-                            self.ub_space_y - self.lb_space_y]
-            # Configure bounds for last step in current outer loop.
-            discrete_U += [False,False]
-            lbu += [-(self.ub_space_x - self.lb_space_x),
+        if no_boundary is False:
+            # Respects space boundary
+            lbuu = [-(self.ub_space_x - self.lb_space_x),
                     -(self.ub_space_y - self.lb_space_y)]
-            ubu += [self.ub_space_x - self.lb_space_x,
+            ubuu = [self.ub_space_x - self.lb_space_x,
                     self.ub_space_y - self.lb_space_y]
-        # Configure bounds related to X.
-        discrete_X = []
-        lbxx = []
-        ubxx =[]
+        else:
+            # No space boundary
+            lbuu = [-np.inf,-np.inf]
+            ubuu = [np.inf,np.inf]
+        
         for i_outer in range(n_outer):
-            # Configure bounds for initial X in the current outer loop.
-            discrete_X += [False]*2*n_robot
-            lbxx += [self.lb_space_x, self.lb_space_y]*n_robot
-            ubxx += [self.ub_space_x, self.ub_space_y]*n_robot
-            # Configure bounds for the rest of X in current outer loop.
             for mode in range(1,n_mode):
                 for i_inner in range(n_inner):
-                    discrete_X += [False]*2*n_robot
-                    lbxx += [self.lb_space_x, self.lb_space_y]*n_robot
-                    ubxx += [self.ub_space_x, self.ub_space_y]*n_robot
+                    lbu += lbuu
+                    ubu += ubuu
+            # Configure bounds for last step in current outer loop.
+            lbu += lbuu
+            ubu += ubuu
+
+        # Configure bounds related to X.
+        lbxx = [-np.inf]*2*n_robot*n_outer*(n_inner*(n_mode-1) + 1)
+        ubxx = [np.inf]*2*n_robot*n_outer*(n_inner*(n_mode-1) + 1)
         # concatenating X and U bounds
-        discrete = discrete_U + discrete_X
         lbx = np.array(lbu + lbxx)
         ubx = np.array(ubu + ubxx)
         # concatenating optimization parameter
         p = ca.reshape(P, -1, 1)
-        return optim_var, lbx, ubx, discrete, p
+        return optim_var, lbx, ubx, p
 
     def get_objective(self):
         """Returns objective function for optimization.
@@ -307,7 +298,7 @@ class Planner():
     def get_optimization(self, solver_name = 'ipopt', no_boundary = False):
         """Sets up and returns a CASADI optimization object."""
         g, lbg, ubg = self.get_constraints()
-        optim_var, lbx, ubx, discrete, p = self.get_optim_vars()
+        optim_var, lbx, ubx, p = self.get_optim_vars()
         obj = self.get_objective()
         nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
         _solver = self.solver_opt[solver_name]
@@ -317,7 +308,6 @@ class Planner():
         
         self.lbg, self.ubg = lbg, ubg
         self.lbx, self.ubx = lbx, ubx
-        self.discrete = discrete
         self.solver = solver
         return solver
     def __solvers(self):
@@ -558,7 +548,7 @@ if __name__ == '__main__':
     #print(planner.P.T)
     g, lbg, ubg = planner.get_constraints()
     G = ca.Function('g',[planner.X,planner.U,planner.P],[g])
-    optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
+    optim_var, lbx, ubx, p = planner.get_optim_vars(no_boundary=True)
     obj = planner.get_objective()
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
     solver = planner.get_optimization(solver_name='knitro', no_boundary=False)
