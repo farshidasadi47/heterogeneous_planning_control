@@ -144,8 +144,22 @@ class Planner():
         g = []
         g += [x_next - x - ca.mtimes(B,u)]
         return g
+    
+    def get_constraint_distance(self,x_next):
+        """"This function return the constraint with respective to
+        maximum distance between each milirobot for each axis."""
+        ubx = self.ub_space_x
+        lbx = self.lb_space_x
+        uby = self.ub_space_y
+        lby = self.lb_space_y
+        g = []
+        for pair in self.robot_pairs:
+            zi = x_next[2*pair[0]:2*pair[0]+2]
+            zj = x_next[2*pair[1]:2*pair[1]+2]
+            g += [zi-zj]
+        return g
 
-    def get_constraints(self):
+    def get_constraints(self, no_boundary = False):
         """This function builds constraints of optimization."""
         mode_sequence = self.mode_sequence
         n_mode = self.swarm.specs.n_mode
@@ -160,6 +174,7 @@ class Planner():
         g_shooting = []
         g_shooting += [P[:,0] - X[:,0]]
         g_inter_robot = []
+        g_distance = []
         counter = 0
         counter_u = 0
         for i_outer in range(n_outer):
@@ -176,6 +191,7 @@ class Planner():
                     g_inter_robot += self.get_constraint_inter_robot(st,
                                                                      control,
                                                                    mode_mapped)
+                    g_distance += self.get_constraint_distance(st_next)
                     counter += 1
                     counter_u += 1
 
@@ -197,14 +213,26 @@ class Planner():
         st_next = P[:,1]
         g_shooting += self.get_constraint_shooting(st_next, st,
                                                    control, mode)
-        g = ca.vertcat(*(g_shooting + g_inter_robot))
         # Configure bounds of g
         n_g_shooting = ca.vertcat(*g_shooting).shape[0]
         n_g_inter_robot = ca.vertcat(*g_inter_robot).shape[0]
-        lbg = np.hstack((np.zeros(n_g_shooting),
-                         np.zeros(n_g_inter_robot) ))
-        ubg = np.hstack((np.zeros(n_g_shooting),
-                         np.inf*np.ones(n_g_inter_robot) ))
+        n_g_distance = ca.vertcat(*g_distance).shape[0]
+        if no_boundary is True:
+            g = ca.vertcat(*(g_shooting + g_inter_robot))
+            lbg = np.hstack((np.zeros(n_g_shooting),
+                             np.zeros(n_g_inter_robot) ))
+            ubg = np.hstack((np.zeros(n_g_shooting),
+                             np.inf*np.ones(n_g_inter_robot) ))
+        else:
+            g = ca.vertcat(*(g_shooting + g_inter_robot + g_distance))
+            delgd = np.array([self.ub_space_x - self.lb_space_x,
+                              self.ub_space_y - self.lb_space_y])
+            lbg = np.hstack((np.zeros(n_g_shooting),
+                             np.zeros(n_g_inter_robot),
+                             np.repeat(-delgd,n_g_distance/2) ))
+            ubg = np.hstack((np.zeros(n_g_shooting),
+                             np.inf*np.ones(n_g_inter_robot),
+                             np.repeat(delgd,n_g_distance/2) ))
         return g, lbg, ubg
 
     def get_optim_vars(self):
