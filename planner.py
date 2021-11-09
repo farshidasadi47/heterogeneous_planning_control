@@ -31,6 +31,7 @@ class Planner():
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
+        self.solver_opt = self.__solvers()
         self.solver = None
         self.xi = self.swarm.position
         self.xf = None
@@ -281,25 +282,42 @@ class Planner():
         optim_var, lbx, ubx, discrete, p = self.get_optim_vars()
         obj = self.get_objective()
         nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-        if solver_name == "ipopt":
-            # Use ipopt solver and consider all variables as continuous.
-            opts = {}
-            #opts['ipopt.print_level'] = 0
-            #opts['print_time'] = 0
-            solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
-        else:
-            opts = {}
-            opts["knitro.algorithm"] = 0  # automatic
-            opts["knitro.ms_enable"] = 1
-            opts["knitro.convex"] = 0  # non convex
-            opts["knitro.bar_feasible"] = 3  # emphasize feasibility
+        _solver = self.solver_opt[solver_name]
 
-            solver = ca.nlpsol('solver', 'knitro', nlp_prob, opts)
+        solver = ca.nlpsol('solver', _solver['name'],
+                           nlp_prob, _solver['opts'])
+        
         self.lbg, self.ubg = lbg, ubg
         self.lbx, self.ubx = lbx, ubx
         self.discrete = discrete
         self.solver = solver
         return solver
+    def __solvers(self):
+        """This function build a dictionary of different solvers and
+        their corresponding options.
+        """
+        solvers = {}
+        # Configuring different options for solverws
+        solvers['ipopt'] = {}
+        solvers['ipopt']['name'] = 'ipopt'
+        solvers['ipopt']['opts'] = {}
+
+        # See knitro online manual for more information
+        solvers['knitro'] = {}
+        solvers['knitro']['name'] = 'knitro'
+        solvers['knitro']['opts'] = {}
+        # non convex
+        solvers['knitro']['opts']['knitro.convex'] = 0
+        # multiple start, ends when finds first feasible solution
+        solvers['knitro']['opts']['knitro.ms_enable'] = 1
+        solvers['knitro']['opts']['knitro.ms_terminate'] = 2
+        # emphasize feasibility
+        solvers['knitro']['opts']['knitro.bar_feasible'] = 2
+        solvers['knitro']['opts']['knitro.bar_switchrule'] = 3
+        # how many fine iteration to do after interior point method
+        solvers['knitro']['opts']['knitro.bar_maxcrossit'] = 30
+
+        return solvers
 
     def __cartesian_to_polar(self,z):
         """Converts cartesian to polar coordinate."""
@@ -467,7 +485,6 @@ class Planner():
             counter += 1
         sol = {}
         sol['x']  = np.hstack((U_sol.T.flatten(), X_sol.T.flatten()))
-
         return sol
 
     def solve_optimization(self, xf, no_boundary = False):
@@ -516,11 +533,11 @@ if __name__ == '__main__':
     optim_var, lbx, ubx, discrete, p = planner.get_optim_vars()
     obj = planner.get_objective()
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    solver = planner.get_optimization(solver_name='ipot', no_boundary=False)
+    solver = planner.get_optimization(solver_name='knitro', no_boundary=False)
     xf = np.array([0,0,-40,0,-20,0])
     sol, U_sol, X_sol, P_sol, UZ, U = planner.solve_optimization(xf,
                                                           no_boundary=True)
-    anim = swarm.simanimation(U,1000)
+    anim = swarm.simanimation(U,1000,no_boundary=True)
     #swarm.simplot(U,10000)
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
