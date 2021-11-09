@@ -224,10 +224,10 @@ class Planner():
                               self.ub_space_y - self.lb_space_y])
             lbg = np.hstack((np.zeros(n_g_shooting),
                              np.zeros(n_g_inter_robot),
-                             np.repeat(-delgd,n_g_distance/2) ))
+                             np.tile(-delgd,n_g_distance/2) ))
             ubg = np.hstack((np.zeros(n_g_shooting),
                              np.inf*np.ones(n_g_inter_robot),
-                             np.repeat(delgd,n_g_distance/2) ))
+                             np.tile(delgd,n_g_distance/2) ))
         else:
             # Without constrait related to space boundary
             g = ca.vertcat(*(g_shooting + g_inter_robot))
@@ -252,6 +252,8 @@ class Planner():
         # Configure bounds for U.
         lbu = []
         ubu = []
+        boundary = False  # The boundary option for this method should
+                          # be totally removed.
         if boundary is True:
             # Respects space boundary
             lbuu = [-(self.ub_space_x - self.lb_space_x),
@@ -269,12 +271,18 @@ class Planner():
                     lbu += lbuu
                     ubu += ubuu
             # Configure bounds for last step in current outer loop.
-            lbu += lbuu
-            ubu += ubuu
+            lbu += [-np.inf,-np.inf]
+            ubu += [np.inf,np.inf]
 
         # Configure bounds related to X.
-        lbxx = [-np.inf]*2*n_robot*n_outer*(n_inner*(n_mode-1) + 1)
-        ubxx = [np.inf]*2*n_robot*n_outer*(n_inner*(n_mode-1) + 1)
+        if boundary is True:
+            lbxx = ([self.lb_space_x,self.lb_space_y]
+                    *n_robot*n_outer*(n_inner*(n_mode-1) + 1))
+            ubxx = ([self.ub_space_x,self.ub_space_y]
+                    *n_robot*n_outer*(n_inner*(n_mode-1) + 1))
+        else:
+            lbxx = [-np.inf]*2*n_robot*n_outer*(n_inner*(n_mode-1) + 1)
+            ubxx = [np.inf]*2*n_robot*n_outer*(n_inner*(n_mode-1) + 1)
         # concatenating X and U bounds
         lbx = np.array(lbu + lbxx)
         ubx = np.array(ubu + ubxx)
@@ -507,7 +515,7 @@ class Planner():
         sol['x']  = np.hstack((U_sol.T.flatten(), X_sol.T.flatten()))
         return sol
 
-    def solve_optimization(self, xf, boundary = False):
+    def solve_optimization(self, xf):
         """Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
         """
@@ -522,11 +530,9 @@ class Planner():
         x0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
         p = np.hstack((xi, xf))
 
-        if boundary is True:
-            sol = solver(x0 = x0, lbx = lbx, ubx = ubx,
-                         lbg = lbg, ubg = ubg, p = p)
-        else:
-            sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
+        sol = solver(x0 = x0, lbx = lbx, ubx = ubx,
+                     lbg = lbg, ubg = ubg, p = p)
+        #sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
         # recovering the solution in appropriate format
         P_sol = np.vstack((xi,xf)).T
         U_sol, X_sol, UZ, U = self.__post_process_u(sol)
@@ -548,17 +554,16 @@ if __name__ == '__main__':
     #print(planner.X.T)
     #print(planner.U.T)
     #print(planner.P.T)
-    g, lbg, ubg = planner.get_constraints(boundary=False)
-    G = ca.Function('g',[planner.X,planner.U,planner.P],[g])
-    optim_var, lbx, ubx, p = planner.get_optim_vars(boundary=True)
-    obj = planner.get_objective()
+    #g, lbg, ubg = planner.get_constraints(boundary=False)
+    #G = ca.Function('g',[planner.X,planner.U,planner.P],[g])
+    #optim_var, lbx, ubx, p = planner.get_optim_vars(boundary=False)
+    #obj = planner.get_objective()
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    solver = planner.get_optimization(solver_name='knitro', boundary=False)
+    solver = planner.get_optimization(solver_name='knitro', boundary=True)
     xf = np.array([0,0,-40,0,-20,0])
-    sol, U_sol, X_sol, P_sol, UZ, U = planner.solve_optimization(xf,
-                                                          boundary=False)
-    anim = swarm.simanimation(U,1000,boundary=False)
-    #swarm.simplot(U,10000)
+    sol, U_sol, X_sol, P_sol, UZ, U = planner.solve_optimization(xf)
+    #anim = swarm.simanimation(U,1000,boundary=False)
+    swarm.simplot(U,10000)
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
     #i = 2
