@@ -38,6 +38,9 @@ class SwarmSpecs:
             for robot in range(self.n_robot):
                 self.B[mode,2*robot:2*(robot+1),:] = (self.beta[mode,robot]
                                                       *np.eye(2))
+        # space boundaries
+        self.ubx = 120
+        self.uby = 95
         
 
 class Swarm:
@@ -185,23 +188,42 @@ class Swarm:
     
     def __simplot_set(self, ax, boundary = False):
         """Sets the plot configuration. """
-        self.__colors = ['k','r','b','g','m']
-        self.__markers = ['o','s','P','h','*']
+        self.__colors = ['k','r','b','g','m','y','c',]
+        self.__markers = ['o','s','P','h','*','+','x','d']
         plt.sca(ax)
         if boundary is True:
-            plt.ylim([-85,85])
-            plt.xlim([-105,105])
+            plt.ylim([-self.specs.uby,self.specs.uby])
+            plt.xlim([-self.specs.ubx,self.specs.ubx])
         plt.title('Swarm transition')
         plt.xlabel('x axis')
         plt.ylabel('y axis')
         plt.gca().set_aspect('equal', adjustable='box')
         plt.grid()
     
-    def __simplot_plot(self, ax, plot_length):
+    def __simplot_plot(self, ax, plot_length, last_section = False):
         """Plots the result of simulation for the given length."""
+        rotation_distance = self.specs.rotation_distance
+        tumbling_distance = self.specs.tumbling_distance
         plt.sca(ax)
         (Position, Angle, Mode, Input,
          mode_change_index) = self.__simulate_result
+        # Draw initial positions and hold it
+        for robot in range(self.specs.n_robot):
+            current_mode = Input[2,0].astype(int)
+            plt.plot(Position[2*robot,0],
+                     Position[2*robot+1,0],
+                     color = self.__colors[current_mode],
+                     marker = self.__markers[robot],
+                     linewidth=1,
+                     markerfacecolor='none')
+            # Draw circle bounding the robots
+            circle = plt.Circle([Position[2*robot,0],
+                                 Position[2*robot+1,0]],
+                                 radius=tumbling_distance/2,
+                                 linestyle='--', linewidth=0.5,
+                                 edgecolor='k', facecolor = "None")
+            ax.add_patch(circle)
+        # Draw the rest
         for robot in range(self.specs.n_robot):
             # Go over all robots.
             length_flag = False
@@ -213,31 +235,49 @@ class Swarm:
                     # Make sure we do not plot more than plot length.
                     end_index = plot_length-1
                     length_flag = True
-                label = "robot: {:1d}".format(robot)
-                if section > 1:
-                    # Avoid multiple legends for each robot.
-                    label = "_Hidden"
-                current_mode = Input[2,start_index].astype(int)
-                plt.plot(Position[2*robot,start_index:end_index+1],
-                         Position[2*robot+1,start_index:end_index+1],
-                         color = self.__colors[current_mode],
-                         marker = self.__markers[robot],
-                         linewidth=1,
-                         label = label,
-                         markerfacecolor='none')
                 if length_flag == True:
                     # Not exceed plot length.
                     break
+                if last_section == False:
+                    # If 'last_section' is set to False, all path
+                    # will be drawn.
+                    current_mode = Input[2,start_index].astype(int)
+                    plt.plot(Position[2*robot,start_index:end_index+1],
+                             Position[2*robot+1,start_index:end_index+1],
+                             color = self.__colors[current_mode],
+                             marker = self.__markers[robot],
+                             linewidth=1,
+                             markerfacecolor='none')
+            # Plot last section
+            label = "robot: {:1d}".format(robot)
+            current_mode = Input[2,start_index].astype(int)
+            plt.plot(Position[2*robot,start_index:end_index+1],
+                     Position[2*robot+1,start_index:end_index+1],
+                     color = self.__colors[current_mode],
+                     marker = self.__markers[robot],
+                     linewidth=1,
+                     label = label,
+                     markerfacecolor='none')
+            # Draw circle bounding the robots
             circle = plt.Circle([Position[2*robot,end_index],
-                                 Position[2*robot+1,end_index]], radius=5,
+                                 Position[2*robot+1,end_index]],
+                                 radius=tumbling_distance/2,
                                  edgecolor='k', facecolor = "None")
             ax.add_patch(circle)
+        # Draw usable space boundaries
+        rectangle = plt.Rectangle([-(self.specs.ubx-tumbling_distance/2),
+                                   -(self.specs.uby-tumbling_distance/2)],
+                                  2*(self.specs.ubx-tumbling_distance/2),
+                                  2*(self.specs.uby-tumbling_distance/2),
+                                  linestyle='--', linewidth=1,
+                                  edgecolor='k', facecolor='none')
+        ax.add_patch(rectangle)
         ax.legend(handlelength=0)
         plt.show()
 
     def simplot(self, input_series, plot_length = 10000,
-                position = None,
-                angle = None, mode = None, boundary = False):
+                position = None, angle = None, mode = None,
+                boundary = False, last_section = False):
         """Plots the swarm motion for a given logical series of input.
         """
         if (input_series.ndim != 2):
@@ -257,17 +297,17 @@ class Swarm:
         fig, ax = plt.subplots(constrained_layout=True)
         self.__simplot_set(ax, boundary)
         # plot the figure
-        self.__simplot_plot(ax, plot_length)
+        self.__simplot_plot(ax, plot_length, last_section)
         return fig, ax
     
-    def __animate(self, i, ax, boundary):
+    def __animate(self, i, ax, boundary, last_section):
         ax.clear()
         self.__simplot_set(ax, boundary)
-        self.__simplot_plot(ax, i)
+        self.__simplot_plot(ax, i, last_section)
 
     def simanimation(self,input_series, anim_length = 10000,
-                     position = None,
-                    angle = None, mode = None, boundary = False):
+                     position = None, angle = None, mode = None,
+                     boundary = False, last_section = False):
         """This function produces an animation from swarm transition
         for a given logical input series and specified length."""
         if (input_series.ndim != 2):
@@ -287,8 +327,9 @@ class Swarm:
         fig, ax = plt.subplots(constrained_layout=True)
         self.__simplot_set(ax, boundary)
         # Animating
-        anim = animation.FuncAnimation(fig, self.__animate, fargs=(ax,boundary),
-                              interval=500, frames=range(1,anim_length+1))
+        anim = animation.FuncAnimation(fig, self.__animate,
+                                       fargs=(ax,boundary,last_section),
+                                   interval=250, frames=range(1,anim_length+1))
         return anim
 
 ########## test section ################################################
@@ -322,8 +363,8 @@ if __name__ == '__main__':
     #u = np.array([swarm.specs.rotation_distance,swarm.angle,0])
     #swarm.update_state(u[:2],True)
     #print(swarm.position)
-    length = 1000
-    #swarm.simplot(input_series,length)
+    length = 10000
+    #swarm.simplot(input_series,length, boundary=True, last_section=False)
     #print(swarm.__simulate_result[0][:,swarm.__simulate_result[4]].T)
-    anim = swarm.simanimation(input_series,length,boundary=True)
+    anim = swarm.simanimation(input_series,length,boundary=True, last_section=True)
 

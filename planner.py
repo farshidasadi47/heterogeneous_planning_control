@@ -16,18 +16,18 @@ class Planner():
     """This class contains objects and methods for planning a path
     for a given swarm of milirobots."""
 
-    def __init__(self, swarm: model.Swarm, n_inner = 2, n_outer = 2):
+    def __init__(self, swarm: model.Swarm, n_inner = 1, n_outer = 3):
         self.swarm = swarm
         self.robot_pairs = self.__set_robot_pairs()
         self.mode_sequence = self.__set_mode_sequence()
-        self.d_min = 10
+        self.d_min = swarm.specs.tumbling_distance
         self.x_final = None
         self.n_inner = n_inner
         self.n_outer = n_outer
-        self.ub_space_x = 105
-        self.lb_space_x = -105
-        self.ub_space_y = 85
-        self.lb_space_y = -85
+        self.ub_space_x = swarm.specs.ubx-swarm.specs.tumbling_distance
+        self.lb_space_x = -(swarm.specs.ubx-swarm.specs.tumbling_distance)
+        self.ub_space_y = swarm.specs.uby-swarm.specs.tumbling_distance
+        self.lb_space_y = -(swarm.specs.uby-swarm.specs.tumbling_distance)
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
@@ -39,10 +39,11 @@ class Planner():
     def set_space_limit(self, ubx, lbx, uby, lby):
         """Sets space boundary limits and updates the bands in
         optimization problem."""
-        self.ub_space_x = ubx
-        self.lb_space_x = lbx
-        self.ub_space_y = uby
-        self.lb_space_y = lby
+        # Additions and subtractions are to consider the size of robots.
+        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance
+        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance
+        self.ub_space_y = uby - self.swarm.specs.tumbling_distance
+        self.lb_space_y = lby + self.swarm.specs.tumbling_distance
     
     def __set_robot_pairs(self):
         """Gives possible unique robot pairs for constraints
@@ -119,7 +120,6 @@ class Planner():
 
     def get_constraint_inter_robot(self,x,u,mode):
         """Returns inter-robot constraints.
-        
         It uses u = [r, theta] as input."""
         g = []
         dm = self.d_min
@@ -311,6 +311,9 @@ class Planner():
         solvers['knitro'] = {}
         solvers['knitro']['name'] = 'knitro'
         solvers['knitro']['opts'] = {}
+        
+        # max time for each series of iterations in seconds
+        solvers['knitro']['opts']['knitro.maxtime_real'] = 3
         # non convex
         solvers['knitro']['opts']['knitro.convex'] = 0
         # multiple start, ends when finds first feasible solution
@@ -517,20 +520,23 @@ class Planner():
         
 ########## test section ################################################
 if __name__ == '__main__':
-    a = [0,0]
-    b = [20,0]
-    c = [40,0]
-    d = [60,0]
+    a, ap = [0,0], [0,20]
+    b, bp = [20,0], [20,20]
+    c, cp = [40,0], [40,20]
+    d, dp = [60,0], [60,20]
     e = [75,0]
-    xi = np.array(a+b+c+d+e)
+    xi = np.array(a+b+c+d)
     A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
-    xf = M
+    xf = F
+    xf = np.array(dp+cp+bp+ap)
     outer = 4
     boundary = True
+    last_section = True
+    
 
-    swarm_specs=model.SwarmSpecs(np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]]),
+    swarm_specs=model.SwarmSpecs(np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]]),
                                    5, 10)
     swarm = model.Swarm(xi, 0, 1, swarm_specs)
     planner = Planner(swarm, n_inner = 1, n_outer = outer)
@@ -552,8 +558,9 @@ if __name__ == '__main__':
     solver = planner.get_optimization(solver_name='knitro', boundary=boundary)
     sol, U_sol, X_sol, P_sol, UZ, U = planner.solve_optimization(xf)
     swarm.reset_state(xi,0,1)
-    anim = swarm.simanimation(U,1000,boundary=boundary)
-    #swarm.simplot(U,10000,boundary=boundary)
+    anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section)
+    swarm.reset_state(xi,0,1)
+    swarm.simplot(U,10000,boundary=boundary,last_section=last_section)
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
     #i = 2
