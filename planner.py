@@ -45,10 +45,10 @@ class Planner():
         """Sets space boundary limits and updates the bands in
         optimization problem."""
         # Additions and subtractions are to consider the size of robots.
-        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance*2
-        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance*2
-        self.ub_space_y = uby - self.swarm.specs.tumbling_distance*2
-        self.lb_space_y = lby + self.swarm.specs.tumbling_distance*2
+        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance*2.5
+        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance*2.5
+        self.ub_space_y = uby - self.swarm.specs.tumbling_distance*2.5
+        self.lb_space_y = lby + self.swarm.specs.tumbling_distance*2.5
     
     def __set_robot_pairs(self):
         """Gives possible unique robot pairs for constraints
@@ -426,20 +426,19 @@ class Planner():
             mode = 0
             u_last = U_sol[:,counter] - rotation_remainder
             r_last = np.linalg.norm(u_last)
-            if r_last > 0 :
-                r_possible = (round((r_last-rotation_distance)
-                                    /((n_mode-1)*rotation_distance))
-                              *(n_mode-1)*rotation_distance)
-                r_possible = r_possible + rotation_distance
-                # Take one rotation in the direction of
-                # last input.
+            n_rotation = np.floor(r_last/rotation_distance)
+            n_possible = (n_mode-1)*round(n_rotation/(n_mode-1)) + 1
+            if r_last > rotation_distance :
+                r_possible = n_possible*rotation_distance
+                # Take one rotation in the direction of last input.
                 UZ[0,counter_u] = u_last[0]*r_possible/r_last
                 UZ[1,counter_u] = u_last[1]*r_possible/r_last
                 UZ[2,counter_u] = mode
             else:
                 UZ[0,counter_u] = 0
-                UZ[1,counter_u] = 0
+                UZ[1,counter_u] = rotation_distance*change_direction
                 UZ[2,counter_u] = mode
+                change_direction *= -1
             X[:,counter_u + 1] = self.__f(X[:,counter_u],
                                           UZ[:2,counter_u],
                                           UZ[2,counter_u])
@@ -539,17 +538,19 @@ if __name__ == '__main__':
     c, cp = [40,0], [40,20]
     d, dp = [60,0], [60,20]
     e = [75,0]
-    xi = np.array(a+b+c+d)
+    xi = np.array(a+b+c+d + e)
     A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
-    xf = F
-    xf = np.array(dp+cp+bp+ap)
-    outer = 4
+    xf = M
+    #xf = np.array(dp+cp+bp+ap)
+    outer = 5
     boundary = True
     last_section = True
     
-    pivot_separation = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]])
+    pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
+    #pivot_separation = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]])
+    
     swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
     swarm = model.Swarm(xi, 0, 1, swarm_specs)
     planner = Planner(swarm, n_inner = 1, n_outer = outer)
