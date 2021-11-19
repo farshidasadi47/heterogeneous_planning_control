@@ -11,6 +11,8 @@ import numpy.matlib
 import casadi as ca
 
 import model
+
+np.set_printoptions(precision=2, suppress=True)
 ########## classes and functions #######################################
 class Planner():
     """This class contains objects and methods for planning a path
@@ -24,10 +26,13 @@ class Planner():
         self.x_final = None
         self.n_inner = n_inner
         self.n_outer = n_outer
-        self.ub_space_x = swarm.specs.ubx-swarm.specs.tumbling_distance
-        self.lb_space_x = -(swarm.specs.ubx-swarm.specs.tumbling_distance)
-        self.ub_space_y = swarm.specs.uby-swarm.specs.tumbling_distance
-        self.lb_space_y = -(swarm.specs.uby-swarm.specs.tumbling_distance)
+        self.ub_space_x = None
+        self.lb_space_x = None
+        self.ub_space_y = None
+        self.lb_space_y = None
+        # Setting the feasible limits
+        self.set_space_limit(swarm.specs.ubx, -swarm.specs.ubx,
+                             swarm.specs.uby, -swarm.specs.ubx)
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
@@ -40,10 +45,10 @@ class Planner():
         """Sets space boundary limits and updates the bands in
         optimization problem."""
         # Additions and subtractions are to consider the size of robots.
-        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance
-        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance
-        self.ub_space_y = uby - self.swarm.specs.tumbling_distance
-        self.lb_space_y = lby + self.swarm.specs.tumbling_distance
+        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance*2
+        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance*2
+        self.ub_space_y = uby - self.swarm.specs.tumbling_distance*2
+        self.lb_space_y = lby + self.swarm.specs.tumbling_distance*2
     
     def __set_robot_pairs(self):
         """Gives possible unique robot pairs for constraints
@@ -115,8 +120,8 @@ class Planner():
     def __f(self,state,control,mode):
         """Defines swarm transition for CASADI."""
         B = self.swarm.specs.B
-        next_state = state + ca.mtimes(B[mode,:,:],control)
-        return next_state
+        next_state = state + ca.mtimes(B[int(mode),:,:],control)
+        return next_state.full().squeeze()
 
     def get_constraint_inter_robot(self,x,u,mode):
         """Returns inter-robot constraints.
@@ -363,7 +368,6 @@ class Planner():
             u_possible = np.zeros((2,2))
         return u_possible
 
-
     def __post_process_u(self,sol):
         """Post processes the solution and adds intermediate steps."""
         mode_sequence = self.mode_sequence
@@ -372,15 +376,20 @@ class Planner():
         n_outer = self.n_outer
         n_robot = self.swarm.specs.n_robot
         n_mode = self.swarm.specs.n_mode
+        xi = self.xi
+        xf = self.xf
         U_sol = sol['x'][:2*n_outer*((n_inner)*(n_mode-1) + 1)]
         X_sol = sol['x'][2*n_outer*((n_inner)*(n_mode-1) + 1):]
         U_sol = ca.reshape(U_sol,2,-1).full()
         X_sol = ca.reshape(X_sol,2*n_robot,-1).full()
         UZ = np.zeros((3,1+n_outer*(n_inner+1)*(n_mode-1)))
+        X = np.zeros((2*n_robot, 1+n_outer*(n_inner+1)*(n_mode-1) ))
+        X[:,0] = xi
         U = np.zeros_like(UZ)
         # recovering input with transitions
         counter = 0
         counter_u = 0
+        change_direction = 1
         rotation_remainder = np.zeros(2)
         for i_outer in range(n_outer):
             for mode in range(1,n_mode):
@@ -389,6 +398,9 @@ class Planner():
                 for i_inner in range(n_inner):
                     UZ[:2,counter_u] = U_sol[:,counter]
                     UZ[2,counter_u] = mode_mapped
+                    X[:,counter_u + 1] = self.__f(X[:,counter_u],
+                                                  UZ[:2,counter_u],
+                                                  UZ[2,counter_u])
                     counter += 1
                     counter_u +=1
                 
@@ -398,19 +410,16 @@ class Planner():
                     mode = 0
                     u_last = U_sol[:,counter-1]
                     r_last = np.linalg.norm(u_last)
-                    if r_last == 0:
-                        # Take a predefined transition if last step
-                        # is zero input.
-                        UZ[0,counter_u] = rotation_distance
-                        UZ[1,counter_u] = 0
-                        UZ[2,counter_u] = mode
-                    else:
-                        # Take one rotation in the direction of
-                        # last input.
-                        UZ[0,counter_u] = u_last[0]*rotation_distance/r_last
-                        UZ[1,counter_u] = u_last[1]*rotation_distance/r_last
-                        UZ[2,counter_u] = mode
+                    # Take a predefined transition if last step
+                    # is zero input.
+                    UZ[0,counter_u] = 0
+                    UZ[1,counter_u] = rotation_distance*change_direction
+                    UZ[2,counter_u] = mode
+                    X[:,counter_u + 1] = self.__f(X[:,counter_u],
+                                                  UZ[:2,counter_u],
+                                                  UZ[2,counter_u])
                     # Keep track of rotations done.
+                    change_direction *= -1
                     rotation_remainder += UZ[:2,counter_u]
                     counter_u += 1
             # Take rotation corresponding the current outer loop.
@@ -431,12 +440,17 @@ class Planner():
                 UZ[0,counter_u] = 0
                 UZ[1,counter_u] = 0
                 UZ[2,counter_u] = mode
+            X[:,counter_u + 1] = self.__f(X[:,counter_u],
+                                          UZ[:2,counter_u],
+                                          UZ[2,counter_u])
             # Update remainder of rotation.
             rotation_remainder = -(u_last - UZ[:2,counter_u])
             counter += 1
             counter_u += 1
         # Refine the last step into two acceptable rotations
         UZ[:2,-2:] = self.__accurate_rotation(u_last)
+        X[:,-2] = self.__f(X[:,-3],UZ[:2,-2],UZ[2,-2])
+        X[:,-1] = self.__f(X[:,-2],UZ[:2,-1],UZ[2,-1])
         # Calculate the corresponding polar coordinate inputs.
         U[2,:] = UZ[2,:]
         for i in range(UZ.shape[1]):
@@ -445,7 +459,7 @@ class Planner():
                 # If this is rotation round it for numerical purposes.
                 U[0,i] = round(U[0,i])
         
-        return U_sol, X_sol, UZ,  U
+        return U_sol, X_sol, UZ,  U, X
     
     def solve_unconstrained(self,xi,xf):
         """This function solved the unconstrained case from
@@ -515,8 +529,8 @@ class Planner():
         #sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
         # recovering the solution in appropriate format
         P_sol = np.vstack((xi,xf)).T
-        U_sol, X_sol, UZ, U = self.__post_process_u(sol)
-        return sol, U_sol, X_sol, P_sol, UZ, U
+        U_sol, X_sol, UZ, U, X = self.__post_process_u(sol)
+        return sol, U_sol, X_sol, P_sol, UZ, U, X
         
 ########## test section ################################################
 if __name__ == '__main__':
@@ -535,9 +549,8 @@ if __name__ == '__main__':
     boundary = True
     last_section = True
     
-
-    swarm_specs=model.SwarmSpecs(np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]]),
-                                   5, 10)
+    pivot_separation = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]])
+    swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
     swarm = model.Swarm(xi, 0, 1, swarm_specs)
     planner = Planner(swarm, n_inner = 1, n_outer = outer)
 
@@ -556,11 +569,12 @@ if __name__ == '__main__':
     #obj = planner.get_objective()
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
     solver = planner.get_optimization(solver_name='knitro', boundary=boundary)
-    sol, U_sol, X_sol, P_sol, UZ, U = planner.solve_optimization(xf)
+    sol, U_sol, X_sol, P_sol, UZ, U, X = planner.solve_optimization(xf)
     swarm.reset_state(xi,0,1)
     anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section)
+    
     swarm.reset_state(xi,0,1)
-    swarm.simplot(U,10000,boundary=boundary,last_section=last_section)
+    swarm.simplot(U,500,boundary=boundary,last_section=last_section)
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
     #i = 2
