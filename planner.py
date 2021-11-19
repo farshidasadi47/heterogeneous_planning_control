@@ -32,7 +32,7 @@ class Planner():
         self.lb_space_y = None
         # Setting the feasible limits
         self.set_space_limit(swarm.specs.ubx, -swarm.specs.ubx,
-                             swarm.specs.uby, -swarm.specs.ubx)
+                             swarm.specs.uby, -swarm.specs.uby)
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
@@ -45,10 +45,10 @@ class Planner():
         """Sets space boundary limits and updates the bands in
         optimization problem."""
         # Additions and subtractions are to consider the size of robots.
-        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance*2.5
-        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance*2.5
-        self.ub_space_y = uby - self.swarm.specs.tumbling_distance*2.5
-        self.lb_space_y = lby + self.swarm.specs.tumbling_distance*2.5
+        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance*1
+        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance*1
+        self.ub_space_y = uby - self.swarm.specs.tumbling_distance*1
+        self.lb_space_y = lby + self.swarm.specs.tumbling_distance*1
     
     def __set_robot_pairs(self):
         """Gives possible unique robot pairs for constraints
@@ -117,7 +117,7 @@ class Planner():
 
         return X, U, P
     
-    def __f(self,state,control,mode):
+    def f(self,state,control,mode):
         """Defines swarm transition for CASADI."""
         B = self.swarm.specs.B
         next_state = state + ca.mtimes(B[int(mode),:,:],control)
@@ -398,7 +398,7 @@ class Planner():
                 for i_inner in range(n_inner):
                     UZ[:2,counter_u] = U_sol[:,counter]
                     UZ[2,counter_u] = mode_mapped
-                    X[:,counter_u + 1] = self.__f(X[:,counter_u],
+                    X[:,counter_u + 1] = self.f(X[:,counter_u],
                                                   UZ[:2,counter_u],
                                                   UZ[2,counter_u])
                     counter += 1
@@ -415,7 +415,7 @@ class Planner():
                     UZ[0,counter_u] = 0
                     UZ[1,counter_u] = rotation_distance*change_direction
                     UZ[2,counter_u] = mode
-                    X[:,counter_u + 1] = self.__f(X[:,counter_u],
+                    X[:,counter_u + 1] = self.f(X[:,counter_u],
                                                   UZ[:2,counter_u],
                                                   UZ[2,counter_u])
                     # Keep track of rotations done.
@@ -439,7 +439,7 @@ class Planner():
                 UZ[1,counter_u] = rotation_distance*change_direction
                 UZ[2,counter_u] = mode
                 change_direction *= -1
-            X[:,counter_u + 1] = self.__f(X[:,counter_u],
+            X[:,counter_u + 1] = self.f(X[:,counter_u],
                                           UZ[:2,counter_u],
                                           UZ[2,counter_u])
             # Update remainder of rotation.
@@ -448,8 +448,8 @@ class Planner():
             counter_u += 1
         # Refine the last step into two acceptable rotations
         UZ[:2,-2:] = self.__accurate_rotation(u_last)
-        X[:,-2] = self.__f(X[:,-3],UZ[:2,-2],UZ[2,-2])
-        X[:,-1] = self.__f(X[:,-2],UZ[:2,-1],UZ[2,-1])
+        X[:,-2] = self.f(X[:,-3],UZ[:2,-2],UZ[2,-2])
+        X[:,-1] = self.f(X[:,-2],UZ[:2,-1],UZ[2,-1])
         # Calculate the corresponding polar coordinate inputs.
         U[2,:] = UZ[2,:]
         for i in range(UZ.shape[1]):
@@ -538,18 +538,19 @@ if __name__ == '__main__':
     c, cp = [40,0], [40,20]
     d, dp = [60,0], [60,20]
     e = [75,0]
-    xi = np.array(a+b+c+d + e)
+    xi = np.array(a+b+c+d)
     A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
     xf = M
+    xf = np.array([-30,0]+[-15,60]+[0,40]+[15,60])
     #xf = np.array(dp+cp+bp+ap)
     outer = 5
     boundary = True
     last_section = True
     
-    pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
-    #pivot_separation = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]])
+    #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
+    pivot_separation = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]])
     
     swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
     swarm = model.Swarm(xi, 0, 1, swarm_specs)
