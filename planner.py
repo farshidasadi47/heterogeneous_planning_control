@@ -153,10 +153,6 @@ class Planner():
     def get_constraint_distance(self,x_next):
         """"This function return the constraint with respective to
         maximum distance between each milirobot for each axis."""
-        ubx = self.ub_space_x
-        lbx = self.lb_space_x
-        uby = self.ub_space_y
-        lby = self.lb_space_y
         g = []
         for pair in self.robot_pairs:
             zi = x_next[2*pair[0]:2*pair[0]+2]
@@ -223,11 +219,17 @@ class Planner():
         n_g_inter_robot = ca.vertcat(*g_inter_robot).shape[0]
         n_g_distance = ca.vertcat(*g_distance).shape[0]
         
-        g = ca.vertcat(*(g_shooting + g_inter_robot))
+        lbdsx = [-(self.ub_space_x-self.lb_space_x),
+               -(self.ub_space_y-self.lb_space_y)]*(n_g_distance/2)
+        ubdsx = [self.ub_space_x-self.lb_space_x,
+               self.ub_space_y-self.lb_space_y]*(n_g_distance/2)
+        g = ca.vertcat(*(g_shooting + g_inter_robot + n_g_distance))
         lbg = np.hstack((np.zeros(n_g_shooting),
-                         np.zeros(n_g_inter_robot) ))
+                         np.zeros(n_g_inter_robot),
+                         np.array(lbdsx) ))
         ubg = np.hstack((np.zeros(n_g_shooting),
-                         np.inf*np.ones(n_g_inter_robot) ))
+                         np.inf*np.ones(n_g_inter_robot),
+                         np.array(ubdsx) ))
         return g, lbg, ubg
 
     def get_optim_vars(self,boundary = False):
@@ -543,11 +545,11 @@ if __name__ == '__main__':
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
     xf = M
-    xf = np.array([-30,0]+[-15,60]+[0,40]+[15,60])
+    xf = np.array([0,30]+[0,50]+[25,50]+ [20,30])
     #xf = np.array(dp+cp+bp+ap)
-    outer = 5
-    boundary = True
-    last_section = True
+    outer = 3
+    boundary = False
+    last_section = False
     
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
     pivot_separation = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]])
