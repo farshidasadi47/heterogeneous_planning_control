@@ -30,6 +30,10 @@ class Planner():
         self.lb_space_x = None
         self.ub_space_y = None
         self.lb_space_y = None
+        self.ub_wrap_x = None
+        self.lb_wrap_x = None
+        self.ub_wrap_y = None
+        self.lb_wrap_y = None
         # Setting the feasible limits
         self.set_space_limit(swarm.specs.ubx, swarm.specs.lbx,
                              swarm.specs.uby, swarm.specs.lby)
@@ -44,11 +48,16 @@ class Planner():
     def set_space_limit(self, ubx, lbx, uby, lby):
         """Sets space boundary limits and updates the bands in
         optimization problem."""
-        # Additions and subtractions are to consider the size of robots.
-        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance*2
-        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance*2
-        self.ub_space_y = uby - self.swarm.specs.tumbling_distance*2
-        self.lb_space_y = lby + self.swarm.specs.tumbling_distance*2
+        # Setting feasible space for optimization.
+        self.ub_space_x = ubx - self.swarm.specs.tumbling_distance*2.5
+        self.lb_space_x = lbx + self.swarm.specs.tumbling_distance*2.5
+        self.ub_space_y = uby - self.swarm.specs.tumbling_distance*2.5
+        self.lb_space_y = lby + self.swarm.specs.tumbling_distance*2.5
+        # Set feasible space for post process wrapping.
+        self.ub_wrap_x = ubx-self.swarm.specs.tumbling_distance/2
+        self.lb_wrap_x = lbx+self.swarm.specs.tumbling_distance/2
+        self.ub_wrap_y = uby-self.swarm.specs.tumbling_distance/2
+        self.lb_wrap_y = lby+self.swarm.specs.tumbling_distance/2
     
     def __set_robot_pairs(self):
         """Gives possible unique robot pairs for constraints
@@ -165,14 +174,11 @@ class Planner():
         """This function builds constraints of optimization."""
         mode_sequence = self.mode_sequence
         n_mode = self.swarm.specs.n_mode
-        n_robot = self.swarm.specs.n_robot
         n_inner = self.n_inner
         n_outer = self.n_outer
         X = self.X
         U = self.U
         P = self.P
-        d_min  = self.d_min
-        rotation_distance = self.swarm.specs.rotation_distance
         g_shooting = []
         g_shooting += [P[:,0] - X[:,0]]
         g_inter_robot = []
@@ -228,7 +234,7 @@ class Planner():
                              np.inf*np.ones(n_g_inter_robot) ))
         return g, lbg, ubg
 
-    def get_optim_vars(self,boundary = False):
+    def get_optim_vars(self):
         """This function returns optimization flatten variable and its
         bounds."""
         U = self.U
@@ -270,8 +276,6 @@ class Planner():
         that favors sparsity.
         """
         U = self.U
-        X = self.X
-        P = self.P
         obj = 0
         for i in range(U.shape[1]):
             u = U[:,i]
@@ -282,7 +286,7 @@ class Planner():
     def get_optimization(self, solver_name = 'ipopt', boundary = False):
         """Sets up and returns a CASADI optimization object."""
         g, lbg, ubg = self.get_constraints(boundary)
-        optim_var, lbx, ubx, p = self.get_optim_vars(boundary)
+        optim_var, lbx, ubx, p = self.get_optim_vars()
         obj = self.get_objective()
         nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
         _solver = self.solver_opt[solver_name]
@@ -325,9 +329,12 @@ class Planner():
         return solvers
 
     def __cartesian_to_polar(self,z):
-        """Converts cartesian to polar coordinate."""
+        """Converts cartesian to polar coordinate based on Y coordinate
+        as reference for zero angle."""
         z = complex(z[0],z[1])
         z = np.array([np.abs(z), np.angle(z)-np.pi/2])
+        if z[0] == 0:
+            z[1] = 0
         return z
 
     def __accurate_rotation(self,u):
@@ -369,7 +376,6 @@ class Planner():
         n_robot = self.swarm.specs.n_robot
         n_mode = self.swarm.specs.n_mode
         xi = self.xi
-        xf = self.xf
         U_sol = sol['x'][:2*(n_outer*((n_inner)*(n_mode-1)) + 1)]
         X_sol = sol['x'][2*(n_outer*((n_inner)*(n_mode-1)) + 1):]
         U_sol = ca.reshape(U_sol,2,-1).full()
@@ -425,7 +431,258 @@ class Planner():
                 U[0,i] = round(U[0,i])
         
         return U_sol, X_sol, UZ,  U, X
+
+    def __post_process_wrap(self,sol):
+        """Post processes the solution.
+        1- Adds intermediate steps to change mode.
+        2- Wraps inputs so that the swarm stays inside the limits."""
+        mode_sequence = self.mode_sequence
+        n_inner = self.n_inner
+        n_outer = self.n_outer
+        n_robot = self.swarm.specs.n_robot
+        n_mode = self.swarm.specs.n_mode
+        xi = self.xi
+        U_sol = sol['x'][:2*(n_outer*((n_inner)*(n_mode-1)) + 1)]
+        X_sol = sol['x'][2*(n_outer*((n_inner)*(n_mode-1)) + 1):]
+        U_sol = ca.reshape(U_sol,2,-1).full()
+        X_sol = ca.reshape(X_sol,2*n_robot,-1).full()
+        X = []
+        UZ = []
+        X.append(xi)
+        x = X[-1]
+        counter = 0
+        rotation_done = np.zeros(2)
+        uhat_old = np.array([0,1.0])
+        for i_outer in range(n_outer):
+            for mode in range(1,n_mode):
+                # map the mode to the current swarm mode sequence.
+                mode_mapped = mode_sequence[mode]
+                for i_inner in range(n_inner):
+                    wrap=self._Planner__wrap_u(U_sol[:,counter],x,mode_mapped,uhat_old)
+                    X_wrap, UZ_wrap, wrap_done, uhat_old = wrap
+                    X.extend(X_wrap)
+                    UZ.extend(UZ_wrap)
+                    x = X[-1]
+                    rotation_done += wrap_done
+                    counter += 1
+        # Take last step rotation
+        # Remove the last mode change
+        rotation_done = rotation_done - UZ[-1][:2]
+        X.pop()
+        UZ.pop()
+        x = X[-1]
+        # Calculate the last rotation
+        # Refine the last step into two acceptable rotations
+        mode = 0
+        u_last = np.zeros((3,2))
+        rotation_remainder = U_sol[:,counter] - rotation_done
+        u_last[:2,:] = self.__accurate_rotation(rotation_remainder)
+        u_last[2,-2:] = np.array([mode,mode])
+        # Update and record values
+        x = self.f(x,u_last[:2,0],mode)
+        X.append(x)
+        UZ.append(u_last[:,0])
+        x = self.f(x,u_last[:2,1],mode)
+        X.append(x)
+        UZ.append(u_last[:,1])
+        #
+        X = np.array(X).T
+        UZ = np.array(UZ).T
+        # Calculate the corresponding polar coordinate inputs.
+        U = np.zeros_like(UZ)
+        U[2,:] = UZ[2,:]
+        for i in range(UZ.shape[1]):
+            U[:2,i] = self.__cartesian_to_polar(UZ[:2,i])
+            if U[2,i] == 0:
+                # If this is rotation round it for numerical purposes.
+                U[0,i] = round(U[0,i])
+
+        return U_sol, X_sol, UZ, U, X
     
+    def __wrap_u(self,u,x,mode,uhat_old):
+        """This function wraps the current section of the input,
+        so that the swarm srays in the space limits."""
+        X_wrap = []
+        UZ_wrap = []
+        wrap_done = np.zeros(2)
+        rem_u = np.around(u,6)
+        rem_r, teta = self._Planner__cartesian_to_polar(rem_u).tolist()
+        uhat = np.array([-np.sin(teta),np.cos(teta)])
+        if rem_r ==0:
+            uhat = np.copy(uhat_old)
+        while rem_r>0:
+            # Determine when the robots reach a wall.
+            r_hit = self._Planner__get_max_to_go(x,uhat,mode)
+            r_hit = min(rem_r,r_hit)
+            # Determine the input
+            u_possible = r_hit*uhat
+            # Update the remainder of input
+            rem_r = rem_r - r_hit
+            rem_u = rem_u - u_possible
+            # Take the current step.
+            x = self.f(x,u_possible,mode)
+            # Record the values
+            X_wrap.append(x)
+            UZ_wrap.append(np.append(u_possible,mode))
+            if rem_r == 0:
+                break
+            # Determine the wrapping if the loop is not broken.
+            r_wrap, uhat_wrap = self._Planner__get_roll_to_go(x,uhat,rem_r)
+            # Determine the rollings and record it.
+            u_possible = r_wrap*uhat_wrap
+            wrap_done = wrap_done + u_possible
+            # Take the current step.
+            x = self.f(x,u_possible,0)  # Zero is rolling mode.
+            # Record the values
+            X_wrap.append(x)
+            UZ_wrap.append(np.append(u_possible,0))  # Zero is rolling mode.
+        # Take one roll to change the mode.
+        u_possible = self._Planner__mode_change(x,uhat)
+        wrap_done = wrap_done + u_possible
+        # Take the current step.
+        x = self.f(x,u_possible,0)  # Zero is rolling mode.
+        # Record the values
+        X_wrap.append(x)
+        UZ_wrap.append(np.append(u_possible,0))  # Zero is rolling mode.
+        return X_wrap, UZ_wrap, wrap_done, uhat
+
+    def __mode_change(self, x, uhat):
+        """Changes mode in feasible direction."""
+         # Getting the usable space to wrap
+        ub_wrap_x = self.ub_wrap_x
+        lb_wrap_x = self.lb_wrap_x
+        ub_wrap_y = self.ub_wrap_y
+        lb_wrap_y = self.lb_wrap_y
+        rotation_distance = self.swarm.specs.rotation_distance
+        # List of possible preset directions 
+        ehat =[uhat,
+               np.array([0,1]),np.array([0,-1]),
+               np.array([1,0]), np.array([-1,0]),
+               np.array([-1,1])/np.sqrt(2),
+               np.array([-1,-1])/np.sqrt(2),
+               np.array([1,-1])/np.sqrt(2),
+               np.array([1,1])/np.sqrt(2)]
+        # Check which direction is feasible for mode change.
+        for hat in ehat:
+            x_next = self.f(x,rotation_distance*hat,0)
+            # Get max and min of swarm position in X direction
+            xmax = max(x_next[::2]) 
+            xmin = min(x_next[::2])
+            # Get max and min of swarm position in Y direction
+            ymax = max(x_next[1::2]) 
+            ymin = min(x_next[1::2])
+            # If the swarm is in the feasible space return the input.
+            if (xmax<=ub_wrap_x and xmin >=lb_wrap_x and
+                ymax<=ub_wrap_y and ymin >=lb_wrap_y):
+                u_possible = rotation_distance*hat
+                break
+        return u_possible
+
+    def __get_max_to_go(self,x,uhat,mode):
+        """This function returns the distance_to_go in the current mode
+        that the swarm hits a wall in wrap boundary."""
+        beta = self.swarm.specs.beta[mode,:]
+        n_robot = self.swarm.specs.n_robot
+        # Getting the usable space to wrap
+        ub_wrap_x = self.ub_wrap_x
+        lb_wrap_x = self.lb_wrap_x
+        ub_wrap_y = self.ub_wrap_y
+        lb_wrap_y = self.lb_wrap_y
+        # Get the distance to hit a wall.
+        r_hit = np.inf
+        for robot in range(n_robot):
+            # Get position of current robot.
+            zj = x[2*robot:2*robot+2]
+            # Check X direction.
+            if uhat[0] != 0:
+                ubrx = (ub_wrap_x - zj[0])/(beta[robot]*uhat[0])
+                lbrx = (lb_wrap_x - zj[0])/(beta[robot]*uhat[0])
+            else:
+                ubrx = np.inf
+                lbrx = -np.inf
+            rx = max(ubrx,lbrx)
+            # Check Y direction
+            if uhat[1] != 0:
+                ubry = (ub_wrap_y - zj[1])/(beta[robot]*uhat[1])
+                lbry = (lb_wrap_y - zj[1])/(beta[robot]*uhat[1])
+            else:
+                ubry = np.inf
+                ubry = np.inf
+            ry = max(ubry,lbry)
+            # Calculate when current robot reaches wall.
+            rj = min(rx,ry)
+            # Update when the swarm reaches to the wall.
+            r_hit = min(r_hit,rj)
+        return r_hit
+    
+    def __get_roll_to_go(self,x,uhat,rem_r):
+        """This function calculates current wrapping to be done."""
+        # Getting the usable space to wrap
+        ub_wrap_x = self.ub_wrap_x
+        lb_wrap_x = self.lb_wrap_x
+        ub_wrap_y = self.ub_wrap_y
+        lb_wrap_y = self.lb_wrap_y
+        n_robot = self.swarm.specs.n_robot
+        rotation_distance = self.swarm.specs.rotation_distance
+        n_mode = self.swarm.specs.n_mode
+        uhatf = [np.array([-1.0,0]), np.array([1.0,0]),
+                 np.array([0,-1.0]), np.array([0,1.0])]
+        # Get the direction that is hitting the wall currently.
+        ux_clearance = np.inf
+        lx_clearance = np.inf
+        uy_clearance = np.inf
+        ly_clearance = np.inf
+        for robot in range(n_robot):
+            # Position of current robot.
+            zj = x[2*robot:2*robot+2]
+            ux_clearance = min(ux_clearance,ub_wrap_x-zj[0])
+            lx_clearance = min(lx_clearance,-lb_wrap_x+zj[0])
+            uy_clearance = min(uy_clearance,ub_wrap_y-zj[1])
+            ly_clearance = min(ly_clearance,-lb_wrap_y+zj[1])
+        # Get feasibility guaranteed direction of wrapping.
+        clearance = np.array([ux_clearance,lx_clearance,
+                              uy_clearance,ly_clearance])
+        uhatf = uhatf[np.argmin(clearance)]
+        # Get the distance to hit the wall in rolling.
+        uhats = [-uhat,uhatf]
+        for direction in uhats:
+            r_wrap = np.inf
+            for robot in range(n_robot):
+                # Get position of current robot.
+                zj = x[2*robot:2*robot+2]
+                # Check X direction.
+                if direction[0] != 0:
+                    ubrx = (ub_wrap_x - zj[0])/(direction[0])
+                    lbrx = (lb_wrap_x - zj[0])/(direction[0])
+                else:
+                    ubrx = np.inf
+                    lbrx = -np.inf
+                rx = max(ubrx,lbrx)
+                # Check Y direction
+                if direction[1] != 0:
+                    ubry = (ub_wrap_y - zj[1])/(direction[1])
+                    lbry = (lb_wrap_y - zj[1])/(direction[1])
+                else:
+                    ubry = np.inf
+                    ubry = np.inf
+                ry = max(ubry,lbry)
+                # Calculate when current robot reaches a wall.
+                rj = min(rx,ry)
+                # Update when the swarm reaches a wall.
+                r_wrap = min(r_wrap,rj)
+            # Modify max wrapping that maintains the current mode.
+            n_wrap = r_wrap//((n_mode-1)*rotation_distance)
+            r_wrap = n_wrap*(n_mode-1)*rotation_distance
+            # Use the original direction is it gives nonzero wrapping.
+            if r_wrap > 0:
+                break
+        # Check how much wrapping is necessary based on current rem_r.
+        rem_n = rem_r//(((n_mode-1)*rotation_distance))
+        rem_r = (rem_n+ 1)*(n_mode-1)*rotation_distance
+        # Update wrapping needed.
+        r_wrap = min(r_wrap,rem_r)
+        return r_wrap, direction
+
     def solve_unconstrained(self,xi,xf):
         """This function solved the unconstrained case from
         controllability analysis and adjusts it for the problem setting,
@@ -474,7 +731,7 @@ class Planner():
         sol['x']  = np.hstack((U_sol.T.flatten(), X_sol.T.flatten()))
         return sol
 
-    def solve_optimization(self, xf):
+    def solve_optimization(self, xf, boundary = False):
         """Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
         """
@@ -495,7 +752,11 @@ class Planner():
         #sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
         # recovering the solution in appropriate format
         P_sol = np.vstack((xi,xf)).T
-        U_sol, X_sol, UZ, U, X = self.__post_process_u(sol)
+        if boundary is True:
+            U_sol, X_sol, UZ, U, X = self.__post_process_wrap(sol)
+        else:
+            U_sol, X_sol, UZ, U, X = self.__post_process_u(sol)
+            
         return sol, U_sol, X_sol, P_sol, UZ, U, X
         
 ########## test section ################################################
@@ -505,19 +766,19 @@ if __name__ == '__main__':
     c, cp = [40,0], [40,20]
     d, dp = [60,0], [60,20]
     e = [75,0]
-    xi = np.array(a+b+c)
+    xi = np.array(a+b+c+d+e)
     A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
-    xf = M
-    xf = np.array([0,30]+[0,50]+[25,50])
+    xf = F
+    #xf = np.array([0,30]+[0,50]+[25,50])
     #xf = np.array(dp+cp+bp+ap)
     outer = 3
-    boundary = False
+    boundary = True
     last_section = True
     
-    #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
-    pivot_separation = np.array([[10,9,8],[9,8,10]])
+    pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
+    #pivot_separation = np.array([[10,9,8],[9,8,10]])
     
     swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
     swarm = model.Swarm(xi, 0, 1, swarm_specs)
@@ -529,7 +790,7 @@ if __name__ == '__main__':
     #obj = planner.get_objective()
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
     solver = planner.get_optimization(solver_name='knitro', boundary=boundary)
-    sol, U_sol, X_sol, P_sol, UZ, U, X = planner.solve_optimization(xf)
+    sol,U_sol,X_sol,P_sol,UZ,U,X = planner.solve_optimization(xf,boundary)
     swarm.reset_state(xi,0,1)
     anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section)
     
