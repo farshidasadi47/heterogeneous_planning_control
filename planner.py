@@ -31,8 +31,8 @@ class Planner():
         self.ub_space_y = None
         self.lb_space_y = None
         # Setting the feasible limits
-        self.set_space_limit(swarm.specs.ubx, -swarm.specs.ubx,
-                             swarm.specs.uby, -swarm.specs.uby)
+        self.set_space_limit(swarm.specs.ubx, swarm.specs.lbx,
+                             swarm.specs.uby, swarm.specs.lby)
         self.X, self.U, self.P = self.__construct_vars()
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2

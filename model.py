@@ -41,7 +41,8 @@ class SwarmSpecs:
         # space boundaries
         self.ubx = 120
         self.uby = 95
-        
+        self.lbx = -120
+        self.lby = -95
 
 class Swarm:
     """This class holds current state of swarm of milirobots."""
@@ -192,8 +193,8 @@ class Swarm:
         self.__markers = ['o','s','P','h','*','+','x','d']
         plt.sca(ax)
         if boundary is True:
-            plt.ylim([-self.specs.uby,self.specs.uby])
-            plt.xlim([-self.specs.ubx,self.specs.ubx])
+            plt.ylim([self.specs.lby,self.specs.uby])
+            plt.xlim([self.specs.lbx,self.specs.ubx])
         plt.title('Swarm transition')
         plt.xlabel('x axis')
         plt.ylabel('y axis')
@@ -265,10 +266,10 @@ class Swarm:
                                  edgecolor='k', facecolor = "None")
             ax.add_patch(circle)
         # Draw usable space boundaries
-        rectangle = plt.Rectangle([-(self.specs.ubx-tumbling_distance/2),
-                                   -(self.specs.uby-tumbling_distance/2)],
-                                  2*(self.specs.ubx-tumbling_distance/2),
-                                  2*(self.specs.uby-tumbling_distance/2),
+        rectangle = plt.Rectangle([self.specs.lbx+tumbling_distance/2,
+                                   self.specs.lby+tumbling_distance/2],
+                                  self.specs.ubx-self.specs.lbx-tumbling_distance,
+                                  self.specs.uby-self.specs.lby-tumbling_distance,
                                   linestyle='--', linewidth=1,
                                   edgecolor='k', facecolor='none')
         ax.add_patch(rectangle)
