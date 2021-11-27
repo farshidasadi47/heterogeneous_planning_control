@@ -767,10 +767,12 @@ if __name__ == '__main__':
     d, dp = [60,0], [60,20]
     e = [75,0]
     xi = np.array(a+b+c+d+e)
+    transfer = np.array([0,0]*(len(xi)//2))
+    xi = xi + transfer
     A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
-    xf = F
+    xf = A
     #xf = np.array([0,30]+[0,50]+[25,50])
     #xf = np.array(dp+cp+bp+ap)
     outer = 3
