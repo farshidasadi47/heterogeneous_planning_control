@@ -18,13 +18,12 @@ class Planner():
     """This class contains objects and methods for planning a path
     for a given swarm of milirobots."""
 
-    def __init__(self, swarm: model.Swarm, n_inner = 1, n_outer = 3):
+    def __init__(self, swarm: model.Swarm, n_outer = 3):
         self.swarm = swarm
         self.robot_pairs = self.__set_robot_pairs()
         self.mode_sequence = self.__set_mode_sequence()
         self.d_min = swarm.specs.tumbling_distance
         self.x_final = None
-        self.n_inner = n_inner
         self.n_outer = n_outer
         self.ub_space_x = None
         self.lb_space_x = None
@@ -77,13 +76,12 @@ class Planner():
         """Constructing casadi symbolic variables for optimization.
         
         """
-        n_inner = self.n_inner
         n_outer = self.n_outer
         n_mode = self.swarm.specs.n_mode
         n_robot = self.swarm.specs.n_robot
         mode_sequence = self.mode_sequence
-        X = ca.SX.sym('x',2*n_robot,n_outer*(n_inner*(n_mode-1)) + 1)
-        U = ca.SX.sym('u',2,n_outer*(n_inner*(n_mode-1))+1)
+        X = ca.SX.sym('x',2*n_robot,n_outer*(n_mode-1) + 1)
+        U = ca.SX.sym('u',2,n_outer*(n_mode-1)+1)
         P = ca.SX.sym('p',2*n_robot,2)
         counter = 0
         counter_u = 0
@@ -91,7 +89,7 @@ class Planner():
         # Construct position in the start of outer loop.
         i_outer = 0
         mode = 0
-        varstr ='{:02d}_{:02d}_{:02d}'.format(i_outer,mode,0)
+        varstr ='{:02d}_{:02d}'.format(i_outer,mode)
         for robot in range(n_robot):
             rob_str = '_{:02d}'.format(robot)
             X[2*robot,counter] = ca.SX.sym('x_'+varstr+rob_str)
@@ -102,19 +100,18 @@ class Planner():
             for mode in range(1,n_mode):
                 # Maps to current mode sequence.
                 mode = mode_sequence[mode]
-                for i_inner in range(n_inner):
-                    varstr ='{:02d}_{:02d}_{:02d}'.format(i_outer,mode,i_inner)
-                    for robot in range(n_robot):
-                        rob_str = '_{:02d}'.format(robot)
-                        X[2*robot,counter] = ca.SX.sym('x_'+varstr+rob_str)
-                        X[2*robot + 1,counter] = ca.SX.sym('y_'+varstr+rob_str)
+                varstr ='{:02d}_{:02d}'.format(i_outer,mode)
+                for robot in range(n_robot):
+                    rob_str = '_{:02d}'.format(robot)
+                    X[2*robot,counter] = ca.SX.sym('x_'+varstr+rob_str)
+                    X[2*robot + 1,counter] = ca.SX.sym('y_'+varstr+rob_str)
                     
-                    U[0,counter_u] = ca.SX.sym('dx_'+varstr)
-                    U[1,counter_u] = ca.SX.sym('dy_'+varstr)
-                    counter += 1
-                    counter_u += 1
+                U[0,counter_u] = ca.SX.sym('dx_'+varstr)
+                U[1,counter_u] = ca.SX.sym('dy_'+varstr)
+                counter += 1
+                counter_u += 1
         # Construct control to go for next outer loop.
-        varstr = '{:02d}_{:02d}_00'.format(i_outer,0)
+        varstr = '{:02d}_{:02d}'.format(i_outer,0)
         U[0,counter_u] = ca.SX.sym('dx_'+varstr)
         U[1,counter_u] = ca.SX.sym('dy_'+varstr)
         counter_u += 1
@@ -174,7 +171,6 @@ class Planner():
         """This function builds constraints of optimization."""
         mode_sequence = self.mode_sequence
         n_mode = self.swarm.specs.n_mode
-        n_inner = self.n_inner
         n_outer = self.n_outer
         X = self.X
         U = self.U
@@ -189,19 +185,18 @@ class Planner():
             for mode in range(1,n_mode):
                 # Maps to mode sequence
                 mode_mapped = mode_sequence[mode]
-                for i_inner in range(n_inner):
-                    st = X[:,counter]
-                    control = U[:,counter_u]
-                    st_next = X[:,counter+1]
-                    g_shooting += self.get_constraint_shooting(st_next, st,
-                                                               control,
-                                                               mode_mapped)
-                    g_inter_robot += self.get_constraint_inter_robot(st,
-                                                                     control,
-                                                                   mode_mapped)
-                    g_distance += self.get_constraint_distance(st_next)
-                    counter += 1
-                    counter_u += 1
+                st = X[:,counter]
+                control = U[:,counter_u]
+                st_next = X[:,counter+1]
+                g_shooting += self.get_constraint_shooting(st_next, st,
+                                                           control,
+                                                           mode_mapped)
+                g_inter_robot += self.get_constraint_inter_robot(st,
+                                                                 control,
+                                                                 mode_mapped)
+                g_distance += self.get_constraint_distance(st_next)
+                counter += 1
+                counter_u += 1
         # Take last step.
         mode = 0
         st = X[:,counter]
@@ -240,7 +235,6 @@ class Planner():
         U = self.U
         X = self.X
         P  = self.P
-        n_inner = self.n_inner
         n_outer = self.n_outer
         n_robot = self.swarm.specs.n_robot
         n_mode = self.swarm.specs.n_mode
@@ -253,16 +247,15 @@ class Planner():
         ubuu = [np.inf,np.inf]
         for i_outer in range(n_outer):
             for mode in range(1,n_mode):
-                for i_inner in range(n_inner):
-                    lbu += lbuu
-                    ubu += ubuu
+                lbu += lbuu
+                ubu += ubuu
         # Configure bounds for last step in current outer loop.
         lbu += [-np.inf,-np.inf]
         ubu += [np.inf,np.inf]
 
         # Configure bounds related to X.
-        lbxx = [-np.inf]*2*n_robot*(n_outer*(n_inner*(n_mode-1)) + 1)
-        ubxx = [np.inf]*2*n_robot*(n_outer*(n_inner*(n_mode-1)) + 1)
+        lbxx = [-np.inf]*2*n_robot*(n_outer*(n_mode-1) + 1)
+        ubxx = [np.inf]*2*n_robot*(n_outer*(n_mode-1) + 1)
         # concatenating X and U bounds
         lbx = np.array(lbu + lbxx)
         ubx = np.array(ubu + ubxx)
@@ -371,17 +364,16 @@ class Planner():
         """Post processes the solution and adds intermediate steps."""
         mode_sequence = self.mode_sequence
         rotation_distance = self.swarm.specs.rotation_distance
-        n_inner = self.n_inner
         n_outer = self.n_outer
         n_robot = self.swarm.specs.n_robot
         n_mode = self.swarm.specs.n_mode
         xi = self.xi
-        U_sol = sol['x'][:2*(n_outer*((n_inner)*(n_mode-1)) + 1)]
-        X_sol = sol['x'][2*(n_outer*((n_inner)*(n_mode-1)) + 1):]
+        U_sol = sol['x'][:2*(n_outer*(n_mode-1) + 1)]
+        X_sol = sol['x'][2*(n_outer*(n_mode-1) + 1):]
         U_sol = ca.reshape(U_sol,2,-1).full()
         X_sol = ca.reshape(X_sol,2*n_robot,-1).full()
-        UZ = np.zeros((3,1+n_outer*(n_inner+1)*(n_mode-1)))
-        X = np.zeros((2*n_robot, 1+n_outer*(n_inner+1)*(n_mode-1) ))
+        UZ = np.zeros((3,1+n_outer*2*(n_mode-1)))
+        X = np.zeros((2*n_robot, 1+n_outer*2*(n_mode-1) ))
         X[:,0] = xi
         U = np.zeros_like(UZ)
         # recovering input with transitions
@@ -393,14 +385,13 @@ class Planner():
             for mode in range(1,n_mode):
                 # map the mode to the current swarm mode sequence.
                 mode_mapped = mode_sequence[mode]
-                for i_inner in range(n_inner):
-                    UZ[:2,counter_u] = U_sol[:,counter]
-                    UZ[2,counter_u] = mode_mapped
-                    X[:,counter_u + 1] = self.f(X[:,counter_u],
-                                                  UZ[:2,counter_u],
-                                                  UZ[2,counter_u])
-                    counter += 1
-                    counter_u +=1
+                UZ[:2,counter_u] = U_sol[:,counter]
+                UZ[2,counter_u] = mode_mapped
+                X[:,counter_u + 1] = self.f(X[:,counter_u],
+                                              UZ[:2,counter_u],
+                                              UZ[2,counter_u])
+                counter += 1
+                counter_u +=1
                 
                 # Change mode
                 mode = 0
@@ -437,13 +428,12 @@ class Planner():
         1- Adds intermediate steps to change mode.
         2- Wraps inputs so that the swarm stays inside the limits."""
         mode_sequence = self.mode_sequence
-        n_inner = self.n_inner
         n_outer = self.n_outer
         n_robot = self.swarm.specs.n_robot
         n_mode = self.swarm.specs.n_mode
         xi = self.xi
-        U_sol = sol['x'][:2*(n_outer*((n_inner)*(n_mode-1)) + 1)]
-        X_sol = sol['x'][2*(n_outer*((n_inner)*(n_mode-1)) + 1):]
+        U_sol = sol['x'][:2*(n_outer*(n_mode-1) + 1)]
+        X_sol = sol['x'][2*(n_outer*(n_mode-1) + 1):]
         U_sol = ca.reshape(U_sol,2,-1).full()
         X_sol = ca.reshape(X_sol,2*n_robot,-1).full()
         X = []
@@ -457,14 +447,13 @@ class Planner():
             for mode in range(1,n_mode):
                 # map the mode to the current swarm mode sequence.
                 mode_mapped = mode_sequence[mode]
-                for i_inner in range(n_inner):
-                    wrap=self._Planner__wrap_u(U_sol[:,counter],x,mode_mapped,uhat_old)
-                    X_wrap, UZ_wrap, wrap_done, uhat_old = wrap
-                    X.extend(X_wrap)
-                    UZ.extend(UZ_wrap)
-                    x = X[-1]
-                    rotation_done += wrap_done
-                    counter += 1
+                wrap=self._Planner__wrap_u(U_sol[:,counter],x,mode_mapped,uhat_old)
+                X_wrap, UZ_wrap, wrap_done, uhat_old = wrap
+                X.extend(X_wrap)
+                UZ.extend(UZ_wrap)
+                x = X[-1]
+                rotation_done += wrap_done
+                counter += 1
         # Take last step rotation
         # Remove the last mode change
         rotation_done = rotation_done - UZ[-1][:2]
@@ -690,7 +679,6 @@ class Planner():
         mode_sequence = self.mode_sequence
         n_mode = self.swarm.specs.n_mode
         n_robot = self.swarm.specs.n_robot
-        n_inner = self.n_inner
         n_outer = self.n_outer
         B = np.zeros((2*n_robot,2*n_mode))
         for mode in range(n_mode):
@@ -699,12 +687,12 @@ class Planner():
         u_unc = np.dot(np.linalg.inv(B),xf - xi)
         u_unc = np.reshape(u_unc,(2,-1)).T
         u = np.zeros_like(u_unc)
-        u[:,-1] = u_unc[:,0]/(n_outer)
-        u[:,:-1] = u_unc[:,1:]/(n_inner*n_outer)
+        u[:,-1] = u_unc[:,0]/n_outer
+        u[:,:-1] = u_unc[:,1:]/n_outer
         
         U = np.empty((2,0),float)
         for i in range(n_mode-1):
-            U = np.hstack( (U, np.tile(u[:,i][np.newaxis].T,(1,n_inner)) ) )
+            U = np.hstack( (U, np.tile(u[:,i][np.newaxis].T,(1,1)) ) )
         U = np.hstack( (U, u[:,-1][np.newaxis].T ) )
         U_sol = U
         for i in range(n_outer - 1):
@@ -716,11 +704,10 @@ class Planner():
         for i_outer in range(n_outer):
             for mode in range(1,n_mode):
                 mapped_mode = mode_sequence[mode]
-                for i_inner in range(n_inner):
-                    X_sol[:,counter + 1] = (X_sol[:,counter]
-                     + np.dot(self.swarm.specs.B[mapped_mode,:,:],
-                       U_sol[:,counter]))
-                    counter += 1
+                X_sol[:,counter + 1] = (X_sol[:,counter]
+                        + np.dot(self.swarm.specs.B[mapped_mode,:,:],
+                        U_sol[:,counter]))
+                counter += 1
             if i_outer < n_outer - 1:
                 mode = 0
                 X_sol[:,counter + 1] = (X_sol[:,counter]
@@ -784,7 +771,7 @@ if __name__ == '__main__':
     
     swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
     swarm = model.Swarm(xi, 0, 1, swarm_specs)
-    planner = Planner(swarm, n_inner = 1, n_outer = outer)
+    planner = Planner(swarm, n_outer = outer)
 
     #g, lbg, ubg = planner.get_constraints(boundary = boundary)
     #G = ca.Function('g',[planner.X,planner.U,planner.P],[g])
