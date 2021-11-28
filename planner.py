@@ -538,19 +538,21 @@ if __name__ == '__main__':
     c, cp = [40,0], [40,20]
     d, dp = [60,0], [60,20]
     e = [75,0]
-    xi = np.array(a+b+c+d)
+    xi = np.array(a+b+c+d+e)
+    transfer = np.array([0,0]*(len(xi)//2))
+    xi = xi + transfer
     A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
     xf = M
-    xf = np.array([-30,0]+[-15,60]+[0,40]+[15,60])
+    #xf = np.array([0,30]+[0,50]+[25,50])
     #xf = np.array(dp+cp+bp+ap)
     outer = 5
     boundary = True
     last_section = True
     
-    #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
-    pivot_separation = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]])
+    pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
+    #pivot_separation = np.array([[10,9,8],[9,8,10]])
     
     swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
     swarm = model.Swarm(xi, 0, 1, swarm_specs)
