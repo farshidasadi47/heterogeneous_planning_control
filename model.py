@@ -89,8 +89,8 @@ class Swarm:
             rotations = np.floor(r/self.specs.rotation_distance)
             r = rotations*self.specs.rotation_distance
 
-        u[0] = -r*np.sin(theta)
-        u[1] = r*np.cos(theta)
+        u[0] = r*np.cos(theta)
+        u[1] = r*np.sin(theta)
         # Update states of swarm of milirobots
         self.position = self.position + np.dot(B[mode,:,:],u)
         self.angle = theta
@@ -365,7 +365,7 @@ if __name__ == '__main__':
     #swarm.update_state(u[:2],True)
     #print(swarm.position)
     length = 10000
-    #swarm.simplot(input_series,length, boundary=True, last_section=False)
+    swarm.simplot(input_series,length, boundary=True, last_section=False)
     #print(swarm.__simulate_result[0][:,swarm.__simulate_result[4]].T)
-    anim = swarm.simanimation(input_series,length,boundary=True, last_section=True)
+    #anim = swarm.simanimation(input_series,length,boundary=True, last_section=True)
 

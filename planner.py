@@ -325,7 +325,7 @@ class Planner():
         """Converts cartesian to polar coordinate based on Y coordinate
         as reference for zero angle."""
         z = complex(z[0],z[1])
-        z = np.array([np.abs(z), np.angle(z)-np.pi/2])
+        z = np.array([np.abs(z), np.angle(z)])
         if z[0] == 0:
             z[1] = 0
         return z
@@ -342,20 +342,20 @@ class Planner():
             if r%rotation_distance > 0:
                 r2 = rotation_distance
                 teta = ca.SX.sym('t',2)
-                f1 = -r1*ca.sin(teta[0])-r2*ca.sin(teta[1]) - u[0]
-                f2 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[1]
+                f1 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[0]
+                f2 = r1*ca.sin(teta[0])+r2*ca.sin(teta[1]) - u[1]
                 f = ca.Function('g',[teta],[ca.vertcat(*[f1,f2])])
                 F = ca.rootfinder('F','newton',f)
                 teta_value = F(np.random.rand(2))
             else:
                 r2 = 0
                 teta_value = np.zeros(2)
-                teta_value[0] = self._Planner__cartesian_to_polar(u)[1]
+                teta_value[0] = self.__cartesian_to_polar(u)[1]
             u_possible = np.zeros((2,2))
-            u_possible[0,0] = -r1*np.sin(teta_value[0])
-            u_possible[1,0] = r1*np.cos(teta_value[0])
-            u_possible[0,1] = -r2*np.sin(teta_value[1])
-            u_possible[1,1] = r2*np.cos(teta_value[1])
+            u_possible[0,0] = r1*np.cos(teta_value[0])
+            u_possible[1,0] = r1*np.sin(teta_value[0])
+            u_possible[0,1] = r2*np.cos(teta_value[1])
+            u_possible[1,1] = r2*np.sin(teta_value[1])
         else:
             u_possible = np.zeros((2,2))
         return u_possible
@@ -447,7 +447,7 @@ class Planner():
             for mode in range(1,n_mode):
                 # map the mode to the current swarm mode sequence.
                 mode_mapped = mode_sequence[mode]
-                wrap=self._Planner__wrap_u(U_sol[:,counter],x,mode_mapped,uhat_old)
+                wrap=self.__wrap_u(U_sol[:,counter],x,mode_mapped,uhat_old)
                 X_wrap, UZ_wrap, wrap_done, uhat_old = wrap
                 X.extend(X_wrap)
                 UZ.extend(UZ_wrap)
@@ -495,13 +495,13 @@ class Planner():
         UZ_wrap = []
         wrap_done = np.zeros(2)
         rem_u = np.around(u,6)
-        rem_r, teta = self._Planner__cartesian_to_polar(rem_u).tolist()
-        uhat = np.array([-np.sin(teta),np.cos(teta)])
+        rem_r, teta = self.__cartesian_to_polar(rem_u).tolist()
+        uhat = np.array([np.cos(teta),np.sin(teta)])
         if rem_r ==0:
             uhat = np.copy(uhat_old)
         while rem_r>0:
             # Determine when the robots reach a wall.
-            r_hit = self._Planner__get_max_to_go(x,uhat,mode)
+            r_hit = self.__get_max_to_go(x,uhat,mode)
             r_hit = min(rem_r,r_hit)
             # Determine the input
             u_possible = r_hit*uhat
@@ -516,7 +516,7 @@ class Planner():
             if rem_r == 0:
                 break
             # Determine the wrapping if the loop is not broken.
-            r_wrap, uhat_wrap = self._Planner__get_roll_to_go(x,uhat,rem_r)
+            r_wrap, uhat_wrap = self.__get_roll_to_go(x,uhat,rem_r)
             # Determine the rollings and record it.
             u_possible = r_wrap*uhat_wrap
             wrap_done = wrap_done + u_possible
@@ -526,7 +526,7 @@ class Planner():
             X_wrap.append(x)
             UZ_wrap.append(np.append(u_possible,0))  # Zero is rolling mode.
         # Take one roll to change the mode.
-        u_possible = self._Planner__mode_change(x,uhat)
+        u_possible = self.__mode_change(x,uhat)
         wrap_done = wrap_done + u_possible
         # Take the current step.
         x = self.f(x,u_possible,0)  # Zero is rolling mode.
@@ -753,20 +753,21 @@ if __name__ == '__main__':
     c, cp = [40,0], [40,20]
     d, dp = [60,0], [60,20]
     e = [75,0]
-    xi = np.array(a+b+c+d+e)
+    xi = np.array(a+b+c+d)
     transfer = np.array([0,0]*(len(xi)//2))
     xi = xi + transfer
     A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
-    xf = A
+    xf = np.array([0,0]+[0,30]+[0,50]+[25,50])
     #xf = np.array([0,30]+[0,50]+[25,50])
     #xf = np.array(dp+cp+bp+ap)
     outer = 3
     boundary = True
     last_section = True
     
-    pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
+    #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
+    pivot_separation = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9]])
     #pivot_separation = np.array([[10,9,8],[9,8,10]])
     
     swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
@@ -778,13 +779,13 @@ if __name__ == '__main__':
     #optim_var, lbx, ubx, p = planner.get_optim_vars(boundary=boundary)
     #obj = planner.get_objective()
     #nlp_prob = {'f': obj, 'x': optim_var, 'g': g, 'p': p}
-    solver = planner.get_optimization(solver_name='knitro', boundary=boundary)
+    solver = planner.get_optimization(solver_name='knitro', boundary=False)
     sol,U_sol,X_sol,P_sol,UZ,U,X = planner.solve_optimization(xf,boundary)
     swarm.reset_state(xi,0,1)
     anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section)
     
-    #swarm.reset_state(xi,0,1)
-    #swarm.simplot(U,500,boundary=boundary,last_section=last_section)
+    swarm.reset_state(xi,0,1)
+    swarm.simplot(U,500,boundary=boundary,last_section=last_section)
     #x = ca.SX.sym('x',4*2)
     #u = ca.SX.sym('u',2)
     #i = 2
