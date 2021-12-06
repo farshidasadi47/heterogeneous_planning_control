@@ -328,7 +328,7 @@ class Planner():
     def __cartesian_to_polar(self,z):
         """Converts cartesian to polar coordinate."""
         z = complex(z[0],z[1])
-        z = np.array([np.abs(z), np.angle(z)-np.pi/2])
+        z = np.array([np.abs(z), np.angle(z)])
         return z
 
     def __accurate_rotation(self,u):
@@ -343,8 +343,8 @@ class Planner():
             if r%rotation_distance > 0:
                 r2 = rotation_distance
                 teta = ca.SX.sym('t',2)
-                f1 = -r1*ca.sin(teta[0])-r2*ca.sin(teta[1]) - u[0]
-                f2 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[1]
+                f1 = r1*ca.cos(teta[0])+r2*ca.cos(teta[1]) - u[0]
+                f2 = r1*ca.sin(teta[0])+r2*ca.sin(teta[1]) - u[1]
                 f = ca.Function('g',[teta],[ca.vertcat(*[f1,f2])])
                 F = ca.rootfinder('F','newton',f)
                 teta_value = F(np.random.rand(2))
@@ -353,10 +353,10 @@ class Planner():
                 teta_value = np.zeros(2)
                 teta_value[0] = self._Planner__cartesian_to_polar(u)[1]
             u_possible = np.zeros((2,2))
-            u_possible[0,0] = -r1*np.sin(teta_value[0])
-            u_possible[1,0] = r1*np.cos(teta_value[0])
-            u_possible[0,1] = -r2*np.sin(teta_value[1])
-            u_possible[1,1] = r2*np.cos(teta_value[1])
+            u_possible[0,0] = r1*np.cos(teta_value[0])
+            u_possible[1,0] = r1*np.sin(teta_value[0])
+            u_possible[0,1] = r2*np.cos(teta_value[1])
+            u_possible[1,1] = r2*np.sin(teta_value[1])
         else:
             u_possible = np.zeros((2,2))
         return u_possible
@@ -527,21 +527,21 @@ if __name__ == '__main__':
     c, cp = [40,0], [40,20]
     d, dp = [60,0], [60,20]
     e = [75,0]
-    xi = np.array(a+b+c+d+e)
+    xi = np.array(a+b+c)
     transfer = np.array([0,0]*(len(xi)//2))
     xi = xi + transfer
     A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
-    xf = A
+    xf = F = np.array([0,0]+[25,50]+ [20,30])
     #xf = np.array([0,30]+[0,50]+[25,50])
     #xf = np.array(dp+cp+bp+ap)
-    outer = 3
-    boundary = False
+    outer = 4
+    boundary = True
     last_section = True
     
-    pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
-    #pivot_separation = np.array([[10,9,8],[9,8,10]])
+    #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
+    pivot_separation = np.array([[10,9,8],[9,8,10]])
     
     swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
     swarm = model.Swarm(xi, 0, 1, swarm_specs)
@@ -577,3 +577,4 @@ if __name__ == '__main__':
     #print(planner.swarm.specs.n_mode)
     #print(planner.n_inner)
     #print(planner.n_outer)
+    
