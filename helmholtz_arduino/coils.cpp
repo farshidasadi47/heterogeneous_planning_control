@@ -1,4 +1,4 @@
-#include "coils.hpp"
+#include "coils.h"
 /********* Function definitions ***************************************/
 void coils::DualVNH5019_Init(){
     // Sets up pin modes for coils drivers.
