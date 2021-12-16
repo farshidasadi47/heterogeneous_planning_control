@@ -32,6 +32,8 @@ class Arduino():
         self.__hz = hz
         self.__period = 1/hz
         self.__period_ns = int(round(1000000000/hz,0))
+        #
+        self.written = None  # Last written bytes.
 
     def __enter__(self):
         return self
@@ -124,6 +126,28 @@ class Arduino():
         if self.connection is not None:
             self.connection.close()
             print(f"Disconnected from {self.__port}.")
+
+    def write(self, x):
+        """This function will sends a given list of floats."""
+        # Get size of the input.
+        size = len(x)
+        # Convert to numpy array for easier processing.
+        if type(x) is not np.ndarray:
+            x = np.array(x)
+        # Convert the number to our format. 105.35678 -> 105357
+        x = np.round(x*1000).astype(int).tolist()
+        # Convert to signed int32 binary in little endian format.
+        x = struct.pack(f'<{size}i',x)
+        # Add delimiter and size to the beginning of the message.
+        self.writtien = self.__delimiter + struct.pack('B',size) + x
+        # Write the message.
+        self.connection.write(self.written)
+    
+
+        
+
+
+
 
 ########## test section ################################################
 if __name__ == '__main__':
