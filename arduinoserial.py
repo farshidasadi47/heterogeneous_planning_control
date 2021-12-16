@@ -33,6 +33,11 @@ class Arduino():
         self.__period = 1/hz
         self.__period_ns = int(round(1000000000/hz,0))
 
+    def __enter__(self):
+        return self
+    def __exit__(self,exc_type, exc_val, exc_tb):
+        self.close()
+
     def __find_arduino(self):
         """
         This method searches for available Arduino boards in
@@ -96,5 +101,35 @@ class Arduino():
         # Following ranges are based on the chosen delimiter.
         self.__max_int32 = struct.unpack('!i',b'\x7f\xff\xff\xff')[0]
         self.__min_int32 = struct.unpack('!i',b'\x80\x00\x00\x00')[0]
-
     
+    def begin(self):
+        """Establishes a serial connection with the chosen port
+        at the given baud rate."""
+        try:
+            self.connection = serial.Serial(self.__port,self.__baud)
+            # Set buffer sizes, this is a suggestion to the hardware
+            # driver, and may or may not over-write the driver's value.
+            self.connection.set_buffer_size(rx_size = self.__buffer_size,
+                                            tx_size = self.__buffer_size)
+            time.sleep(.1)
+            print(f"Connection to {self.__port}.")
+            self.__last_spin_time = time.perf_counter_ns()
+        except serial.serialutil.SerialException:
+            print(line_sep)
+            print(f"Serial port {self.__port} is busy.")
+            print("Close the corresponding process and restart the program.")
+    
+    def close(self):
+        """Closes the connection."""
+        if self.connection is not None:
+            self.connection.close()
+            print(f"Disconnected from {self.__port}.")
+
+########## test section ################################################
+if __name__ == '__main__':
+
+    with Arduino() as arduino:
+        arduino.begin()
+        #while True:
+        #    print("{:+011.3f}".format(time.perf_counter()))
+        #    arduino.sleep()
