@@ -95,14 +95,15 @@ class Arduino():
         """
         Defines variables related to our messaging protocol.
         """
-        self.__delimiter = b'\x7f\xff\xff\xff'
+        # Everything is little endian, since ATmega328P is this way.
+        self.__delimiter = b'\x7f\xff\xff\xff'[::-1]
         self.__format = 'little'
         # Data types available in the protocol with their sizes.
         self.__data_types = {}
-        self.__data_types['int32'] = 4
+        self.__data_types['float32'] = 4
         # Following ranges are based on the chosen delimiter.
-        self.__max_int32 = struct.unpack('!i',b'\x7f\xff\xff\xff')[0]
-        self.__min_int32 = struct.unpack('!i',b'\x80\x00\x00\x00')[0]
+        self.__max_float32 = struct.unpack('!i',b'\x7f\xff\xff\xff')[0]
+        self.__min_float32 = struct.unpack('!i',b'\x80\x00\x00\x00')[0]
     
     def begin(self):
         """Establishes a serial connection with the chosen port
@@ -128,20 +129,26 @@ class Arduino():
             print(f"Disconnected from {self.__port}.")
 
     def write(self, x):
-        """This function will sends a given list of floats."""
+        """
+        This function will sends a given list of numbers.
+        It convrts everynumber to 32bit float and sends the delimited
+        byte array. The message format is as:
+            delimiter + size of array in bytes + message
+        The array length should not exceed 60 members.
+        Max integer range to be sent accurately is 2^24 = 
+        """
         # Get size of the input.
         size = len(x)
         # Convert to numpy array for easier processing.
         if type(x) is not np.ndarray:
-            x = np.array(x)
-        # Convert the number to our format. 105.35678 -> 105357
-        x = np.round(x*1000).astype(int).tolist()
+            x = np.array(x).squeeze()
         # Convert to signed int32 binary in little endian format.
-        x = struct.pack(f'<{size}i',x)
+        x = struct.pack(f'<{size}f',*x)
         # Add delimiter and size to the beginning of the message.
-        self.writtien = self.__delimiter + struct.pack('B',size) + x
+        self.written = self.__delimiter + struct.pack('B',4*size) + x
         # Write the message.
-        self.connection.write(self.written)
+        #self.connection.write(self.written)
+        return self.written
     
 
         
@@ -153,7 +160,8 @@ class Arduino():
 if __name__ == '__main__':
 
     with Arduino() as arduino:
-        arduino.begin()
+        #arduino.begin()
         #while True:
         #    print("{:+011.3f}".format(time.perf_counter()))
         #    arduino.sleep()
+        pass

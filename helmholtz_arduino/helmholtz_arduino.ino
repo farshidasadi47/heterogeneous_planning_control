@@ -5,11 +5,13 @@
 /********* Includes ***************************************************/
 #include "arduinoserial.h"
 #include "coils.h"
+#include "Arduino.h"
 
 /********* Globals ****************************************************/
 const unsigned long int baud = 115200;
 Arduino arduino;
 char str[64];
+char x = 10;
 
 /********* Initializing ***********************************************/
 void setup(){
@@ -20,9 +22,8 @@ void setup(){
 /********* Main loop **************************************************/
 void loop() {
   // send data only when you receive data:
-  sprintf(str,"%4s",arduino.delimiter_);
-  arduino.io->println(str);
-  sprintf(str,"% 7lu",arduino.baud_);
-  arduino.io->println(str);
+  float a[3] = {-1256.84,3256.98,-1239.85};
+  arduino.write<float>(a,3);
+  arduino.io->println("written:");
   delay(1000);
 }
