@@ -19,7 +19,9 @@ void setup(){
 /********* Main loop **************************************************/
 void loop() {
   // send data only when you receive data:
-  sprintf(str,"%4s",arduino.delimiter);
+  sprintf(str,"%4s",arduino.delimiter_);
+  Serial.println(str);
+  sprintf(str,"% 7lu",arduino.baud_);
   Serial.println(str);
   delay(1000);
 }

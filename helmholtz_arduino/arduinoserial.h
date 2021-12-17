@@ -21,8 +21,15 @@ class Arduino{
     // Establishes serial connection with our simple protocol.
     public:
     // Instance variables.
-    unsigned char delimiter[4] = {0x41,0x42,0x43,0x44};// {0x7f,0xff,0xff,0xff};//
+    unsigned char delimiter_[4] = {0x41,0x42,0x43,0x44};// {0x7f,0xff,0xff,0xff};//
+    unsigned long int baud_;
+    // Constructor and deconstructor
+    Arduino()                      : baud_(115200){}
+    Arduino(unsigned long int baud): baud_(baud)  {}
+    ~Arduino(){};
+    // Methods
 };
+
 
 
 #endif // ARDUINOSERIAL_H
