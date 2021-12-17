@@ -1,6 +1,6 @@
 #include "coils.h"
 /********* Function definitions ***************************************/
-void coils::DualVNH5019_Init(){
+void DualVNH5019_Init(){
     // Sets up pin modes for coils drivers.
     // Input: none
     // Output: none
@@ -118,8 +118,7 @@ void set_magnetic_field_cartesian(float ex, float ey,
     // Output: None.
     set_m1_small_z(ez*power_percentage);
     set_m2_middle_x(ex*power_percentage);
-    set_m3_big_y(ey,power_percentage);
+    set_m3_big_y(ey*power_percentage);
 
     return;
 }
-

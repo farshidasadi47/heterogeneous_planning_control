@@ -13,26 +13,26 @@
 /********* Type defs **************************************************/
 // PIN definitions, 
 // H bridge 1, connected to small coil, Z axis, A->B is +Z direction.
-static const unsigned char EN1 = 6;
-static const unsigned char INA1 = 2;
-static const unsigned char INB1 = 4;
-static const unsigned char PWM1 = 9;
-static const unsigned char CS1 = A0;
-static const float m1_correction_factor = 2*1.5/4.2;
+const unsigned char EN1 = 6;
+const unsigned char INA1 = 2;
+const unsigned char INB1 = 4;
+const unsigned char PWM1 = 9;
+const unsigned char CS1 = A0;
+const float m1_correction_factor = 2*1.5/4.2;
 // H bridge 2, connected to middle coil, X axis, B->A is +X direction.
-static const unsigned char EN2 = 12;
-static const unsigned char INA2 = 7;
-static const unsigned char INB2 = 8;
-static const unsigned char PWM2 = 10;
-static const unsigned char CS2 = A1;
-static const float m2_correction_factor = 2*2.5/4.2;
+const unsigned char EN2 = 12;
+const unsigned char INA2 = 7;
+const unsigned char INB2 = 8;
+const unsigned char PWM2 = 10;
+const unsigned char CS2 = A1;
+const float m2_correction_factor = 2*2.5/4.2;
 // H bridge 3, connected to big coil, Y axis, B->A is +Y direction.
-static const unsigned char EN3 = 0;
-static const unsigned char INA3 = 3;
-static const unsigned char INB3 = 5;
-static const unsigned char PWM3 = 11;
-static const unsigned char CS3 = A2;
-static const float m3_correction_factor = 1.0;
+const unsigned char EN3 = 0;
+const unsigned char INA3 = 3;
+const unsigned char INB3 = 5;
+const unsigned char PWM3 = 11;
+const unsigned char CS3 = A2;
+const float m3_correction_factor = 1.0;
 /********* Function declarations **************************************/
 // DualVNH5019_Init
 // Sets up pin modes for coils drivers.

@@ -17,8 +17,12 @@
 // Description.
 // Input: None
 // Output: None
-void some_func();
-
+class Arduino{
+    // Establishes serial connection with our simple protocol.
+    public:
+    // Instance variables.
+    unsigned char delimiter[4] = {0x41,0x42,0x43,0x44};// {0x7f,0xff,0xff,0xff};//
+};
 
 
 #endif // ARDUINOSERIAL_H

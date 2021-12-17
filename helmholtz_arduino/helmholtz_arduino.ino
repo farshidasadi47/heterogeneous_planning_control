@@ -3,12 +3,13 @@
 * It communicates with computer via ROS2 arduibo interface.
 * Author: Farshid Asadi, farshidasadi47@yahoo.com
 /********* Includes ***************************************************/
-#include <pyduino_bridge.h>
-#include "coils.hpp"
+#include "arduinoserial.h"
+#include "coils.h"
 
 /********* Globals ****************************************************/
-int incomingByte = 0;  // For incoming serial data.
-const int baud = 500000;
+const unsigned long int baud = 115200;
+Arduino arduino;
+char str[64];
 
 /********* Initializing ***********************************************/
 void setup(){
@@ -18,12 +19,7 @@ void setup(){
 /********* Main loop **************************************************/
 void loop() {
   // send data only when you receive data:
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    incomingByte = Serial.read();
-
-    // say what you got:
-    Serial.print("I received: ");
-    Serial.println(incomingByte, DEC);
-  }
+  sprintf(str,"%4s",arduino.delimiter);
+  Serial.println(str);
+  delay(1000);
 }
