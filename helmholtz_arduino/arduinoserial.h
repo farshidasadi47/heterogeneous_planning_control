@@ -10,8 +10,9 @@
 #define ARDUINOSERIAL_H
 
 #include "Arduino.h"
-/********* Type defs **************************************************/
-
+#include "HardwareSerial.h"
+/********* Type defs and globals **************************************/
+extern HardwareSerial Serial;
 /********* Function declarations **************************************/
 // some_func
 // Description.
@@ -23,11 +24,23 @@ class Arduino{
     // Instance variables.
     unsigned char delimiter_[4] = {0x41,0x42,0x43,0x44};// {0x7f,0xff,0xff,0xff};//
     unsigned long int baud_;
+    HardwareSerial *io;
     // Constructor and deconstructor
-    Arduino()                      : baud_(115200){}
-    Arduino(unsigned long int baud): baud_(baud)  {}
+    Arduino()                      : baud_(115200), io(&Serial){}
+    Arduino(unsigned long int baud): baud_(baud)  , io(&Serial){}
     ~Arduino(){};
     // Methods
+    void begin(){
+      // Starts serial communication.
+      io->begin(baud_);
+    }
+    void end(){
+      // Finishes serial communication.
+      io->end();
+    }
+
+    
+
 };
 
 

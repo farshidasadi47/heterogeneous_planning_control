@@ -14,14 +14,15 @@ char str[64];
 /********* Initializing ***********************************************/
 void setup(){
     // Initialize.
-    Serial.begin(baud); // opens serial port, sets data rate to 500000 bps.
+    //Serial.begin(baud); // opens serial port, sets data rate to 500000 bps.
+    arduino.begin();
 }
 /********* Main loop **************************************************/
 void loop() {
   // send data only when you receive data:
   sprintf(str,"%4s",arduino.delimiter_);
-  Serial.println(str);
+  arduino.io->println(str);
   sprintf(str,"% 7lu",arduino.baud_);
-  Serial.println(str);
+  arduino.io->println(str);
   delay(1000);
 }
