@@ -48,8 +48,8 @@ if __name__ == '__main__':
     letters = {}
     letters['start'] = np.array([0,0]+[20,0]+[40,0]+[60,0])
     letters['Y'] = np.array([0,0]+[0,20]+[-10,40]+[10,40]) 
-    letters['D'] = np.array([0,0]+[0,50]+[25,50]+ [20,30])
-    letters['F'] = np.array([0,0]+[0,40]+[30,35]+[30,5])
+    letters['F'] = np.array([0,0]+[0,50]+[25,50]+ [20,30])
+    letters['D'] = np.array([0,0]+[0,40]+[30,35]+[30,5])
     letters['end'] = letters['start']
     transfer = np.array([0,0]*(len(letters['start'])//2))
     xi = letters['start'] + transfer
@@ -68,10 +68,10 @@ if __name__ == '__main__':
     # solver = planning.get_optimization(solver_name='knitro', boundary=boundary)
     # sol, U_sol, X_sol, P_sol, UZ, U, X = planning.solve_optimization(xf)
     # swarm.reset_state(xi,0,1)
-    anim =swarm.simanimation(U,10000,boundary=boundary,last_section=last_section)
+    anim =swarm.simanimation(U,10000,boundary=boundary,last_section=last_section,save =False)
     
-    swarm.reset_state(xi,0,1)
-    swarm.simplot(U,500,boundary=boundary,last_section=last_section)
+    #swarm.reset_state(xi,0,1)
+    #swarm.simplot(U,500,boundary=boundary,last_section=last_section)
 
 
 
