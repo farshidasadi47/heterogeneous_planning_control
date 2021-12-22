@@ -782,7 +782,7 @@ if __name__ == '__main__':
     solver = planner.get_optimization(solver_name='knitro', boundary=False)
     sol,U_sol,X_sol,P_sol,UZ,U,X = planner.solve_optimization(xf,boundary)
     swarm.reset_state(xi,0,1)
-    anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section)
+    anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
     
     swarm.reset_state(xi,0,1)
     swarm.simplot(U,500,boundary=boundary,last_section=last_section)

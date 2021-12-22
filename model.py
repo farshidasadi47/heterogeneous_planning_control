@@ -3,6 +3,7 @@
 # system.
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
+import os
 import numpy as np
 np.set_printoptions(precision=4, suppress=True)
 import matplotlib.pyplot as plt
@@ -191,27 +192,25 @@ class Swarm:
         """Sets the plot configuration. """
         self.__colors = ['k','r','b','g','m','y','c',]
         self.__markers = ['o','s','P','h','*','+','x','d']
-        plt.sca(ax)
         if boundary is True:
-            plt.ylim([self.specs.lby,self.specs.uby])
-            plt.xlim([self.specs.lbx,self.specs.ubx])
-        plt.title('Swarm transition')
-        plt.xlabel('x axis')
-        plt.ylabel('y axis')
-        plt.gca().set_aspect('equal', adjustable='box')
-        plt.grid()
+            ax.set_ylim([self.specs.lby,self.specs.uby])
+            ax.set_xlim([self.specs.lbx,self.specs.ubx])
+        ax.set_title('Swarm transition')
+        ax.set_xlabel('x axis')
+        ax.set_ylabel('y axis')
+        ax.set_aspect('equal', adjustable='box')
+        ax.grid()
     
     def __simplot_plot(self, ax, plot_length, last_section = False):
         """Plots the result of simulation for the given length."""
         rotation_distance = self.specs.rotation_distance
         tumbling_distance = self.specs.tumbling_distance
-        plt.sca(ax)
         (Position, Angle, Mode, Input,
          mode_change_index) = self.__simulate_result
         # Draw initial positions and hold it
         for robot in range(self.specs.n_robot):
             current_mode = Input[2,0].astype(int)
-            plt.plot(Position[2*robot,0],
+            ax.plot(Position[2*robot,0],
                      Position[2*robot+1,0],
                      color = self.__colors[current_mode],
                      marker = self.__markers[robot],
@@ -243,7 +242,7 @@ class Swarm:
                     # If 'last_section' is set to False, all path
                     # will be drawn.
                     current_mode = Input[2,start_index].astype(int)
-                    plt.plot(Position[2*robot,start_index:end_index+1],
+                    ax.plot(Position[2*robot,start_index:end_index+1],
                              Position[2*robot+1,start_index:end_index+1],
                              color = self.__colors[current_mode],
                              marker = self.__markers[robot],
@@ -252,7 +251,7 @@ class Swarm:
             # Plot last section
             label = "robot: {:1d}".format(robot)
             current_mode = Input[2,start_index].astype(int)
-            plt.plot(Position[2*robot,start_index:end_index+1],
+            ax.plot(Position[2*robot,start_index:end_index+1],
                      Position[2*robot+1,start_index:end_index+1],
                      color = self.__colors[current_mode],
                      marker = self.__markers[robot],
@@ -308,7 +307,7 @@ class Swarm:
 
     def simanimation(self,input_series, anim_length = 10000,
                      position = None, angle = None, mode = None,
-                     boundary = False, last_section = False):
+                     boundary = False, last_section = False, save = False):
         """This function produces an animation from swarm transition
         for a given logical input series and specified length."""
         if (input_series.ndim != 2):
@@ -331,6 +330,24 @@ class Swarm:
         anim = animation.FuncAnimation(fig, self.__animate,
                                        fargs=(ax,boundary,last_section),
                                    interval=250, frames=range(1,anim_length+1))
+        # Saving animation.
+        if save:
+            # Set file name for saving animation.
+            index_for_saving = 1
+            anim_name = f"sim_anim_{index_for_saving:02d}.gif"
+            anim_directory = os.path.join(os.getcwd(), "result_sim")
+            # If the directory does not exist, make one.
+            if not os.path.exists(anim_directory):
+                os.mkdir(anim_directory)
+            anim_path = os.path.join(anim_directory,anim_name)
+            # Check if the current file name exists in the directory.
+            while os.path.exists(anim_path):
+                # Increase file number index until no file with such
+                # name exists.
+                index_for_saving += 1
+                anim_name = f"sim_anim_{index_for_saving:02d}.gif"
+                anim_path = os.path.join(anim_directory,anim_name)
+            anim.save(anim_path, fps = 4)
         return anim
 
 ########## test section ################################################
@@ -365,7 +382,7 @@ if __name__ == '__main__':
     #swarm.update_state(u[:2],True)
     #print(swarm.position)
     length = 10000
-    swarm.simplot(input_series,length, boundary=True, last_section=False)
+    #swarm.simplot(input_series,length, boundary=True, last_section=False)
     #print(swarm.__simulate_result[0][:,swarm.__simulate_result[4]].T)
-    #anim = swarm.simanimation(input_series,length,boundary=True, last_section=True)
+    anim = swarm.simanimation(input_series,length,boundary=True, last_section=True, save = False)
 
