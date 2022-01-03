@@ -151,17 +151,15 @@ class Arduino():
         return self.written
     
 
-        
-
-
-
-
-########## test section ################################################
-if __name__ == '__main__':
-
+def main():
+    """This function isolates tests from the module."""
     with Arduino() as arduino:
         #arduino.begin()
         #while True:
         #    print("{:+011.3f}".format(time.perf_counter()))
         #    arduino.sleep()
         pass
+########## test section ################################################
+if __name__ == '__main__':
+
+    main()

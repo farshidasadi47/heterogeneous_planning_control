@@ -22,8 +22,8 @@ void setup(){
 /********* Main loop **************************************************/
 void loop() {
   // send data only when you receive data:
-  float a[3] = {-1256.84,3256.98,-1239.85};
-  arduino.write<float>(a,3);
+  float a[3]{-1256.84,3256.98,-1239.85};
   arduino.io->println("written:");
+  arduino.write<float>(a,3);
   delay(1000);
 }

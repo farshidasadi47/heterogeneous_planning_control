@@ -39,8 +39,8 @@ class Arduino{
     
     public:
     // Instance variables.
-    unsigned char delimiter_[4] = {0xff,0xff,0xff,0x7f};//
-    unsigned char read_buffer_[256] = {0};
+    unsigned char delimiter_[4]{0xff,0xff,0xff,0x7f};//
+    unsigned char read_buffer_[256]{0};
     unsigned long int baud_;
     HardwareSerial *io;
     // Constructor and deconstructor
@@ -63,12 +63,12 @@ class Arduino{
         // Length of arr (arr_size) should not exceed 60.
         // Input: Numeric array, size of array.
         // Output: None.
-        unsigned char written[4 + 1 + 4*arr_size] = {0};
-        float serialized[arr_size] = {0};
+        unsigned char written[4 + 1 + 4*arr_size]{0};
+        float serialized[arr_size]{0};
         // Add delimiter to the written array.
         memcpy(&written[0], &delimiter_[0], sizeof(delimiter_));
         // Add size of the message.
-        written[sizeof(delimiter_)] = arr_size*4;
+        written[sizeof(delimiter_)] = arr_size*sizeof(arr[0]);
         // Convert data to the protocol format explained on top of file.
         Arduino::serialize<T>(arr, serialized, arr_size);
         // Append serialized data to the message.
@@ -77,18 +77,8 @@ class Arduino{
                sizeof(serialized));
 
         // for testing
-        unsigned int str_size{100};
-        char str[str_size];
-        sprintf(str,"%10s",written);
-        io->print(str);
-        io->println("dog");
-        // print hex values
-        
-        for(int j = 0; j < sizeof(written); j++){
-            sprintf(&str[4*j], "\\x%02x", written[j]);
-        }
-        io->print(str);
-        io->println("cat");
+        Arduino::print_str(written,4 + 1 + 4*arr_size);
+        Arduino::print_hex(written,4 + 1 + 4*arr_size);
 
         return;
     }
@@ -102,6 +92,32 @@ class Arduino{
         for(int i = 0; i< arr_size; i++){
             serialized[i] = (float) arr[i];
         }
+        return;
+    }
+
+    void print_str(unsigned char* arr, unsigned char arr_size){
+        // Prints hex representation of given char array.
+        // Input:  Pointer to array to print.
+        //         Array size.
+        // Output: None.
+        char str[arr_size*4+1]{0};
+        for(unsigned int j = 0; j < arr_size; j++){
+            sprintf(&str[4*j], "%4.c", arr[j]);
+        }
+        io->println(str);
+        return;
+    }
+
+    void print_hex(unsigned char* arr, unsigned char arr_size){
+        // Prints hex representation of given char array.
+        // Input:  Pointer to array to print.
+        //         Array size.
+        // Output: None.
+        char str[arr_size*4+1]{0};
+        for(unsigned int j = 0; j < arr_size; j++){
+            sprintf(&str[4*j], "\\x%02x", arr[j]);
+        }
+        io->println(str);
         return;
     }
 

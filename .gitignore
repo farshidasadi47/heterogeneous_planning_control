@@ -1,6 +1,8 @@
 test.*
 test/
 result_sim/
+
+.vscode/
 ########## python .gitignore ###########################################
 # Byte-compiled / optimized / DLL files
 __pycache__/
