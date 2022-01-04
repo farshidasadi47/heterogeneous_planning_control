@@ -19,8 +19,10 @@
 #include "HardwareSerial.h"
 /********* Type defs and globals **************************************/
 #undef SERIAL_RX_BUFFER_SIZE
-#define SERIAL_RX_BUFFER_SIZE 256
+#define SERIAL_RX_BUFFER_SIZE 64
 extern HardwareSerial Serial;
+
+#define TEST false
 /********* Function declarations **************************************/
 // some_func
 // Description.
@@ -75,23 +77,22 @@ class Buffer{
 
 };
 
-Buffer<unsigned char, 4> buffer;
-
+template<unsigned char read_buffer_size>
 class Arduino{
     /* Establishes serial connection with a simple protocol.
        Messages are numeric arrays formatted as delimiter + size + data.
        The delimiter is 4 bytes: "0xff 0xff 0xff 0x7f"
-       The size is one byte shows how many bytes to read.
+       The size of message should be given in class initialization.
        The data is a formatted numeric array. Every type is converted to 
        32bit float and then serialized.
        Maximum integer range that can be sent this way is:
            +/-2^24 = +/- 16777216
     */
-    
     public:
     // Instance variables.
-    unsigned char delimiter_[4]{0xff,0xff,0xff,0x7f};//
-    unsigned char read_buffer_[256]{0};
+    unsigned char delimiter_[4]{0xff,0xff,0xff,0x7f};
+    Buffer<unsigned char,4> buffer_delimiter_;
+    unsigned char read_buffer_[read_buffer_size]{0};
     unsigned long int baud_;
     HardwareSerial *io;
     // Constructor and deconstructor
@@ -114,22 +115,29 @@ class Arduino{
         // Length of arr (arr_size) should not exceed 60.
         // Input: Numeric array, size of array.
         // Output: None.
-        unsigned char written[4 + 1 + 4*arr_size]{0};
+        // 4 is size of delimiter.
         float serialized[arr_size]{0};
+        unsigned char serialized_size = sizeof(serialized);
+        unsigned char written[4 + 1 + serialized_size]{0};
         // Add delimiter to the written array.
-        memcpy(&written[0], &delimiter_[0], sizeof(delimiter_));
+        memcpy(&written[0], &delimiter_[0], 4);
         // Add size of the message.
-        written[sizeof(delimiter_)] = arr_size*sizeof(arr[0]);
+        written[4] = arr_size*sizeof(arr[0]);
         // Convert data to the protocol format explained on top of file.
         Arduino::serialize<T>(arr, serialized, arr_size);
         // Append serialized data to the message.
-        memcpy(&written[sizeof(delimiter_) + 1],
+        memcpy(&written[4 + 1],
                serialized,
-               sizeof(serialized));
-
+               serialized_size);
+        // Write the serialized value to serial.
+        for(unsigned char i=0;i<serialized_size+5;i++){
+            io->write(written[i]);
+        }
         // for testing
-        Arduino::print_str(written,4 + 1 + 4*arr_size);
-        Arduino::print_hex(written,4 + 1 + 4*arr_size);
+        if(TEST){
+            Arduino::print_str(written,serialized_size+5);
+            Arduino::print_hex(written,serialized_size+5);
+        }
 
         return;
     }
@@ -172,16 +180,49 @@ class Arduino{
         return;
     }
 
-    void read(){
-        // Reads data from serial and deserializes it and puts it in 
-        // read_buffer_ variable.
+    bool read(float* arr, unsigned char arr_size){
+        // Reads latest complete msg from serial, deserializes it, 
+        // puts it in read_buffer_ variable.
         // Input: None.
         // Output: None.
-        unsigned char ndx = 0;
-        while (io->available()){
-            read_buffer_[ndx] = io->read();
+        bool new_data{false};
+        static unsigned char read_buffer_ndx{0};
+        static unsigned char size_to_read{0};
+        static unsigned char last_read{0};
+        unsigned char buffer_delimiter[4]{0};
+        bool get_size{false};
+        while (io->available()>0){
+            // Read new data.
+            last_read = io->read();
+            // Put data in read buffer if "size_to_read > 0".
+            if(size_to_read > 0){
+                read_buffer_[read_buffer_ndx] = last_read;
+                size_to_read--;
+                read_buffer_ndx++;
+            }else{
+                if(read_buffer_ndx>0){
+                    // If anything has been read, update arr.
+                    memcpy(&arr[0], &read_buffer_[0], sizeof(arr[0])*arr_size);
+                    // Clean the read_buffer_
+                    memset(read_buffer_,0,read_buffer_size);
+                    // Set new data flag.
+                    new_data = true;
+                }
+            }
+            // Check if delimiter is sent.
+            get_size = ( *((long*) &buffer_delimiter[0]) ==
+                         *((long*) &delimiter_[0]));
+            // Update size_to_read
+            if(get_size){
+                size_to_read = last_read;
+                read_buffer_ndx = 0;
+            }
+            // Update delimiter buffer with last value.
+            buffer_delimiter_.put_fifo(last_read);
+            // Read the buffer for comparison.
+            buffer_delimiter_.read_fifo(buffer_delimiter);
         }
-
+        return new_data;
     }
 
 };
