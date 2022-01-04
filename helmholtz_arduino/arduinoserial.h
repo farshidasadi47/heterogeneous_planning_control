@@ -26,6 +26,57 @@ extern HardwareSerial Serial;
 // Description.
 // Input: None
 // Output: None
+template<class T, int size>
+class Buffer{
+    /* This class provides a special circular buffer that always
+       puts new data into the buffer.
+       Also for reading purpose it reads the total buffer starting from
+       the most recent value.
+       The purpose of this buffer is to store last N byte of the serial
+       stream, so that we can compare it with our delimiter.
+    */
+    public:
+    // Instance vars
+    T fifo[size]{0};
+    int putndx{0};    // Index of where to put next.
+    int getndx{0};    // Index of where to get next.
+    // Constructor and deconstructor
+    Buffer(){} 
+    ~Buffer(){}
+    // Methods
+    int put_fifo (T data) {
+        int ndx{putndx};                  // Temporary index.
+        //ndx = putndx;                   // Copy of put index.
+        fifo[ndx] = data;                 // Put data into fifo.
+        putndx = (ndx + 1)%size;          // Wrap put index.
+    }
+
+    void read_fifo(T* arr){
+        // Reads the whole fifo.
+        // Input: array of the same size of "size".
+        int ndx{putndx};                  // Temporary index.
+        // Copy the fifo to array.
+        for(int i=0; i<size; i++){
+            arr[i] = fifo[(i+ndx)%size];
+        }
+        return;
+    }
+
+    int wrap_int(int x, int const lbx = 0, int const ubx = size){
+        // Wraps a given integer between lower and upper bound.
+        // Input: integer to be wrapped and bounds.
+        // Output: wrapped value.
+        int range_size = ubx - lbx + 1;
+        if(x < lbx){
+            x += range_size * ((lbx - x) / range_size + 1);
+        }
+        return lbx + (x - ubx) % range_size;
+    }
+
+};
+
+Buffer<unsigned char, 4> buffer;
+
 class Arduino{
     /* Establishes serial connection with a simple protocol.
        Messages are numeric arrays formatted as delimiter + size + data.
@@ -46,7 +97,7 @@ class Arduino{
     // Constructor and deconstructor
     Arduino()                      : baud_(115200), io(&Serial){}
     Arduino(unsigned long int baud): baud_(baud)  , io(&Serial){}
-    ~Arduino(){};
+    ~Arduino(){}
     // Methods
     void begin(){
        // Starts serial communication.

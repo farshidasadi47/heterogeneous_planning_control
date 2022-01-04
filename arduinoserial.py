@@ -161,5 +161,9 @@ def main():
         pass
 ########## test section ################################################
 if __name__ == '__main__':
-
-    main()
+     with Arduino() as arduino:
+        #arduino.begin()
+        #while True:
+        #    print("{:+011.3f}".format(time.perf_counter()))
+        #    arduino.sleep()
+        pass
