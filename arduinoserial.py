@@ -24,7 +24,7 @@ class Arduino():
         self.__port = None
         self.__find_arduino()  # Find and set the com port.
         self.connection = None
-        self.__buffer_size = 255
+        self.__buffer_size = 65
         # Communication protocol related vars
         self.__define_protocol_vars()
         # Timing related vars/
@@ -109,7 +109,8 @@ class Arduino():
         """Establishes a serial connection with the chosen port
         at the given baud rate."""
         try:
-            self.connection = serial.Serial(self.__port,self.__baud)
+            self.connection = serial.Serial(self.__port,self.__baud,
+                                            timeout=0, write_timeout=1e-3)
             # Set buffer sizes, this is a suggestion to the hardware
             # driver, and may or may not over-write the driver's value.
             self.connection.set_buffer_size(rx_size = self.__buffer_size,
@@ -150,6 +151,13 @@ class Arduino():
         #self.connection.write(self.written)
         return self.written
     
+    def read(self):
+        """Reads serial buffer and returns the latest complete array."""
+        # Read the whole available buffer
+        buffer = self.connection.read(self.__buffer_size)
+        return buffer
+
+    
 
 def main():
     """This function isolates tests from the module."""
@@ -162,8 +170,9 @@ def main():
 ########## test section ################################################
 if __name__ == '__main__':
      with Arduino() as arduino:
-        #arduino.begin()
-        #while True:
+        arduino.begin()
+        while True:
+            print(arduino.read())
         #    print("{:+011.3f}".format(time.perf_counter()))
-        #    arduino.sleep()
-        pass
+            arduino.sleep()
+        
