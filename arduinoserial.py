@@ -7,6 +7,10 @@ import time
 import struct
 from array import array
 
+from ctypes import windll #new
+timeBeginPeriod = windll.winmm.timeBeginPeriod #new
+timeBeginPeriod(1) #new
+
 import serial
 import serial.tools.list_ports
 import numpy as np
@@ -105,6 +109,17 @@ class Arduino():
         self.__max_float32 = struct.unpack('!i',b'\x7f\xff\xff\xff')[0]
         self.__min_float32 = struct.unpack('!i',b'\x80\x00\x00\x00')[0]
     
+    def sleep(self):
+        """
+        Sleeps based on the specified rate of the class.
+        """
+        ctime = time.perf_counter()
+        elapsed = ctime - self.__last_spin_time
+        sleep_value = max(self.__period - elapsed, 0 )
+        time.sleep(sleep_value)
+        self.__last_spin_time = time.perf_counter()
+        
+
     def begin(self):
         """Establishes a serial connection with the chosen port
         at the given baud rate."""
@@ -117,7 +132,7 @@ class Arduino():
                                             tx_size = self.__buffer_size)
             time.sleep(.1)
             print(f"Connection to {self.__port}.")
-            self.__last_spin_time = time.perf_counter_ns()
+            self.__last_spin_time = time.perf_counter()
         except serial.serialutil.SerialException:
             print(line_sep)
             print(f"Serial port {self.__port} is busy.")
@@ -164,15 +179,25 @@ def main():
     with Arduino() as arduino:
         #arduino.begin()
         #while True:
-        #    print("{:+011.3f}".format(time.perf_counter()))
         #    arduino.sleep()
         pass
 ########## test section ################################################
 if __name__ == '__main__':
-     with Arduino() as arduino:
+    reads = []
+    with Arduino(10) as arduino:
         arduino.begin()
-        while True:
-            print(arduino.read())
-        #    print("{:+011.3f}".format(time.perf_counter()))
+        counter = 0
+        start = time.time()
+        while counter<100:
+            x = arduino.read()
+            if x:
+                print(x)
+                reads.append(x)
+            #print(f"{time.perf_counter():+011.4f}")
+            counter += 1
             arduino.sleep()
+        end = time.time()
+        print(f"Total time for counter {counter:04d} loops: {end-start:+09.4f}secs")
+        print(f"Time per loop: {(end-start)/counter*1000:+015.4f} msecs")
+        
         
