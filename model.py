@@ -348,6 +348,7 @@ class Swarm:
                 anim_name = f"sim_anim_{index_for_saving:02d}.gif"
                 anim_path = os.path.join(anim_directory,anim_name)
             anim.save(anim_path, fps = 4)
+        plt.show()
         return anim
 
 ########## test section ################################################

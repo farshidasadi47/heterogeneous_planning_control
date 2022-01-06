@@ -4,6 +4,7 @@
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
 import time
+import re
 import struct
 from array import array
 
@@ -38,6 +39,7 @@ class Arduino():
         self.__period_ns = int(round(1000000000/hz,0))
         #
         self.written = None  # Last written bytes.
+        self.remnant = b''
 
     def __enter__(self):
         return self
@@ -59,7 +61,8 @@ class Arduino():
                 arduino_ports.append(port)
         # Raise an error if there was no arduino connected.
         if not arduino_ports:
-            raise IOError("No Arduino found. Connect your Board.")
+            raise IOError
+            print("No Arduino found. Connect your Board.")
         # If there was arduinos, choose the board.
         if len(arduino_ports)<1:
             # If there is only one arduino choose that and proceed.
@@ -103,8 +106,8 @@ class Arduino():
         self.__delimiter = b'\x7f\xff\xff\xff'[::-1]
         self.__format = 'little'
         # Data types available in the protocol with their sizes.
-        self.__data_types = {}
-        self.__data_types['float32'] = 4
+        self.__type_size = {}
+        self.__type_size['float32'] = 4
         # Following ranges are based on the chosen delimiter.
         self.__max_float32 = struct.unpack('!i',b'\x7f\xff\xff\xff')[0]
         self.__min_float32 = struct.unpack('!i',b'\x80\x00\x00\x00')[0]
@@ -168,8 +171,27 @@ class Arduino():
     
     def read(self):
         """Reads serial buffer and returns the latest complete array."""
+        new_data = False
         # Read the whole available buffer
-        buffer = self.connection.read(self.__buffer_size)
+        buffer = self.connection.read(4096)
+        # Add the remnant from previous buffer read to current one.
+        # This ensures that newest message is not lost.
+        sent = self.remnant + buffer
+        # Split based on delimiter, includes the delimiter in the list.
+        splitted = re.split(b'('+self.__delimiter+b')',sent)
+        # Extract the message.
+        """ if len(splitted)>1:
+            # There was at least one occurence of the delimiter.
+            temp = splitted[-1]
+            size = temp[0]//self.__type_size['float32']  # array size.
+            # If the last piece is complete, return it.
+            if len(temp) == (temp[0]+1):
+                data = struct.unpack(f'<{size}f')
+                self.__type_size['float32'] """
+
+
+
+
         return buffer
 
     
@@ -186,9 +208,10 @@ if __name__ == '__main__':
     reads = []
     with Arduino(10) as arduino:
         arduino.begin()
+        time.sleep(5)
         counter = 0
         start = time.time()
-        while counter<100:
+        while counter<50:
             x = arduino.read()
             if x:
                 print(x)
@@ -201,3 +224,4 @@ if __name__ == '__main__':
         print(f"Time per loop: {(end-start)/counter*1000:+015.4f} msecs")
         
         
+# %%
