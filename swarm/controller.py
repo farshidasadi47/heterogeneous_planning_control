@@ -36,7 +36,6 @@ class ControlModel():
         self.specs = specs
         self.__set_rotation_constants_and_functions()
         self.reset_state(pos, theta, mode)
-        self.update_mode_sequence()
 
     def reset_state(self, pos: np.ndarray, theta: float, mode: int):
         if (pos.shape[0]//2 != self.specs.n_robot):
@@ -75,15 +74,28 @@ class ControlModel():
                                                self.rot_vect,
                                                increment*(mode-1))
     
-
-
-
-
-        
-
-
-        
-
+    def angle_body_to_magnet(self, ang: np.ndarray):
+        """
+        Converts (theta, alpha) of robots body, to (theta, alpha) of 
+        the robots magnets. The converted value can be used as desired
+        orientation of coils magnetic field.
+        @param: array composed of theta, and alpha of robot body in
+                Radians.
+         @type: 1D numpy array.
+        """
+        # Get magnet vector.
+        magnet_vect = self.magnet_vect[self.mode]
+        # Calculate the cartesian magnet vetor.
+        # Rotate alpha around X axis.
+        magnet_vect = self.rotx(magnet_vect, ang[1])
+        # Rotate theta around Z axis.
+        magnet_vect = self.rotz(magnet_vect, ang[0])
+        # Convert to spherical coordinate.
+        # alpha_m: arctan(z/x)
+        alpha_m = np.degrees(np.arctan2(magnet_vect[2], magnet_vect[0]))
+        # theta_m: arctan(y/x)
+        theta_m = np.degrees(np.arctan2(magnet_vect[1], magnet_vect[0]))
+        return np.array([theta_m, alpha_m, np.norm(magnet_vect)])
 
 
 ########## test section ################################################
