@@ -55,12 +55,15 @@ class Peripherals(Node):
         """To be able to use the class in with statement."""
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc, traceback):
         """To be able to use it in with statement."""
-        self.destroy_node()
         # Shutdown rclpy.
         if rclpy.ok() is True:
             rclpy.shutdown()
+        # Catch exceptions
+        if exc_type == KeyboardInterrupt:
+            print("Interrupted by user.")
+            return True
     
     def __add_publisher(self, msg_type, topic: str):
         """Creates publisher."""
@@ -147,14 +150,19 @@ class MainExecutor(rclpy.executors.SingleThreadedExecutor):
         """To be able to use the class in with statement."""
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc, traceback):
         """To be able to use it in with statement."""
         # Shutdown rclpy.
         if rclpy.ok() is True:
             rclpy.shutdown()
+        # Catch exceptions
+        if exc_type == KeyboardInterrupt:
+            print("Interrupted by user.")
+            return True
 
 ########## Test section ################################################
 if __name__ == "__main__":
-    executor = MainExecutor(50)
-    executor.spin()
+    with MainExecutor(50) as executor:
+        #executor = MainExecutor(50)
+        executor.spin()
 # %%
