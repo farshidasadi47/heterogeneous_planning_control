@@ -38,14 +38,16 @@ class ControlModel(model.Swarm):
                        pos: np.ndarray, theta: float, mode: int):
         self.specs = specs
         self.__set_rotation_constants_and_functions()
-        self.reset_state(pos, theta, mode)
+        self.reset_state(pos, theta, 0, mode)
 
-    def reset_state(self, pos: np.ndarray, theta: float, mode: int):
+    def reset_state(self, pos: np.ndarray, theta: float,
+                          alpha: float, mode: int):
         if (pos.shape[0]//2 != self.specs.n_robot):
             error_message = """Position does not match number of the robots."""
             raise ValueError(error_message)
         self.pos = pos
         self.theta = theta
+        self.alpha = alpha
         self.mode = mode
         self.update_mode_sequence(mode)
     
@@ -110,4 +112,3 @@ if __name__ == '__main__':
 
     control = ControlModel(swarm_specs, np.array([0,0,20,0,40,0]),0,1)
     print(control.rotz(control.magnet_vect[1],np.pi/4))
-    print(vars(swarm_specs))
