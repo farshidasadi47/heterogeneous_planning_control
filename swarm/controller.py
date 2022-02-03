@@ -102,7 +102,10 @@ class ControlModel(model.Swarm):
                                         np.linalg.norm(magnet_vect[:2])))
         # theta_m: arctan(y/x)
         theta_m = np.degrees(np.arctan2(magnet_vect[1], magnet_vect[0]))
-        return np.array([theta_m, alpha_m, np.linalg.norm(magnet_vect)])
+        return np.array([theta_m, alpha_m])
+        
+
+
 
 
 ########## test section ################################################
