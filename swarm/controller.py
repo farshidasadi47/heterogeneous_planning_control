@@ -39,6 +39,7 @@ class ControlModel(model.Swarm):
         self.specs = specs
         self.__set_rotation_constants_and_functions()
         self.reset_state(pos, theta, 0, mode)
+        self.step_increment = np.deg2rad(2)
 
     def reset_state(self, pos: np.ndarray, theta: float,
                           alpha: float, mode: int):
@@ -71,13 +72,13 @@ class ControlModel(model.Swarm):
         self.rotv = (lambda vect, axis, ang: 
                           Rotation.from_rotvec(ang*axis).apply(vect).squeeze())
         # Calculate magnet vectors
-        increment = 2*np.pi/(n_mode-1)
+        self.increment = 2*np.pi/(n_mode-1)
         magnet_vect_base =  np.array([1,-1,0])/np.sqrt(1+1)
         self.magnet_vect = {}
         for mode in range(1,n_mode):
             self.magnet_vect[mode] = self.rotv(magnet_vect_base,
                                                self.rot_vect,
-                                               increment*(mode-1))
+                                               self.increment*(mode-1))
     
     def angle_body_to_magnet(self, ang: np.ndarray, mode: int):
         """
