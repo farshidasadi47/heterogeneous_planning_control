@@ -134,10 +134,14 @@ class ControlModel():
             step_increment = -self.step_increment
 
         for alpha in np.arange(starting_alpha, desired_alpha, step_increment):
-            self.alpha = alpha
-            yield self.alpha
-        self.alpha = desired_alpha
-        yield self.alpha
+            self.update_alpha(alpha)
+            yield alpha
+        alpha = desired_alpha
+        self.update_alpha(alpha)
+        yield alpha
+
+    def update_alpha(self, alpha: float):
+        self.alpha = alpha
 
     def step_theta(self, desired_theta:float):
         """
