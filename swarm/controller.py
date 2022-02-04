@@ -41,12 +41,24 @@ class ControlModel(model.Swarm):
         self.reset_state(pos, theta, 0, mode)
         self.step_increment = np.deg2rad(2)
 
-    def reset_state(self, pos: np.ndarray, theta: float,
-                          alpha: float, mode: int):
+    def reset_state(self, pos: np.ndarray = None, theta: float = None,
+                          alpha: float = None, mode: int = None):
+        if pos is None:
+            pos = self.pos
+        if theta is None:
+            theta = self.theta
+        if alpha is None:
+            alpha = self.alpha
+        if mode is None:
+            mode = self.mode
         if (pos.shape[0]//2 != self.specs.n_robot):
             error_message = """Position does not match number of the robots."""
             raise ValueError(error_message)
+        #
+        leg_vect = np.array([0,self.specs.pivot_seperation/2,0])
         self.pos = pos
+        self.posa = self.rotz(leg_vect, theta) + pos
+        self.posb = self.rotz(-leg_vect, theta)+ pos
         self.theta = theta
         self.alpha = alpha
         self.mode = mode
