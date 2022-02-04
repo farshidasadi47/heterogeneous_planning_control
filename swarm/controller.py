@@ -26,7 +26,7 @@ class Robots:
     def to_list(self):
         return list(vars(self).values())
 
-class ControlModel(model.Swarm):
+class ControlModel():
     """
     This class holds controlers for pivot walking and rolling of
     swarm of millirobots.
@@ -55,10 +55,10 @@ class ControlModel(model.Swarm):
             error_message = """Position does not match number of the robots."""
             raise ValueError(error_message)
         #
-        leg_vect = np.array([0,self.specs.pivot_seperation/2,0])
+        leg_vect = np.array([0,self.specs.pivot_seperation[mode,0]/2,0])
         self.pos = pos
-        self.posa = self.rotz(leg_vect, theta) + pos
-        self.posb = self.rotz(-leg_vect, theta)+ pos
+        self.posa = self.rotz(leg_vect, theta)[:2] + pos[:2]
+        self.posb = self.rotz(-leg_vect, theta)[:2]+ pos[:2]
         self.theta = theta
         self.alpha = alpha
         self.mode = mode
@@ -122,17 +122,6 @@ class ControlModel(model.Swarm):
         return np.array([theta, alpha])        
   
     # Control related methods
-    def update_state(self, pos= None, theta= None, alpha= None, mode= None):
-        if pos is not None:
-            self.pos = pos
-        if theta is not None:
-            self.theta = theta
-        if alpha is not None:
-            self.alpha = alpha
-        if mode is not None:
-            self.mode = int(mode)
-            self.update_mode_sequence(self.mode)
-
     def step_alpha(self, desired_alpha:float):
         """
         Yields body angles that transitions robot to desired alpha.
