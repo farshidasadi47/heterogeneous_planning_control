@@ -141,6 +141,18 @@ class ControlModel():
             wrapped += 2*np.pi
         wrapped -= np.pi
         return wrapped
+    
+    @staticmethod
+    def wrap_range(from_ang, to_ang, inc = 1):
+        """
+        Yields a range of wrapped angle that goes from \"from_ang\"
+        to \"to_ang\".
+        """
+        diff = np.around(ControlModel.wrap(to_ang - from_ang),10)
+        if diff < 0:
+            inc *= -1
+        for ang in np.arange(0,diff,inc):
+            yield ControlModel.wrap(from_ang + ang)
   
     # Control related methods
     def step_alpha(self, desired_alpha:float):
