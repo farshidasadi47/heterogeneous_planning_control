@@ -56,10 +56,21 @@ class ControlModel():
             error_message = """Position does not match number of the robots."""
             raise ValueError(error_message)
         #
+        pivot_seperation = self.specs.pivot_seperation[mode,:]
         leg_vect = np.array([0,self.specs.pivot_seperation[mode,0]/2,0])
-        self.pos = pos
-        self.posa = self.rotz(leg_vect, theta)[:2] + pos[:2]
-        self.posb = self.rotz(-leg_vect, theta)[:2]+ pos[:2]
+        self.pos = pos.astype(float)
+        # Calculate leg positions.
+        self.posa = np.zeros_like(self.pos)
+        self.posb = np.zeros_like(self.pos)
+        # Leg vector, along +y (robot body frame) axis.
+        leg_vect = self.rotz(np.array([0,1.0,0]), theta)[:2]
+        for robot in range(self.specs.n_robot):
+            # a is half way along +y or leg_vect.
+            self.posa[2*robot:2*robot+2] = (pivot_seperation[robot]*leg_vect/2
+                                            + self.pos[2*robot:2*robot+2])
+            # b is half way along -y or -leg_vect
+            self.posb[2*robot:2*robot+2] = (-pivot_seperation[robot]*leg_vect/2
+                                            + self.pos[2*robot:2*robot+2])
         self.theta = theta
         self.alpha = alpha
         self.mode = mode
