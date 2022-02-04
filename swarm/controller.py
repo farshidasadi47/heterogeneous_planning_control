@@ -7,6 +7,7 @@
 from dataclasses import dataclass
 from itertools import combinations
 from collections import deque
+from math import remainder
 
 import numpy as np
 import numpy.matlib
@@ -119,7 +120,16 @@ class ControlModel():
                                       np.linalg.norm(cartesian[:2])))
         # theta: arctan(y/x)
         theta = np.degrees(np.arctan2(cartesian[1], cartesian[0]))
-        return np.array([theta, alpha])        
+        return np.array([theta, alpha])
+
+    @staticmethod
+    def wrap(angle):
+        """Wraps angles between -PI to PI."""
+        wrapped = remainder(angle+np.pi, 2*np.pi)
+        if wrapped< 0:
+            wrapped += 2*np.pi
+        wrapped -= np.pi
+        return wrapped
   
     # Control related methods
     def step_alpha(self, desired_alpha:float):
@@ -134,9 +144,10 @@ class ControlModel():
             step_increment = -self.step_increment
 
         for alpha in np.arange(starting_alpha, desired_alpha, step_increment):
+            alpha = self.wrap(alpha)
             self.update_alpha(alpha)
             yield alpha
-        alpha = desired_alpha
+        alpha = self.wrap(desired_alpha)
         self.update_alpha(alpha)
         yield alpha
 
