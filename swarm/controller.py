@@ -96,13 +96,20 @@ class ControlModel(model.Swarm):
         magnet_vect = self.rotx(magnet_vect, ang[1])
         # Rotate theta around Z axis.
         magnet_vect = self.rotz(magnet_vect, ang[0])
-        # Convert to spherical coordinate.
-        # alpha_m: arctan(z/(x**2 + y**2)**.5)
-        alpha_m = np.degrees(np.arctan2(magnet_vect[2],
-                                        np.linalg.norm(magnet_vect[:2])))
-        # theta_m: arctan(y/x)
-        theta_m = np.degrees(np.arctan2(magnet_vect[1], magnet_vect[0]))
-        return np.array([theta_m, alpha_m])
+        # Convert to spherical coordinate, [theta_m, alpha_m].
+        magnet_sph = self.cart_to_sph(magnet_vect)
+        return magnet_sph
+    
+    @staticmethod
+    def cart_to_sph(cartesian):
+        # alpha: arctan(z/(x**2 + y**2)**.5)
+        alpha = np.degrees(np.arctan2(cartesian[2],
+                                      np.linalg.norm(cartesian[:2])))
+        # theta: arctan(y/x)
+        theta = np.degrees(np.arctan2(cartesian[1], cartesian[0]))
+        return np.array([theta, alpha])        
+  
+
         
 
 
