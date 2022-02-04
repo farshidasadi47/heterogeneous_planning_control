@@ -109,7 +109,90 @@ class ControlModel(model.Swarm):
         theta = np.degrees(np.arctan2(cartesian[1], cartesian[0]))
         return np.array([theta, alpha])        
   
+    # Control related methods
+    def update_state(self, pos= None, theta= None, alpha= None, mode= None):
+        if pos is not None:
+            self.pos = pos
+        if theta is not None:
+            self.theta = theta
+        if alpha is not None:
+            self.alpha = alpha
+        if mode is not None:
+            self.mode = int(mode)
+            self.update_mode_sequence(self.mode)
 
+    def step_alpha(self, desired_alpha:float):
+        """
+        Yields body angles that transitions robot to desired alpha.
+        """
+        starting_alpha = self.alpha
+        # Determining increment sign.
+        if desired_alpha > starting_alpha:
+            step_increment = self.step_increment
+        else:
+            step_increment = -self.step_increment
+
+        for alpha in np.arange(starting_alpha, desired_alpha, step_increment):
+            self.alpha = alpha
+            yield self.alpha
+        self.alpha = desired_alpha
+        yield self.alpha
+
+    def step_theta(self, desired_theta:float):
+        """
+        Yields body angles that transitions robot to desired theta.
+        """
+        starting_theta = self.theta
+        # Determining increment sign.
+        if desired_theta > starting_theta:
+            step_increment = self.step_increment
+        else:
+            step_increment = -self.step_increment
+        for theta in np.arange(starting_theta, desired_theta, step_increment):
+            self.theta = theta
+            yield self.theta
+        self.theta = desired_theta
+        yield self.theta
+
+    def step_rotation_field(self, n_rotation: int):
+        """
+        Yields magnet angles that rotates the robot for one step.
+        @param: number of required rotations, negative means backward.
+        """
+        assert self.alpha == 0.0, "Rotaiton should happen at alpha = 0."
+        #assert n_rotation != 0, "There is no zero rotation."
+        # Calculate axis of rotation.
+        # Robot initial axis of rotation, fixed along body, +Y axis.
+        rot_axis_base =  np.array([0,1,0]) 
+        # Rotate, theta about +Z, to get current rot_axis.
+        rot_axis = self.rotz(rot_axis_base, self.theta)  
+        # Calculate starting magnet vector by rotating magnet_vect
+        # by current theta.
+        start_magnet_vect = self.rotz(self.magnet_vect[self.mode], self.theta)
+        # Calculate and yield magnetic vectors to perform rotation.
+        # Adjust increment and n_rotation for direction.
+        if n_rotation >= 0.0:
+            increment = self.increment
+            step_increment = self.step_increment
+        else:
+            n_rotation = -n_rotation
+            increment = -self.increment
+            step_increment = -self.step_increment
+        # Do the rotations and yield values.
+        for _ in range(n_rotation):
+            for ang in np.arange(0, increment, step_increment):
+                magnet_vect = self.rotv(start_magnet_vect, rot_axis, ang)
+                # Convert to spherical and yield.
+                yield self.cart_to_sph(magnet_vect)
+            # Calculate last one.
+            magnet_vect = self.rotv(start_magnet_vect, rot_axis, increment)
+            # Convert to spherical.
+            magnet_sph = self.cart_to_sph(magnet_vect)
+            # Update starting rotation vector and mode.
+            start_magnet_vect = magnet_vect
+            self.update_state(mode = self.mode_sequence[1])
+            # Convert to spherical and yield.
+            yield self.cart_to_sph(magnet_vect)
         
 
 
