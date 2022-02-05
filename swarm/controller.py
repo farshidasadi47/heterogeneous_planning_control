@@ -96,13 +96,13 @@ class ControlModel():
         self.rotv = (lambda vect, axis, ang: 
                           Rotation.from_rotvec(ang*axis).apply(vect).squeeze())
         # Calculate magnet vectors
-        self.increment = 2*np.pi/(n_mode-1)
+        self.rot_increment = 2*np.pi/(n_mode-1)
         magnet_vect_base =  np.array([1,-1,0])/np.sqrt(1+1)
         self.magnet_vect = {}
         for mode in range(1,n_mode):
             self.magnet_vect[mode] = self.rotv(magnet_vect_base,
                                                self.rot_vect,
-                                               self.increment*(mode-1))
+                                               self.rot_increment*(mode-1))
     
     def angle_body_to_magnet(self, ang: np.ndarray, mode: int):
         """
@@ -205,27 +205,28 @@ class ControlModel():
         # Calculate and yield magnetic vectors to perform rotation.
         # Adjust increment and n_rotation for direction.
         if n_rotation >= 0.0:
-            increment = self.increment
+            rot_increment = self.rot_increment
             step_increment = self.step_increment
         else:
             n_rotation = -n_rotation
-            increment = -self.increment
+            rot_increment = -self.rot_increment
             step_increment = -self.step_increment
         # Do the rotations and yield values.
         for _ in range(n_rotation):
-            for ang in np.arange(0, increment, step_increment):
+            for ang in np.arange(0, rot_increment, step_increment):
                 magnet_vect = self.rotv(start_magnet_vect, rot_axis, ang)
                 # Convert to spherical and yield.
                 yield self.cart_to_sph(magnet_vect)
             # Calculate last one.
-            magnet_vect = self.rotv(start_magnet_vect, rot_axis, increment)
+            magnet_vect = self.rotv(start_magnet_vect, rot_axis, rot_increment)
             # Convert to spherical.
             magnet_sph = self.cart_to_sph(magnet_vect)
             # Update starting rotation vector and mode.
             start_magnet_vect = magnet_vect
-            self.update_state(mode = self.mode_sequence[1])
+            self.reset_state(mode = self.mode_sequence[1])
             # Convert to spherical and yield.
             yield self.cart_to_sph(magnet_vect)
+
         
 
 
