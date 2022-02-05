@@ -160,14 +160,8 @@ class ControlModel():
         Yields body angles that transitions robot to desired alpha.
         """
         starting_alpha = self.alpha
-        # Determining increment sign.
-        if desired_alpha > starting_alpha:
-            step_increment = self.step_increment
-        else:
-            step_increment = -self.step_increment
-
-        for alpha in np.arange(starting_alpha, desired_alpha, step_increment):
-            alpha = self.wrap(alpha)
+        for alpha in self.wrap_range(starting_alpha, desired_alpha,
+                                                          self.step_increment):
             self.update_alpha(alpha)
             yield alpha
         alpha = self.wrap(desired_alpha)
