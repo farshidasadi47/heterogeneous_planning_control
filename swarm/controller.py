@@ -171,21 +171,54 @@ class ControlModel():
     def update_alpha(self, alpha: float):
         self.alpha = alpha
 
-    def step_theta(self, desired_theta:float):
+    def step_theta(self, desired_theta:float, pivot: str = None):
         """
         Yields body angles that transitions robot to desired theta.
         """
         starting_theta = self.theta
-        # Determining increment sign.
-        if desired_theta > starting_theta:
-            step_increment = self.step_increment
-        else:
-            step_increment = -self.step_increment
-        for theta in np.arange(starting_theta, desired_theta, step_increment):
-            self.theta = theta
-            yield self.theta
-        self.theta = desired_theta
-        yield self.theta
+        for theta in self.wrap_range(starting_theta, desired_theta,
+                                                          self.step_increment):
+            self.update_theta(theta, pivot)
+            yield theta
+        theta = self.wrap(desired_theta)
+        self.update_theta(theta, pivot)
+        yield theta
+    
+    def update_theta(self, theta:float, pivot: str):
+        theta = self.wrap(theta)
+        pivot_seperation = self.specs.pivot_seperation[self.mode,:]
+        # Leg vector, along +y (robot body frame) axis.
+        leg_vect = self.rotz(np.array([0,1.0,0]), theta)[:2]
+        # Update positions of all robots.
+        for robot in range(self.specs.n_robot):
+            if pivot == "a":
+                # posa remains intact.
+                # pos is half way across -leg_vect.
+                self.pos[2*robot:2*robot+2] = (self.posa[2*robot:2*robot+2]
+                                       -pivot_seperation[robot]*leg_vect/2)
+                # posb is across -leg_vect.
+                self.posb[2*robot:2*robot+2] = (self.posa[2*robot:2*robot+2]
+                                             -pivot_seperation[robot]*leg_vect)
+            elif pivot == "b":
+                # posb remains intact.
+                # pos is half way across leg_vect.
+                self.pos[2*robot:2*robot+2] = (self.posb[2*robot:2*robot+2]
+                                       +pivot_seperation[robot]*leg_vect/2)
+                # posb is across leg_vect.
+                self.posa[2*robot:2*robot+2] = (self.posb[2*robot:2*robot+2]
+                                             +pivot_seperation[robot]*leg_vect)
+            elif pivot == None:
+                # Rotationg around center.
+                assert abs(self.alpha) <.01
+                # pos remains intact, call reset_state.
+                self.reset_state(theta = theta)
+                break
+            else:
+                exc_msg = ("\"pivot\" should be either \"a\" or \"b\""
+                           +" or \"None\" for central rotation.")
+                raise ValueError(exc_msg)
+        # Update theta
+        self.theta = theta
 
     def step_rotation_field(self, n_rotation: int):
         """
