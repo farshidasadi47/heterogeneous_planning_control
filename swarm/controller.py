@@ -263,7 +263,7 @@ class ControlModel():
             # Convert to spherical and yield.
             yield self.cart_to_sph(magnet_vect)
     
-    def pivot_walking(self, sweep: float, steps: int):
+    def pivot_walking(self, theta: float, sweep: float, steps: int):
         """
         Yields body angles for pivot walking with specified sweep angles
         and number of steps.
@@ -271,25 +271,21 @@ class ControlModel():
         assert steps > 0, "\"steps\" should be positive integer."
         direction = 1  # 1 is A pivot, -1 is B pivot.
         pivot = {1:"a", -1:"b"}
-        theta_base = self.theta
+        # Line of the robot for currect direction.
+        yield from self.step_theta(theta- sweep)
         for _ in range(steps):
             # First pivot around A (lift B) and toggle until completed.
             # Lift the robot by sweep_alpha.
             yield from self.step_alpha(-direction*self.sweep_alpha)
             # Step through theta.
-            yield from self.step_theta(theta_base+direction*sweep/2,
+            yield from self.step_theta(theta+direction*sweep,
                                        pivot[direction])
             # Put down the robot.
             yield from self.step_alpha(0.0)
             # Toggle pivot.
             direction *= -1
-        # Perform the vlast step.
-        # Lift the robot by sweep_alpha.
-        yield from self.step_alpha(-direction*self.sweep_alpha)
-        # Step through theta.
-        yield from self.step_theta(theta_base, pivot[direction])
-        # Put down the robot.
-        yield from self.step_alpha(0.0)
+        # Line of the robot.
+        yield from self.step_theta(theta)
 
     def feedforward_walk(self, input_cmd: np.ndarray):
         """
@@ -304,16 +300,14 @@ class ControlModel():
         # Get pivot length of leader robot in current mode.
         pivot_length = self.specs.pivot_seperation[self.mode,0]
         # Calculate maximum distance the leader can travel in one step.
-        d_step_max = pivot_length*np.sin(self.sweep_theta/2)
+        d_step_max = pivot_length*np.sin(self.sweep_theta)
         # Number of steps takes to do the pivot walk.
         n_steps = int(input_cmd[0]//d_step_max) + 1
         # Compute current sweep angle.
         d_step = input_cmd[0]/n_steps
-        sweep = np.arcsin(d_step/pivot_length)*2
-        # Line of starting angle of robots.
-        yield from self.step_theta(input_cmd[1])
+        sweep = np.arcsin(d_step/pivot_length)
         # Do pivot walking.
-        yield from self.pivot_walking(sweep,n_steps)
+        yield from self.pivot_walking(input_cmd[1], sweep, n_steps)
 
 
 ########## test section ################################################
