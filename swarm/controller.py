@@ -163,10 +163,10 @@ class ControlModel():
         for alpha in self.wrap_range(starting_alpha, desired_alpha,
                                                           self.step_increment):
             self.update_alpha(alpha)
-            yield alpha
+            yield np.array([self.theta, alpha])
         alpha = self.wrap(desired_alpha)
         self.update_alpha(alpha)
-        yield alpha
+        yield np.array([self.theta, alpha])
 
     def update_alpha(self, alpha: float):
         self.alpha = alpha
@@ -179,10 +179,10 @@ class ControlModel():
         for theta in self.wrap_range(starting_theta, desired_theta,
                                                           self.step_increment):
             self.update_theta(theta, pivot)
-            yield theta
+            yield np.array([theta, self.alpha])
         theta = self.wrap(desired_theta)
         self.update_theta(theta, pivot)
-        yield theta
+        yield np.array([theta, self.alpha])
     
     def update_theta(self, theta:float, pivot: str):
         theta = self.wrap(theta)
