@@ -291,6 +291,30 @@ class ControlModel():
         # Put down the robot.
         yield from self.step_alpha(0.0)
 
+    def feedforward_walk(self, input_cmd: np.ndarray):
+        """
+        Generates and yields body angles for pivot walking.
+        @param: Numpy array as [distance to walk, theta, mode]
+        """
+        # Check if the commanded input mode matched the current mode.
+        if input_cmd[2] != self.mode:
+            exc_msg = "Input is incompatible with current mode."
+            raise ValueError(exc_msg)
+        # Determine current sweep angle.
+        # Get pivot length of leader robot in current mode.
+        pivot_length = self.specs.pivot_seperation[self.mode,0]
+        # Calculate maximum distance the leader can travel in one step.
+        d_step_max = pivot_length*np.sin(self.sweep_theta/2)
+        # Number of steps takes to do the pivot walk.
+        n_steps = int(input_cmd[0]//d_step_max) + 1
+        # Compute current sweep angle.
+        d_step = input_cmd[0]/n_steps
+        sweep = np.arcsin(d_step/pivot_length)*2
+        # Line of starting angle of robots.
+        yield from self.step_theta(input_cmd[1])
+        # Do pivot walking.
+        yield from self.pivot_walking(sweep,n_steps)
+
 
 ########## test section ################################################
 if __name__ == '__main__':
