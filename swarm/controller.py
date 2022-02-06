@@ -41,6 +41,9 @@ class ControlModel():
         self.__set_rotation_constants_and_functions()
         self.reset_state(pos, theta, 0, mode)
         self.step_increment = np.deg2rad(2)
+        self.sweep_theta = np.deg2rad(30)  # Max sweep angle
+        self.sweep_alpha = np.deg2rad(20)  # alpha sweep limit.
+
 
     def reset_state(self, pos: np.ndarray = None, theta: float = None,
                           alpha: float = None, mode: int = None):
