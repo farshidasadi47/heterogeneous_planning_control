@@ -262,10 +262,34 @@ class ControlModel():
             self.reset_state(mode = self.mode_sequence[1])
             # Convert to spherical and yield.
             yield self.cart_to_sph(magnet_vect)
-
-        
-
-
+    
+    def pivot_walking(self, sweep: float, steps: int):
+        """
+        Yields body angles for pivot walking with specified sweep angles
+        and number of steps.
+        """
+        assert steps > 0, "\"steps\" should be positive integer."
+        direction = 1  # 1 is A pivot, -1 is B pivot.
+        pivot = {1:"a", -1:"b"}
+        theta_base = self.theta
+        for _ in range(steps):
+            # First pivot around A (lift B) and toggle until completed.
+            # Lift the robot by sweep_alpha.
+            yield from self.step_alpha(-direction*self.sweep_alpha)
+            # Step through theta.
+            yield from self.step_theta(theta_base+direction*sweep/2,
+                                       pivot[direction])
+            # Put down the robot.
+            yield from self.step_alpha(0.0)
+            # Toggle pivot.
+            direction *= -1
+        # Perform the vlast step.
+        # Lift the robot by sweep_alpha.
+        yield from self.step_alpha(-direction*self.sweep_alpha)
+        # Step through theta.
+        yield from self.step_theta(theta_base, pivot[direction])
+        # Put down the robot.
+        yield from self.step_alpha(0.0)
 
 
 ########## test section ################################################
