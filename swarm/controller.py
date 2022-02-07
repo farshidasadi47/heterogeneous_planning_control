@@ -163,10 +163,18 @@ class ControlModel():
         Yields body angles that transitions robot to desired alpha.
         """
         starting_alpha = self.alpha
-        for alpha in self.wrap_range(starting_alpha, desired_alpha,
-                                                          self.step_increment):
+        iterator = self.wrap_range(starting_alpha, desired_alpha,
+                                                           self.step_increment)
+        # Skip the first element to avoid repetition.
+        try:
+            next(iterator)
+        except StopIteration:
+            pass
+        # Yield the rest.
+        for alpha in iterator:
             self.update_alpha(alpha)
             yield np.array([self.theta, alpha])
+        # Yield last section.
         alpha = self.wrap(desired_alpha)
         self.update_alpha(alpha)
         yield np.array([self.theta, alpha])
@@ -179,10 +187,18 @@ class ControlModel():
         Yields body angles that transitions robot to desired theta.
         """
         starting_theta = self.theta
-        for theta in self.wrap_range(starting_theta, desired_theta,
-                                                          self.step_increment):
+        iterator = self.wrap_range(starting_theta, desired_theta,
+                                                           self.step_increment)
+        # Skip the first element to avoid repetition.
+        try:
+            next(iterator)
+        except StopIteration:
+            pass
+        # Yield the rest.
+        for theta in iterator:
             self.update_theta(theta, pivot)
             yield np.array([theta, self.alpha])
+        # Yield last section.
         theta = self.wrap(desired_theta)
         self.update_theta(theta, pivot)
         yield np.array([theta, self.alpha])
