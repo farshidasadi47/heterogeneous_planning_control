@@ -40,10 +40,11 @@ class ControlModel():
         self.specs = specs
         self.__set_rotation_constants_and_functions()
         self.reset_state(pos, theta, 0, mode)
-        self.step_increment = np.deg2rad(2)
+        self.theta_step_increment = np.deg2rad(2)
+        self.alpha_step_increment = np.deg2rad(4)
+        self.rot_step_increment = np.deg2rad(8)
         self.sweep_theta = np.deg2rad(30)  # Max sweep angle
         self.sweep_alpha = np.deg2rad(20)  # alpha sweep limit.
-
 
     def reset_state(self, pos: np.ndarray = None, theta: float = None,
                           alpha: float = None, mode: int = None):
@@ -170,7 +171,7 @@ class ControlModel():
         """
         starting_alpha = self.alpha
         iterator = self.wrap_range(starting_alpha, desired_alpha,
-                                                           self.step_increment)
+                                                     self.alpha_step_increment)
         # Skip the first element to avoid repetition.
         try:
             next(iterator)
@@ -194,7 +195,7 @@ class ControlModel():
         """
         starting_theta = self.theta
         iterator = self.wrap_range(starting_theta, desired_theta,
-                                                           self.step_increment)
+                                                     self.theta_step_increment)
         # Skip the first element to avoid repetition.
         try:
             next(iterator)
@@ -264,11 +265,11 @@ class ControlModel():
         # Adjust increment and n_rotation for direction.
         if n_rotation >= 0.0:
             rot_increment = self.rot_increment
-            step_increment = self.step_increment
+            step_increment = self.rot_step_increment
         else:
             n_rotation = -n_rotation
             rot_increment = -self.rot_increment
-            step_increment = -self.step_increment
+            step_increment = -self.rot_step_increment
         # Do the rotations and yield values.
         for _ in range(n_rotation):
             for ang in np.arange(0, rot_increment, step_increment):
