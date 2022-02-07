@@ -272,20 +272,35 @@ class ControlModel():
             step_increment = -self.rot_step_increment
         # Do the rotations and yield values.
         for _ in range(n_rotation):
-            for ang in np.arange(0, rot_increment, step_increment):
+            for ang in np.arange(0, rot_increment, step_increment)[1:]:
+                # First element is ignored to avoid repetition.
                 magnet_vect = self.rotv(start_magnet_vect, rot_axis, ang)
+                # Update states.
+                self.update_rotation_field(step_increment)
                 # Convert to spherical and yield.
                 yield self.cart_to_sph(magnet_vect)
             # Calculate last one.
             magnet_vect = self.rotv(start_magnet_vect, rot_axis, rot_increment)
-            # Convert to spherical.
-            magnet_sph = self.cart_to_sph(magnet_vect)
+            # Update states.
+            self.update_rotation_field(rot_increment -ang)
             # Update starting rotation vector and mode.
             start_magnet_vect = magnet_vect
             self.reset_state(mode = self.mode_sequence[1])
             # Convert to spherical and yield.
             yield self.cart_to_sph(magnet_vect)
-    
+
+    def update_rotation_field(self, rot_ang: float):
+        # Get how much rotation per current step is done.
+        rot_ratio_done = rot_ang/self.rot_increment
+        rotation_distance = self.specs.rotation_distance
+        n_robot = self.specs.n_robot
+        theta = self.theta
+        # Update the states.
+        for robot in range(n_robot):
+            self.pos[2*robot:2*robot+2] += (
+                                       np.array([np.cos(theta), np.sin(theta)])
+                                       *rot_ratio_done*rotation_distance)
+
     def pivot_walking(self, theta: float, sweep: float, steps: int):
         """
         Yields body angles for pivot walking with specified sweep angles
