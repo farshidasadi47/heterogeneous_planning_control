@@ -135,7 +135,11 @@ class ControlModel():
         # theta: arctan(y/x)
         theta = np.degrees(np.arctan2(cartesian[1], cartesian[0]))
         return np.array([theta, alpha])
-
+    
+    @staticmethod
+    def round_to_zero(x: float, precision: int = 16):
+        """Rounds down numbers with given precision."""
+        return int(x*(10**precision))/(10**precision)
     @staticmethod
     def wrap(angle):
         """Wraps angles between -PI to PI."""
@@ -151,11 +155,13 @@ class ControlModel():
         Yields a range of wrapped angle that goes from \"from_ang\"
         to \"to_ang\".
         """
-        diff = np.around(ControlModel.wrap(to_ang - from_ang),10)
+        diff = float(ControlModel.wrap(to_ang - from_ang))
         if diff < 0:
             inc *= -1
-        for ang in np.arange(0,diff,inc):
-            yield ControlModel.wrap(from_ang + ang)
+        diff = ControlModel.round_to_zero(diff)
+        to_ang = from_ang + diff
+        for ang in np.arange(from_ang, to_ang, inc):
+            yield ControlModel.wrap(ang)
   
     # Control related methods
     def step_alpha(self, desired_alpha:float):
@@ -300,7 +306,7 @@ class ControlModel():
             yield from self.step_alpha(0.0)
             # Toggle pivot.
             direction *= -1
-        # Line of the robot.
+        # Line up the robot.
         yield from self.step_theta(theta)
 
     def feedforward_walk(self, input_cmd: np.ndarray):
