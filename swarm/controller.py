@@ -445,11 +445,21 @@ class ControlModel():
                     # Yield outputs.
                     yield field_ang, self.get_state()
 
+def robot_defs(n_robot: int):
+    """
+    This function returns a pre defiend robot specs.
+    @param: which robot spec you need.
+    """
+    # predefined robot specs.
+    robots = dict()
+    robots[3] = Robots(np.array([[9,8,7],[8,7,9]]), 6.5, 12)
+    return robots[n_robot]
+    
 ########## test section ################################################
 if __name__ == '__main__':
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
-    three_robot = Robots(np.array([[9,8,7],[8,7,9]]), 6.5, 12)
-    swarm_specs=model.SwarmSpecs(*three_robot.to_list())
+    robot = robot_defs(3)
+    swarm_specs=model.SwarmSpecs(*robot.to_list())
 
     control = ControlModel(swarm_specs, np.array([0,0,20,0,40,0]),0,1)
     print(control.rotz(control.magnet_vect[1],np.pi/4))
