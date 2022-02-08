@@ -313,7 +313,8 @@ class ControlModel():
         n_rotation = round(input_cmd[0]/self.specs.rotation_distance)
         yield from self.step_rotation_field(n_rotation)
 
-    def pivot_walking(self, theta: float, sweep: float, steps: int):
+    def pivot_walking(self, theta: float, sweep: float, steps: int,
+                                                         last_section = False):
         """
         Yields body angles for pivot walking with specified sweep angles
         and number of steps.
@@ -334,10 +335,11 @@ class ControlModel():
             yield from self.step_alpha(0.0)
             # Toggle pivot.
             direction *= -1
-        # Line up the robot.
-        yield from self.step_theta(theta)
+        if last_section:
+            # Line up the robot.
+            yield from self.step_theta(theta)
 
-    def feedforward_walk(self, input_cmd: np.ndarray):
+    def feedforward_walk(self, input_cmd: np.ndarray, last_section = False):
         """
         Generates and yields body angles for pivot walking.
         @param: Numpy array as [distance to walk, theta, mode]
@@ -357,7 +359,7 @@ class ControlModel():
         d_step = input_cmd[0]/n_steps
         sweep = np.arcsin(d_step/pivot_length)
         # Do pivot walking.
-        yield from self.pivot_walking(input_cmd[1], sweep, n_steps)
+        yield from self.pivot_walking(input_cmd[1],sweep,n_steps,last_section)
 
     def line_input_compatibility_check(self, input_series: np.ndarray):
         """
@@ -367,15 +369,20 @@ class ControlModel():
         """
         # Get states, to reset them after compatibility check.
         states = self.get_state()
+        num_sections = input_series.shape[1]
+        last_section = False
         # Execute the input step by step.
         # Raise error if not compatible.
         # Reset states to their initial value in any condition.
         try: 
-            for section in range(input_series.shape[1]):
+            for section in range(num_sections):
                 current_input = input_series[section,:]
                 current_input_mode = current_input[2]
                 if current_input_mode == 0:
                     # This is rotation mode.
+                    # Line up the robots and perform the rotation.
+                    for _ in self.step_theta(current_input[1]):
+                        pass
                     for _ in self.rotation_walking_field(current_input):
                         pass
                 else: 
@@ -386,11 +393,16 @@ class ControlModel():
                                 +" has incompatible mode")
                         raise ValueError(exc_msg)
                     # If no exception is occured, run the section.
-                    for _ in self.feedforward_walk(current_input):
+                    if section == (num_sections - 1):
+                        # If this is last section, robots will line up
+                        # in their commanded direction.
+                        last_section = True
+                    for _ in self.feedforward_walk(current_input,last_section):
                         pass
         finally:
             # Reset the states to its initials.
             self.reset_state(*states)
+
 
 ########## test section ################################################
 if __name__ == '__main__':
