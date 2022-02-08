@@ -300,6 +300,15 @@ class ControlModel():
             self.pos[2*robot:2*robot+2] += (
                                        np.array([np.cos(theta), np.sin(theta)])
                                        *rot_ratio_done*rotation_distance)
+    
+    def rotation_walking_field(self, input_cmd: np.ndarray):
+        """
+        Yields magnet angles thatwalks the robot using rotation mode.
+        @param: Numpy array as [distance to walk, theta, mode]
+        """
+        # determine rounded number of rotations needed.
+        n_rotation = round(input_cmd[0]/self.specs.rotation_distance)
+        yield from self.step_rotation_field(n_rotation)
 
     def pivot_walking(self, theta: float, sweep: float, steps: int):
         """
