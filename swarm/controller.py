@@ -79,6 +79,9 @@ class ControlModel():
         self.alpha = alpha
         self.mode = mode
         self.update_mode_sequence(mode)
+
+    def get_state(self):
+        return self.pos, self.theta, self.alpha, self.mode
     
     def update_mode_sequence(self,mode: int):
         self.mode_sequence = deque(range(1,self.specs.n_mode))
@@ -356,6 +359,38 @@ class ControlModel():
         # Do pivot walking.
         yield from self.pivot_walking(input_cmd[1], sweep, n_steps)
 
+    def line_input_compatibility_check(self, input_series: np.ndarray):
+        """
+        Checks if an input_series is a compatible sequence.
+        @param: 2D array of commands as [distance, angle, mode] for 
+        each row.
+        """
+        # Get states, to reset them after compatibility check.
+        states = self.get_state()
+        # Execute the input step by step.
+        # Raise error if not compatible.
+        # Reset states to their initial value in any condition.
+        try: 
+            for section in range(input_series.shape[1]):
+                current_input = input_series[section,:]
+                current_input_mode = current_input[2]
+                if current_input_mode == 0:
+                    # This is rotation mode.
+                    for _ in self.rotation_walking_field(current_input):
+                        pass
+                else: 
+                    # This is pivot walking mode.
+                    # First check compatibility.
+                    if current_input_mode != self.mode:
+                        exc_msg = (f"Input series section: {section+1:02d}"
+                                +" has incompatible mode")
+                        raise ValueError(exc_msg)
+                    # If no exception is occured, run the section.
+                    for _ in self.feedforward_walk(current_input):
+                        pass
+        finally:
+            # Reset the states to its initials.
+            self.reset_state(*states)
 
 ########## test section ################################################
 if __name__ == '__main__':
