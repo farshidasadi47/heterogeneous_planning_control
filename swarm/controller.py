@@ -403,6 +403,47 @@ class ControlModel():
             # Reset the states to its initials.
             self.reset_state(*states)
 
+    def feedforward_line(self, input_series:np.ndarray):
+        """
+        Generates magnetic field angles and state transition of the
+        milli-robots, to execute a series of linear input commands
+        through feedforward control.
+        @param: 2D array of commands as [distance, angle, mode] for 
+        each row.
+
+        line_input_compatibility_check method should be run before this
+        method to see if the input_series is compatible.
+        """
+        num_sections = input_series.shape[1]
+        last_section = False
+        for section in range(num_sections):
+            current_input = input_series[section,:]
+            current_input_mode = current_input[2]
+            if current_input_mode == 0:
+                # This is rotation mode.
+                # Line up the robots.
+                for body_ang in self.step_theta(current_input[1]):
+                    # Convert body ang to field_ang.
+                    field_ang = self.angle_body_to_magnet(body_ang, 
+                                                                  current_mode)
+                    # Yield outputs.
+                    yield field_ang, self.get_state()
+                for field_ang in self.rotation_walking_field(current_input):
+                    yield field_ang, self.get_state()
+            else: 
+                # This is pivot walking mode.
+                current_mode = self.mode
+                if section == (num_sections - 1):
+                    # If last section, robot will finally line up in 
+                    # commanded direction.
+                    last_section = True
+                for body_ang in self.feedforward_walk(current_input,
+                                                                 last_section):
+                    # Convert body ang to field_ang.
+                    field_ang = self.angle_body_to_magnet(body_ang, 
+                                                                  current_mode)
+                    # Yield outputs.
+                    yield field_ang, self.get_state()
 
 ########## test section ################################################
 if __name__ == '__main__':
