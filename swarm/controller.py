@@ -454,12 +454,21 @@ def robot_defs(n_robot: int):
     robots = dict()
     robots[3] = Robots(np.array([[9,8,7],[8,7,9]]), 6.5, 12)
     return robots[n_robot]
-    
+
+def control_def(n_robot: int, pos: np.ndarray, theta: float, mode: int):
+    """
+    Returns a controller object with prespecified robot parameters.
+    @param: Which robot spec you need.
+    @param: Initial positions of milli-robots.
+    @param: Initial theta angle of the robots.
+    @param: Initial mode of the robots.
+    """
+    robot = robot_defs(n_robot)
+    swarm_specs = model.SwarmSpecs(*robot.to_list())
+    return ControlModel(swarm_specs, pos, theta, mode)
+
 ########## test section ################################################
 if __name__ == '__main__':
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
-    robot = robot_defs(3)
-    swarm_specs=model.SwarmSpecs(*robot.to_list())
-
-    control = ControlModel(swarm_specs, np.array([0,0,20,0,40,0]),0,1)
-    print(control.rotz(control.magnet_vect[1],np.pi/4))
+    control = control_def(3,np.array([0,0,20,0,40,0]),0,1)
+    
