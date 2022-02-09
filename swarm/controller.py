@@ -471,4 +471,13 @@ def control_def(n_robot: int, pos: np.ndarray, theta: float, mode: int):
 if __name__ == '__main__':
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
     control = control_def(3,np.array([0,0,20,0,40,0]),0,1)
+    input_series = np.array([[10,0,1],
+                             [6.5,np.pi/2,0],
+                             [10,0,2]])
+    for i in control.feedforward_line(input_series):
+        str_msg = (",".join(f"{elem:+07.2f}" for elem in i[0]) + "|"
+                  +",".join(f"{elem:+07.2f}" for elem in i[1][0]) + "|"
+                  +f"{i[1][1]*180/np.pi:+07.2f},{i[1][2]*180/np.pi:+07.2f}, "
+                  +f"{i[1][3]:01d}")
+        print(str_msg)
     
