@@ -445,32 +445,32 @@ class ControlModel():
                     # Yield outputs.
                     yield field_ang, self.get_state()
 
-def robot_defs(n_robot: int):
+class Controller(ControlModel):
     """
-    This function returns a pre defiend robot specs.
-    @param: which robot spec you need.
+    This is a wrapper around ControlModel class, that initializes such
     """
-    # predefined robot specs.
-    robots = dict()
-    robots[3] = Robots(np.array([[9,8,7],[8,7,9]]), 6.5, 12)
-    return robots[n_robot]
+    def __init__(self, n_robot, pos, theta, mode):
+        self.robots = dict()
+        self.robots[3] = Robots(np.array([[9,8,7],[8,7,9]]), 6.5, 12)
+        self.control_def(n_robot, pos, theta, mode)
 
-def control_def(n_robot: int, pos: np.ndarray, theta: float, mode: int):
-    """
-    Returns a controller object with prespecified robot parameters.
-    @param: Which robot spec you need.
-    @param: Initial positions of milli-robots.
-    @param: Initial theta angle of the robots.
-    @param: Initial mode of the robots.
-    """
-    robot = robot_defs(n_robot)
-    swarm_specs = model.SwarmSpecs(*robot.to_list())
-    return ControlModel(swarm_specs, pos, theta, mode)
+    def control_def(self, n_robot: int, pos: np.ndarray,
+                                                      theta: float, mode: int):
+        """
+        Returns a controller object with prespecified robot parameters.
+        @param: Which robot spec you need.
+        @param: Initial positions of milli-robots.
+        @param: Initial theta angle of the robots.
+        @param: Initial mode of the robots.
+        """
+        robot = self.robots[n_robot]
+        swarm_specs = model.SwarmSpecs(*robot.to_list())
+        super().__init__(swarm_specs, pos, theta, mode)
 
 ########## test section ################################################
 if __name__ == '__main__':
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
-    control = control_def(3,np.array([0,0,20,0,40,0]),0,1)
+    control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
     input_series = np.array([[10,0,1],
                              [6.5,np.pi/2,0],
                              [10,0,2]])
