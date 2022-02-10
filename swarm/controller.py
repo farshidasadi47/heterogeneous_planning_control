@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from collections import deque
 from math import remainder
+import threading
 
 import numpy as np
 import numpy.matlib
@@ -466,6 +467,53 @@ class Controller(ControlModel):
         robot = self.robots[n_robot]
         swarm_specs = model.SwarmSpecs(*robot.to_list())
         super().__init__(swarm_specs, pos, theta, mode)
+
+class Pipeline:
+    """
+    This class manages command mode and commands in those mode.
+    """
+    def __init__(self, n_robot: int):
+        self.lock = threading.Lock()
+        self.__setup(n_robot)
+
+    def __setup(self, n_robot):
+        cmd = {"idle":   np.array([0.0,0.0,0.0]),
+               "server": np.array([0.0,0.0,0.0])}
+        self.cmd_mode = "idle"
+        self.cmd = cmd
+        self.states = (np.zeros(2*n_robot,dtype=float), 0.0,0.0,0)
+    
+    def set_cmd(self, cmd: np.ndarray, states = None):
+        self.lock.acquire()
+        self.cmd["server"] = cmd
+        self.states = states
+        self.lock.release()
+    
+    def set_idle(self, cmd: np.ndarray):
+        self.lock.acquire()
+        self.cmd["idle"] = cmd
+        self.lock.release()
+
+    def set_cmd_mode(self, cmd_mode):
+        self.lock.acquire()
+        if cmd_mode in self.cmd.keys():
+            self.cmd_mode = cmd_mode
+            self.lock.release()
+        else:
+            print("Invalid cmd_mode. Check cmd.keys().")
+    
+    def get_cmd_mode(self):
+        self.lock.acquire()
+        cmd_mode = self.cmd_mode
+        self.lock.release()
+        return cmd_mode
+    
+    def get_cmd(self):
+        self.lock.acquire()
+        cmd = self.cmd[self.cmd_mode]
+        states = self.states
+        self.lock.release()
+        return cmd, states
 
 ########## test section ################################################
 if __name__ == '__main__':
