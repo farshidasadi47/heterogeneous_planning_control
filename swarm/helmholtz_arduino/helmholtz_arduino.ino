@@ -8,7 +8,6 @@
 #include <stdio.h>
 // ROS2 related
 #include <micro_ros_arduino.h>
-#include <std_msgs/msg/int32.h>
 #include <geometry_msgs/msg/point32.h>
 // Micro-ros related
 #include <rcl/rcl.h>
@@ -23,8 +22,6 @@ float field[3]{0};
 // Timer period on nanoseconds
 const unsigned int timer_period = RCL_MS_TO_NS(10);  // 100.0 Hz
 // ROS2 messages
-std_msgs__msg__Int32 msg_pub;
-std_msgs__msg__Int32 msg_sub;
 geometry_msgs__msg__Point32 field_sub;
 geometry_msgs__msg__Point32 field_pub;
 // Micro-ros node
@@ -34,8 +31,6 @@ rcl_allocator_t allocator;
 rcl_node_t node;
 rcl_timer_t timer;
 // Publishers ans subscribers
-rcl_publisher_t msg_publisher;
-rcl_subscription_t msg_subscriber;
 rcl_publisher_t field_publisher;
 rcl_subscription_t field_subscriber;
 /********* Function declarations **************************************/
@@ -66,13 +61,6 @@ void setup() {
     RCCHECK(rc);
     // Set up publishers.
     // Get message type support
-    const rosidl_message_type_support_t* type_support_msg =
-                         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32);
-    // Creates a best_effort rcl publisher
-    rc = rclc_publisher_init_best_effort(&msg_publisher, &node, 
-                                         type_support_msg, "arduino_fb");
-    RCCHECK(rc);
-    // Get message type support
     const rosidl_message_type_support_t* type_support_field =
                          ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Point32);
     // Creates a best_effort rcl publisher
@@ -80,10 +68,6 @@ void setup() {
                                          type_support_field, "arduino_field_fb");
     RCCHECK(rc);
     // Set up subscribers.
-    // Initialize a reliable subscriber
-    rc = rclc_subscription_init_best_effort(&msg_subscriber,&node,
-                                        type_support_msg, "arduino_cmd");
-    RCCHECK(rc);
     rc = rclc_subscription_init_best_effort(&field_subscriber,&node,
                                         type_support_field, "arduino_field_cmd");
     RCCHECK(rc);
@@ -92,14 +76,11 @@ void setup() {
     RCCHECK(rc);
     // Initialize executer
     // total number of handles = #subscriptions + #timers
-    unsigned int num_handles = 2 + 1 ;
+    unsigned int num_handles = 1 + 1 ;
     rc = rclc_executor_init(&executor,&support.context,num_handles,&allocator);
     RCCHECK(rc);
     // Adding subscribers and timers. Orders matter.
     // Add subscriber to executer.
-    rc = rclc_executor_add_subscription(&executor, &msg_subscriber, &msg_sub,
-                                        &msg_sub_callback, ON_NEW_DATA);
-    RCCHECK(rc);
     rc = rclc_executor_add_subscription(&executor, &field_subscriber, &field_sub,
                                         &field_sub_callback, ON_NEW_DATA);
     RCCHECK(rc);
@@ -107,8 +88,6 @@ void setup() {
     rc = rclc_executor_add_timer(&executor, &timer);
     RCCHECK(rc);
     //
-    msg_sub.data = 0;
-    msg_pub.data = 0;
     field_sub.x = 0;
     field_sub.y = 0;
     field_sub.z = 0;
@@ -123,8 +102,6 @@ void main_loop(){
     // All the process should be programmed here.
     // Toggle PIN13, to check loop frequency by oscilloscope
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-    // Update last latency check variable.
-    msg_pub.data = msg_sub.data;
     // Update field command feedback
     field_pub.x = field_sub.x;
     field_pub.y = field_sub.y;
@@ -132,7 +109,6 @@ void main_loop(){
     // Update coil voltages.
     set_magnetic_field(field_sub.x, field_sub.y, field_sub.z);
     // Publish the latest latency check variable.
-    RCSOFTCHECK(rcl_publish(&msg_publisher, &msg_pub, NULL));
     RCSOFTCHECK(rcl_publish(&field_publisher, &field_pub, NULL));
 }
 
@@ -151,12 +127,6 @@ void field_sub_callback(const void* msgin){
     field_sub.x = msg->x;
     field_sub.y = msg->y;
     field_sub.z = msg->z;
-}
-
-void msg_sub_callback(const void* msgin){
-    // Subscription for checking latency.
-    const std_msgs__msg__Int32* msg = (const std_msgs__msg__Int32*) msgin;
-    msg_sub.data = msg->data;
 }
 
 void timer_callback(rcl_timer_t * timer, int64_t last_call_time){  
