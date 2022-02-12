@@ -14,8 +14,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 from geometry_msgs.msg import Point32
+from std_srvs.srv import Empty
 
-from controller import Pipeline
+from controller import Pipeline, Controller
 ########## Definiitons #################################################
 class Peripherals(Node):
     """Main executor for arduino comunications."""
@@ -126,9 +127,79 @@ class Peripherals(Node):
                   +",".join(f"{elem:+07.2f}" for elem in states[0]) + "|"
                   +f"{states[1]*180/np.pi:+07.2f},{states[2]*180/np.pi:+07.2f}, "
                   +f"{states[3]:01d}")
-        print(time_counter_msg,end="")
-        print(cmd_msg)
+        if cmd_mode == "server":
+            print(time_counter_msg,end="")
+            print(cmd_msg)
         self.counter = (self.counter + 1)%1000000
+
+class ControlService(Node):
+    """This class holds services that control swarm of milirobot."""
+    def __init__(self, pipeline:Pipeline, control:Controller, rate = 100):
+        # If rclpy.init() is not called, call it.
+        if rclpy.ok() is not True:
+            rclpy.init(args = sys.argv)
+        super().__init__("controlservice")
+        self.pipeline = pipeline
+        self.control = control
+        self.rate = self.create_rate(rate)
+        # Action servers
+        self.__add_service_server(Empty,'/feedfrwd_input',
+                                               self.__feedfrwd_input_server_cb)
+    
+    def __enter__(self):
+        """To be able to use the class in with statement."""
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        """To be able to use it in with statement."""
+        # Shutdown rclpy.
+        if rclpy.ok() is True:
+            rclpy.shutdown()
+        # Catch exceptions
+        if exc_type == KeyboardInterrupt:
+            print("Interrupted by user.")
+            return True
+
+    def __add_service_server(self, srv_type, srv_name: str, callback):
+        """Adds an action server and puts it into a dictionary."""
+        self.create_service(srv_type, srv_name, callback)
+
+    # Callbacks
+    # Servers
+    def __feedfrwd_input_server_cb(self, request, response):
+        """
+        This service calls feedforward_line function of ControlModel
+         class and executes a given input_series.
+        """
+        input_series = np.array([[10,0,1],
+                                 [6.5*3,np.pi/2,0],
+                                 [10,0,2],
+                                 [6.5,0,0]])
+        # Check if we are not in the middle of another service that 
+        # calls data pipeline, If we are, ignore this service call.
+        if self.pipeline.cmd_mode == "idle":
+            try:
+                # Compatibility check,raises ValueError if incompatible.
+                self.control.line_input_compatibility_check(input_series)
+                # Change command mode.
+                self.pipeline.set_cmd_mode("server")
+                self.rate.sleep()
+                # Execute main controller and update pipeline.
+                for field, states in self.control.feedforward_line(
+                                                                 input_series):
+                    self.pipeline.set_cmd(np.array([*field, 100.0]), states)
+                    self.rate.sleep()
+                # set command to zero
+                self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                self.rate.sleep()
+            except ValueError:
+                # ValueError can be raised by input_compatibility_check.
+                # This error is handled internally, so we pass here.
+                pass
+        # Release the data pipeline.
+        self.pipeline.set_cmd_mode("idle")
+        self.rate.sleep()
+        return response
 
 class MainExecutor(rclpy.executors.MultiThreadedExecutor):
     """Main executor for arduino comunications."""
@@ -139,8 +210,10 @@ class MainExecutor(rclpy.executors.MultiThreadedExecutor):
         super().__init__()
         #
         pipeline = Pipeline(3)
+        control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
         # Add nodes.
         self.add_node(Peripherals(pipeline, rate = rate))
+        self.add_node(ControlService(pipeline, control, rate))
         
     def __enter__(self):
         """To be able to use the class in with statement."""
