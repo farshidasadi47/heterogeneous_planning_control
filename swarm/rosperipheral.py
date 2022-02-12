@@ -143,6 +143,7 @@ class ControlService(Node):
         self.control = control
         self.rate = self.create_rate(rate)
         # Action servers
+        self.__add_service_server(Empty,'set_idle', self.__set_idle_server_cb)
         self.__add_service_server(Empty,'/feedfrwd_input',
                                                self.__feedfrwd_input_server_cb)
     
@@ -166,6 +167,19 @@ class ControlService(Node):
 
     # Callbacks
     # Servers
+    def __set_idle_server_cb(self, request, response):
+        """
+        Sets field command in idle condition.
+        """
+        print("Enter field angles and percentage: theta, alpha, %power")
+        self.rate.sleep()
+        field = list(map(float,input("Enter values: ").strip().split(",")))[:3]
+        str_msg = (f"[theta, alpha, %power] = ["
+                   + ",".join(f"{elem:+07.2f}" for elem in field) + "]")
+        print(str_msg)
+        self.pipeline.set_idle(field)
+        return response
+
     def __feedfrwd_input_server_cb(self, request, response):
         """
         This service calls feedforward_line function of ControlModel
