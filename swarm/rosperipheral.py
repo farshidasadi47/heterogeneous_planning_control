@@ -14,16 +14,19 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 from geometry_msgs.msg import Point32
+
+from controller import Pipeline
 ########## Definiitons #################################################
 class Peripherals(Node):
     """Main executor for arduino comunications."""
-    def __init__(self, rate = 100, name="peripherals"):
+    def __init__(self, pipeline: Pipeline, rate = 100, name="peripherals"):
         # If rclpy.init() is not called, call it.
         if rclpy.ok() is not True:
             rclpy.init(args = sys.argv)
         super().__init__(name)
         # Some global variable
         self.counter = 0
+        self.pipeline = pipeline
         # QoS profile
         self.qos_profile = QoSProfile(
         reliability=
@@ -108,15 +111,23 @@ class Peripherals(Node):
         return arduino_field_fb
     
     def __timer_callback(self):
-        """This contains the main control loop."""
-        sent = np.around(np.random.uniform(-90,90,3),2)
-        sent[2] = 100.0
-        self.publish_all(arduino_field_cmd=sent)
+        """This contains the hardware communication loop."""
+        # Read last values from pipeline.
+        field, states = self.pipeline.get_cmd()
+        cmd_mode = self.pipeline.get_cmd_mode()
+        # Publish command
+        self.publish_all(arduino_field_cmd=field)
+        # Read latest subscriber values.
         field_fb = self.get_subs_values()
-        print_str = (f"{time.time()%1e4:+010.3f}|{self.counter:+010d}, "
-                    +",".join(f"{element:+06.2f}" for element in sent)+", "
-                    +",".join(f"{element:+06.2f}" for element in field_fb))
-        print(print_str)
+        # printing
+        time_counter_msg = f"{time.time()%1e4:+010.3f}|{self.counter:+010d}|"
+        cmd_msg = (",".join(f"{elem:+07.2f}" for elem in field) + "|"
+                  +",".join(f"{elem:+07.2f}" for elem in field_fb) + "|"
+                  +",".join(f"{elem:+07.2f}" for elem in states[0]) + "|"
+                  +f"{states[1]*180/np.pi:+07.2f},{states[2]*180/np.pi:+07.2f}, "
+                  +f"{states[3]:01d}")
+        print(time_counter_msg,end="")
+        print(cmd_msg)
         self.counter = (self.counter + 1)%1000000
 
 class MainExecutor(rclpy.executors.MultiThreadedExecutor):
@@ -126,10 +137,10 @@ class MainExecutor(rclpy.executors.MultiThreadedExecutor):
         if rclpy.ok() is not True:
             rclpy.init(args = sys.argv)
         super().__init__()
-        # First create the node and its related functionalities.
-        self.node = Peripherals(rate = rate)
+        #
+        pipeline = Pipeline(3)
         # Add nodes.
-        self.add_node(self.node)
+        self.add_node(Peripherals(pipeline, rate = rate))
         
     def __enter__(self):
         """To be able to use the class in with statement."""
