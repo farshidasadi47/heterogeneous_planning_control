@@ -16,11 +16,14 @@
   <exec_depend>time</exec_depend>
 
   <exec_depend>numpy</exec_depend>
+  <exec_depend>scipy</exec_depend>
+  <exec_depend>matplotlib</exec_depend>
+  <exec_depend>casadi</exec_depend>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
-
+  <exec_depend>std_srvs</exec_depend>
 
 
   <export>
