@@ -490,6 +490,11 @@ class Pipeline:
         self.cmd["server"] = cmd
         self.states = states
         self.lock.release()
+
+    def set_state(self, states):
+        self.lock.acquire()
+        self.states = states
+        self.lock.release()
     
     def set_idle(self, cmd: np.ndarray):
         self.lock.acquire()

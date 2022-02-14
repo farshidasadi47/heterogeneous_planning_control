@@ -228,6 +228,8 @@ class MainExecutor(rclpy.executors.MultiThreadedExecutor):
         #
         pipeline = controller.Pipeline(3)
         control = controller.Controller(3,np.array([0,0,20,0,40,0]),0,1)
+        # Set initialize pipeline states.
+        pipeline.set_state(control.get_state())
         # Add nodes.
         self.add_node(Peripherals(pipeline, rate = rate))
         self.add_node(ControlService(pipeline, control, rate))
