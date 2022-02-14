@@ -371,7 +371,7 @@ class ControlModel():
         """
         # Get states, to reset them after compatibility check.
         states = self.get_state()
-        num_sections = input_series.shape[1]
+        num_sections = input_series.shape[0]
         last_section = False
         # Execute the input step by step.
         # Raise error if not compatible.
@@ -416,7 +416,7 @@ class ControlModel():
         line_input_compatibility_check method should be run before this
         method to see if the input_series is compatible.
         """
-        num_sections = input_series.shape[1]
+        num_sections = input_series.shape[0]
         last_section = False
         for section in range(num_sections):
             current_input = input_series[section,:]
@@ -424,6 +424,7 @@ class ControlModel():
             if current_input_mode == 0:
                 # This is rotation mode.
                 # Line up the robots.
+                current_mode = self.mode
                 for body_ang in self.step_theta(current_input[1]):
                     # Convert body ang to field_ang.
                     field_ang = self.angle_body_to_magnet(body_ang, 
@@ -522,7 +523,8 @@ if __name__ == '__main__':
     control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
     input_series = np.array([[10,0,1],
                              [6.5,np.pi/2,0],
-                             [10,0,2]])
+                             [10,0,2],
+                             [6.5,0,0]])
     for i in control.feedforward_line(input_series):
         str_msg = (",".join(f"{elem:+07.2f}" for elem in i[0]) + "|"
                   +",".join(f"{elem:+07.2f}" for elem in i[1][0]) + "|"
