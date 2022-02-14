@@ -16,11 +16,13 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from geometry_msgs.msg import Point32
 from std_srvs.srv import Empty
 
-from controller import Pipeline, Controller
+# from "foldername" import filename, this is for ROS compatibility.
+from swarm import controller
 ########## Definiitons #################################################
 class Peripherals(Node):
     """Main executor for arduino comunications."""
-    def __init__(self, pipeline: Pipeline, rate = 100, name="peripherals"):
+    def __init__(self, pipeline: controller.Pipeline,
+                       rate = 100, name="peripherals"):
         # If rclpy.init() is not called, call it.
         if rclpy.ok() is not True:
             rclpy.init(args = sys.argv)
@@ -134,7 +136,8 @@ class Peripherals(Node):
 
 class ControlService(Node):
     """This class holds services that control swarm of milirobot."""
-    def __init__(self, pipeline:Pipeline, control:Controller, rate = 100):
+    def __init__(self, pipeline: controller.Pipeline,
+                       control: controller.Controller, rate = 100):
         # If rclpy.init() is not called, call it.
         if rclpy.ok() is not True:
             rclpy.init(args = sys.argv)
@@ -223,8 +226,8 @@ class MainExecutor(rclpy.executors.MultiThreadedExecutor):
             rclpy.init(args = sys.argv)
         super().__init__()
         #
-        pipeline = Pipeline(3)
-        control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
+        pipeline = controller.Pipeline(3)
+        control = controller.Controller(3,np.array([0,0,20,0,40,0]),0,1)
         # Add nodes.
         self.add_node(Peripherals(pipeline, rate = rate))
         self.add_node(ControlService(pipeline, control, rate))

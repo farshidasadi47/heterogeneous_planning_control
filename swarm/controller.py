@@ -16,7 +16,8 @@ import casadi as ca
 
 from scipy.spatial.transform import Rotation
 
-import model
+# from "foldername" import filename, this is for ROS compatibility.
+from swarm import model
 
 np.set_printoptions(precision=2, suppress=True)
 ########## classes and functions #######################################
