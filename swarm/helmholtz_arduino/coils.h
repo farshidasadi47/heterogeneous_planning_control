@@ -18,21 +18,21 @@ const unsigned char INA1 = 2;
 const unsigned char INB1 = 4;
 const unsigned char PWM1 = 9;
 const unsigned char CS1 = A0;
-const float m1_correction_factor = 1.5/2.5;
+const float m1_correction_factor = 0.4986;
 // H bridge 2, connected to middle coil, X axis, B->A is +X direction.
 const unsigned char EN2 = 12;
 const unsigned char INA2 = 7;
 const unsigned char INB2 = 8;
 const unsigned char PWM2 = 10;
 const unsigned char CS2 = A1;
-const float m2_correction_factor = 1;
+const float m2_correction_factor = 0.7120;
 // H bridge 3, connected to big coil, Y axis, B->A is +Y direction.
 const unsigned char EN3 = 0;
 const unsigned char INA3 = 3;
 const unsigned char INB3 = 5;
 const unsigned char PWM3 = 11;
 const unsigned char CS3 = A2;
-const float m3_correction_factor = 4.2/(2*2.5);
+const float m3_correction_factor = 1.0;
 
 /********* Function declarations **************************************/
 // DualVNH5019_Init
