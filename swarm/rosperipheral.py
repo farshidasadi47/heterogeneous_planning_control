@@ -176,10 +176,16 @@ class ControlService(Node):
         """
         print("Enter field angles and percentage: theta, alpha, %power")
         self.rate.sleep()
-        field = list(map(float,input("Enter values: ").strip().split(",")))[:3]
-        str_msg = (f"[theta, alpha, %power] = ["
+        try:
+            field=list(map(float,
+                               input("Enter values: ").strip().split(",")))[:3]
+            str_msg = (f"[theta, alpha, %power] = ["
                    + ",".join(f"{elem:+07.2f}" for elem in field) + "]")
-        print(str_msg)
+            print(str_msg)
+            if len(field) != 3:
+                raise ValueError
+        except:
+            print("Ooops! values ignored.")
         self.pipeline.set_idle(field)
         return response
 
