@@ -149,6 +149,8 @@ class ControlService(Node):
         self.__add_service_server(Empty,'set_idle', self.__set_idle_server_cb)
         self.__add_service_server(Empty,'/feedfrwd_input',
                                                self.__feedfrwd_input_server_cb)
+        self.__add_service_server(Empty,'/set_steps',
+                                               self.__set_steps_server_cb)
     
     def __enter__(self):
         """To be able to use the class in with statement."""
@@ -222,6 +224,31 @@ class ControlService(Node):
         # Release the data pipeline.
         self.pipeline.set_cmd_mode("idle")
         self.rate.sleep()
+        return response
+    
+    def __set_steps_server_cb(self, request, response):
+        """
+        Sets steps parameters of the ControlModel class.
+        """
+        print("Enter step parameters in angle: inc_theta, inc_alpha, "
+              + "inc_rot, sweep_theta, sweep_alpha")
+        self.rate.sleep()
+        try:
+            if self.pipeline.cmd_mode != "idle":
+                # Do not change parameters while something going on.
+                raise ValueError
+            step_params=list(map(float,
+                               input("Enter values: ").strip().split(",")))[:5]
+            str_msg = ("[inc_theta, inc_alpha, inc_rot, sweep_theta, "
+                   +"sweep_alpha] = ["
+                   + ",".join(f"{elem:+07.2f}" for elem in step_params) + "]")
+            print(str_msg)
+            if len(step_params) != 5:
+                raise ValueError
+        except:
+            print("Ooops! values ignored.")
+        # Use the parameters
+        self.control.set_steps(*step_params)
         return response
 
 class MainExecutor(rclpy.executors.MultiThreadedExecutor):
