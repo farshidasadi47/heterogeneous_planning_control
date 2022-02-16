@@ -40,7 +40,7 @@ class ControlModel():
     def __init__(self, specs: model.SwarmSpecs,
                        pos: np.ndarray, theta: float, mode: int):
         self.specs = specs
-        self.__set_rotation_constants_and_functions()
+        self.__set_rotation_constants_and_functions(-60*np.pi/180)
         self.reset_state(pos, theta, 0, mode)
         self.theta_step_increment = np.deg2rad(2)
         self.alpha_step_increment = np.deg2rad(4)
@@ -89,7 +89,7 @@ class ControlModel():
         self.mode_sequence = deque(range(1,self.specs.n_mode))
         self.mode_sequence.rotate(-mode+1)
 
-    def __set_rotation_constants_and_functions(self):
+    def __set_rotation_constants_and_functions(self, magnet_angle: float):
         """
         This function initializes magnets vectors for each mode.
         It also constructs lambda functions for rotating 
@@ -106,12 +106,25 @@ class ControlModel():
                           Rotation.from_rotvec(ang*axis).apply(vect).squeeze())
         # Calculate magnet vectors
         self.rot_increment = 2*np.pi/(n_mode-1)
-        magnet_vect_base =  np.array([1,-1,0])/np.sqrt(1+1)
+        magnet_vect_base =  np.array([np.cos(magnet_angle),
+                                      np.sin(magnet_angle),0])
         self.magnet_vect = {}
         for mode in range(1,n_mode):
             self.magnet_vect[mode] = self.rotv(magnet_vect_base,
                                                self.rot_vect,
                                                self.rot_increment*(mode-1))
+
+    def set_steps(self, sweep_theta, sweep_alpha, inc_theta,inc_alpha,inc_rot):
+        """
+        Sets theta, alpha, and rolling steps parameters.
+        All parameters should be given in Degrees.
+        For definition of the angles see the paper.
+        """
+        self.theta_step_increment = np.deg2rad(inc_theta)
+        self.alpha_step_increment = np.deg2rad(inc_alpha)
+        self.rot_step_increment = np.deg2rad(inc_rot)
+        self.sweep_theta = np.deg2rad(sweep_theta)  # Max sweep angle
+        self.sweep_alpha = np.deg2rad(sweep_alpha)  # alpha sweep limit.
     
     def angle_body_to_magnet(self, ang: np.ndarray, mode: int):
         """
