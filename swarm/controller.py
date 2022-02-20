@@ -159,6 +159,28 @@ class ControlModel():
     def round_to_zero(x: float, precision: int = 16):
         """Rounds down numbers with given precision."""
         return int(x*(10**precision))/(10**precision)
+    
+    @staticmethod
+    def frange(start, stop=None, step=None):
+        # This function is copied from web.
+        # if set start=0.0 and step = 1.0 if not specified
+        start = float(start)
+        if stop == None:
+            stop = start + 0.0
+            start = 0.0
+        if step == None:
+            step = 1.0
+        #
+        count = 0
+        while True:
+            temp = float(start + count * step)
+            if step > 0 and temp >= stop:
+                break
+            elif step < 0 and temp <= stop:
+                break
+            yield temp
+            count += 1
+
     @staticmethod
     def wrap(angle):
         """Wraps angles between -PI to PI."""
@@ -179,7 +201,7 @@ class ControlModel():
             inc *= -1
         diff = ControlModel.round_to_zero(diff)
         to_ang = from_ang + diff
-        for ang in np.arange(from_ang, to_ang, inc):
+        for ang in ControlModel.frange(from_ang, to_ang, inc):
             yield ControlModel.wrap(ang)
   
     # Control related methods
@@ -289,8 +311,16 @@ class ControlModel():
             rot_increment = -self.rot_increment
             step_increment = -self.rot_step_increment
         # Do the rotations and yield values.
+        
         for _ in range(n_rotation):
-            for ang in np.arange(0, rot_increment, step_increment)[1:]:
+            iterator = ControlModel.frange(0, rot_increment, step_increment)
+            # Skip the first element to avoid repetition.
+            try:
+                next(iterator)
+            except StopIteration:
+                pass
+            # Yield the rest
+            for ang in iterator:
                 # First element is ignored to avoid repetition.
                 magnet_vect = self.rotv(start_magnet_vect, rot_axis, ang)
                 # Update states.
