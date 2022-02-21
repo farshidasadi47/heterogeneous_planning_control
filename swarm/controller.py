@@ -9,6 +9,7 @@ from itertools import combinations
 from collections import deque
 from math import remainder
 import threading
+import time
 
 import numpy as np
 import numpy.matlib
@@ -264,7 +265,7 @@ class ControlModel():
         yield np.array([self.theta, alpha])
 
     def update_alpha(self, alpha: float):
-        self.alpha = alpha
+        self.alpha = ControlModel.wrap(alpha)
 
     def step_theta(self, desired_theta:float, pivot: str = None):
         """
@@ -650,10 +651,13 @@ if __name__ == '__main__':
                              [6.5,np.pi/2,0],
                              [10,0,2],
                              [6.5,0,0]])
+    start = time.time()
     for i in control.feedforward_line(input_series,alternative=True):
         str_msg = (",".join(f"{elem:+07.2f}" for elem in i[0]) + "|"
                   +",".join(f"{elem:+07.2f}" for elem in i[1][0]) + "|"
                   +f"{i[1][1]*180/np.pi:+07.2f},{i[1][2]*180/np.pi:+07.2f}, "
                   +f"{i[1][3]:01d}")
         print(str_msg)
+    end = time.time()
+    print(f"Elapsed = {(end-start)*1000:+015.2f}milliseconds")
     
