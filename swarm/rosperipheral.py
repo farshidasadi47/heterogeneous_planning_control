@@ -202,16 +202,19 @@ class ControlService(Node):
                                  [6.5,0,0]])
         # Check if we are not in the middle of another service that 
         # calls data pipeline, If we are, ignore this service call.
+        interactive = True
         if self.pipeline.cmd_mode == "idle":
             try:
                 # Compatibility check,raises ValueError if incompatible.
-                self.control.line_input_compatibility_check(input_series)
+                self.control.line_input_compatibility_check(input_series,
+                                                            interactive)
                 # Change command mode.
                 self.pipeline.set_cmd_mode("server")
                 self.rate.sleep()
                 # Execute main controller and update pipeline.
                 for field, states in self.control.feedforward_line(
-                                                                 input_series):
+                                                                 input_series,
+                                                                 interactive):
                     self.pipeline.set_cmd(np.array([*field, 100.0]), states)
                     self.rate.sleep()
                 # set command to zero

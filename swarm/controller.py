@@ -450,7 +450,9 @@ class ControlModel():
             # Line up the robot.
             yield from self.step_theta(theta)
 
-    def feedforward_walk(self, input_cmd: np.ndarray, last_section = False):
+    def feedforward_walk(self, input_cmd: np.ndarray,
+                               last_section = False,
+                               alternative = True):
         """
         Generates and yields body angles for pivot walking.
         @param: Numpy array as [distance to walk, theta, mode]
@@ -470,9 +472,15 @@ class ControlModel():
         d_step = input_cmd[0]/n_steps
         sweep = np.arcsin(d_step/pivot_length)
         # Do pivot walking.
-        yield from self.pivot_walking(input_cmd[1],sweep,n_steps,last_section)
+        if alternative:
+            yield from self.pivot_walking_alt(input_cmd[1],sweep,
+                                              n_steps,last_section)
+        else:
+            yield from self.pivot_walking(input_cmd[1],sweep,
+                                          n_steps,last_section)
 
-    def line_input_compatibility_check(self, input_series: np.ndarray):
+    def line_input_compatibility_check(self, input_series: np.ndarray,
+                                       alternative = True):
         """
         Checks if an input_series is a compatible sequence.
         @param: 2D array of commands as [distance, angle, mode] for 
@@ -508,13 +516,14 @@ class ControlModel():
                         # If this is last section, robots will line up
                         # in their commanded direction.
                         last_section = True
-                    for _ in self.feedforward_walk(current_input,last_section):
+                    for _ in self.feedforward_walk(current_input,last_section,
+                                                                  alternative):
                         pass
         finally:
             # Reset the states to its initials.
             self.reset_state(*states)
 
-    def feedforward_line(self, input_series:np.ndarray):
+    def feedforward_line(self, input_series:np.ndarray, alternative = True):
         """
         Generates magnetic field angles and state transition of the
         milli-robots, to execute a series of linear input commands
@@ -550,12 +559,14 @@ class ControlModel():
                     # commanded direction.
                     last_section = True
                 for body_ang in self.feedforward_walk(current_input,
-                                                                 last_section):
+                                                      last_section,
+                                                      alternative):
                     # Convert body ang to field_ang.
                     field_ang = self.angle_body_to_magnet(body_ang, 
                                                                   current_mode)
                     # Yield outputs.
                     yield field_ang, self.get_state()
+
 
 class Controller(ControlModel):
     """
@@ -639,7 +650,7 @@ if __name__ == '__main__':
                              [6.5,np.pi/2,0],
                              [10,0,2],
                              [6.5,0,0]])
-    for i in control.feedforward_line(input_series):
+    for i in control.feedforward_line(input_series,alternative=True):
         str_msg = (",".join(f"{elem:+07.2f}" for elem in i[0]) + "|"
                   +",".join(f"{elem:+07.2f}" for elem in i[1][0]) + "|"
                   +f"{i[1][1]*180/np.pi:+07.2f},{i[1][2]*180/np.pi:+07.2f}, "
