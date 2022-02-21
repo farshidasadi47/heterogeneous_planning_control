@@ -203,7 +203,44 @@ class ControlModel():
         to_ang = from_ang + diff
         for ang in ControlModel.frange(from_ang, to_ang, inc):
             yield ControlModel.wrap(ang)
-  
+    
+    @staticmethod
+    def range_oval(sweep_theta, sweep_alpha, inc):
+        """
+        This function produces a range tuple for theta and alpha.
+        The angles are produced so that the lifted end of the robot will
+        go on an half oval path. The oval majpr axes lengths are as:
+        horizontal ~ tan(sweep_theta)
+        vertical   ~ tan(sweep_alpha)
+        """
+        assert_str = ("\nThis functions is designed to accept following ranges:"
+                    +"\n\t0 =< sweep_thata =< pi/3"
+                    +"\n\t0 =< sweep_alpha =< pi/3" + "\n\t0 < inc")
+        assert (sweep_theta>=0 and sweep_theta<=np.pi/3 and 
+                sweep_alpha>=0 and sweep_alpha<=np.pi/3 and inc>0), assert_str
+        #
+        fr = lambda ang: (np.tan(sweep_alpha)*np.tan(sweep_theta)
+                         /np.sqrt((np.tan(sweep_alpha)*np.cos(ang))**2
+                                 +(np.tan(sweep_theta)*np.sin(ang))**2))
+        #
+        iterator = ControlModel.frange(0,np.pi,inc)
+        iterator = np.arange(0,np.pi,inc).flat
+        # Skip first element.
+        try:
+            next(iterator)
+        except StopIteration:
+            pass
+        # Yield the rest.
+        for ang in iterator:
+            # Get corresponding radius on the ellipse.
+            r = fr(ang)
+            # Calculate angles and yield them.
+            alpha = np.arctan2(r*np.sin(ang), 1)
+            theta = sweep_theta - np.arctan2(r*np.cos(ang), 1)
+            yield theta, alpha
+        # Yield last one.
+        yield sweep_theta*2, 0.0
+
     # Control related methods
     def step_alpha(self, desired_alpha:float):
         """
