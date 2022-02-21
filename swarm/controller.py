@@ -421,6 +421,35 @@ class ControlModel():
             # Line up the robot.
             yield from self.step_theta(theta)
 
+    def pivot_walking_alt(self, theta: float, sweep: float, steps: int,
+                                                         last_section = False):
+        """
+        Alternative pivot walking method.
+        Yields body angles for pivot walking with specified sweep angles
+        and number of steps.
+        """
+        assert steps > 0, "\"steps\" should be positive integer."
+        direction = 1  # 1 is A pivot, -1 is B pivot.
+        pivot = {1:"a", -1:"b"}
+        # Line of the robot for currect direction.
+        yield from self.step_theta(theta- sweep)
+        for _ in range(steps):
+            step_starting_theta = self.theta
+            for theta_s, alpha_s in ControlModel.range_oval(sweep,
+                                                      self.sweep_alpha,
+                                                      self.rot_step_increment):
+                # Update relted states.
+                self.update_alpha(-direction*alpha_s)
+                self.update_theta(step_starting_theta
+                                  + direction*theta_s,pivot[direction])
+                # Yield the values.
+                yield np.array([self.theta, self.alpha])
+            # Update direction.
+            direction *= -1
+        if last_section:
+            # Line up the robot.
+            yield from self.step_theta(theta)
+
     def feedforward_walk(self, input_cmd: np.ndarray, last_section = False):
         """
         Generates and yields body angles for pivot walking.
