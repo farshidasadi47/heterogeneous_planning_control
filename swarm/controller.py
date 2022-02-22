@@ -206,6 +206,43 @@ class ControlModel():
             yield ControlModel.wrap(ang)
     
     @staticmethod
+    def wrap_range_twin(*,from_1, to_1, inc_1, from_2, to_2, inc_2):
+        """
+        Yields a range of wrapped angle that goes from \"from_i\"
+        to \"to_i\" simoultaneously.
+        """
+        assert_str = "Cannot handle cases that \"from_i == to_i\" is True."
+        assert (from_1 != to_1 and from_2!= to_2), assert_str
+        diff_1 = float(ControlModel.wrap(to_1 - from_1))
+        diff_2 = float(ControlModel.wrap(to_2 - from_2))
+        # modify sign of increments if necessary.
+        if diff_1 < 0:
+            inc_1 *= -1
+        if diff_2 < 0:
+            inc_2 *= -1
+        # Round up to a precision to avoid numerical problems.
+        diff_1 = ControlModel.round_to_zero(diff_1)
+        diff_2 = ControlModel.round_to_zero(diff_2)
+        #
+        to_1 = from_1 + diff_1
+        to_2 = from_2 + diff_2
+        # Determine number of steps in range.
+        n_1 = np.ceil(diff_1/inc_1).astype(int)
+        n_2 = np.ceil(diff_2/inc_2).astype(int)
+        # Modify increments based on longer range.
+        n_longer = max(n_1,n_2)
+        if n_longer>0:
+            inc_1 = diff_1/n_longer
+            inc_2 = diff_2/n_longer
+        # Get generators.
+        iter_1 = ControlModel.frange(from_1, to_1, inc_1)
+        iter_2 = ControlModel.frange(from_2, to_2, inc_2)
+        # Yield the values.
+        for ang_1 in iter_1:
+            ang_2 = next(iter_2)
+            yield ang_1, ang_2
+    
+    @staticmethod
     def range_oval(sweep_theta, sweep_alpha, inc):
         """
         This function produces a range tuple for theta and alpha.
@@ -655,7 +692,7 @@ if __name__ == '__main__':
     for i in control.feedforward_line(input_series,alternative=True):
         str_msg = (",".join(f"{elem:+07.2f}" for elem in i[0]) + "|"
                   +",".join(f"{elem:+07.2f}" for elem in i[1][0]) + "|"
-                  +f"{i[1][1]*180/np.pi:+07.2f},{i[1][2]*180/np.pi:+07.2f}, "
+                  +f"{i[1][1]*180/np.pi:+07.2f},{i[1][2]*180/np.pi:+07.2f}, " 
                   +f"{i[1][3]:01d}")
         print(str_msg)
     end = time.time()
