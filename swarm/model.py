@@ -32,6 +32,8 @@ class SwarmSpecs:
                 tumbling_distance):
         if (pivot_seperation.ndim != 2):
             raise ValueError('pivot_seperation should be a 2D numpy array')
+        if (pivot_seperation.shape[0]%2 != 0):
+            print("Control algorithm is designed for robots with even sides.")
         self.n_mode = pivot_seperation.shape[0] + 1
         self.n_robot = pivot_seperation.shape[1]
         self.pivot_seperation = np.vstack((np.ones(self.n_robot),
@@ -48,6 +50,21 @@ class SwarmSpecs:
             for robot in range(self.n_robot):
                 self.B[mode,2*robot:2*(robot+1),:] = (self.beta[mode,robot]
                                                       *np.eye(2))
+        # Angles and distances related to mode changes
+        self.rot_inc = 2*np.pi/(self.n_mode-1)
+        self.mode_rel_ang = []
+        # Angles to enter modes when lifted on A.
+        # Indexes are relative to current mode of the robot.
+        for i in range(self.n_mode-1):
+            angle = i*self.rot_inc
+            self.mode_rel_ang.append(angle)
+        # Mode change distances relative to current mode.
+        self.mode_distance = [0]
+        for i in range(1,self.n_mode-1):
+            dist = (self.tumbling_distance
+                   *np.sqrt(2-2*np.cos(self.mode_rel_ang[i])))/2
+            self.mode_distance.append(dist)
+        # Angles to put the robot before mode change.
         # space boundaries
         self.ubx = 120
         self.uby = 95
