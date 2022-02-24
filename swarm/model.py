@@ -4,6 +4,7 @@
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
 import os
+from math import remainder
 import numpy as np
 np.set_printoptions(precision=4, suppress=True)
 import matplotlib.pyplot as plt
@@ -13,6 +14,14 @@ plt.rcParams.update({'font.size': 20})
 plt.rcParams['font.family'] = 'Times New Roman'
 plt.rcParams['text.usetex'] = False
 
+########## Functions ###################################################
+def wrap(angle):
+    """Wraps angles between -PI to PI."""
+    wrapped = remainder(angle+np.pi, 2*np.pi)
+    if wrapped< 0:
+        wrapped += 2*np.pi
+    wrapped -= np.pi
+    return wrapped
 ########## Classes #####################################################
 class SwarmSpecs:
     """This class stores specifications of swarm of milirobots."""
