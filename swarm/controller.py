@@ -355,6 +355,41 @@ class ControlModel():
                 raise ValueError(exc_msg)
         # Update theta
         self.theta = theta
+    
+    def step_mode(self, des_mode: int, des_ang: float):
+        """
+        Yields body angles that transitions robot to desired mode at
+        the given angle.
+        @param: des_mode: describes the desired mode to go.
+        @param: des_ang: describes the angle that center of each robot
+                         will go from start to end of movement.
+        """
+        str_msg = "Mode change can only be started from alpha = 0."
+        assert abs(self.alpha) <.01, str_msg
+        # Get index of desired mode from the current sequence to
+        # determine parameters for tumbling process.
+        # Mode index to get tumbling angles and distance.
+        if self.mode != des_mode:
+            des_mode_index = self.mode_sequence.index(des_mode)
+            theta_start = des_ang - self.specs.mode_rel_ang[des_mode_index]/2
+            theta_end = des_ang + self.specs.mode_rel_ang[des_mode_index]/2
+            # Positions 
+            pos_start = self.pos
+            pos_delta = (self.specs.mode_distance[des_mode_index]
+              *np.array([np.cos(des_ang), np.sin(des_ang)]*self.specs.n_robot))
+            pos_end = pos_start + pos_delta
+            # Line up the robots based on the mode change angle.
+            yield from self.step_theta(theta_start)
+            # Lift the robots of pivot point A.
+            yield from self.step_alpha(-np.pi/2, self.tumble_step_inc)
+            # Update theta and mode
+            self.theta = ControlModel.wrap(theta_end)
+            self.mode = des_mode
+            self.update_mode_sequence(self.mode)
+            # Update robot's positions at the end of tumble.
+            self.reset_state(pos = pos_end)
+            # Lift down the robots.
+            yield from self.step_alpha(0.0, self.tumble_step_inc)
 
     def step_rotation_field(self, n_rotation: int):
         """
