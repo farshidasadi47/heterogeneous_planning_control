@@ -41,7 +41,7 @@ class ControlModel():
     def __init__(self, specs: model.SwarmSpecs,
                        pos: np.ndarray, theta: float, mode: int):
         self.specs = specs
-        self.__set_rotation_constants_and_functions(-60*np.pi/180)
+        self.__set_rotation_constants_and_functions()
         self.reset_state(pos, theta, 0, mode)
         self.theta_step_inc = np.deg2rad(10)
         self.alpha_step_inc = np.deg2rad(4)
@@ -91,7 +91,7 @@ class ControlModel():
         self.mode_sequence = deque(range(1,self.specs.n_mode))
         self.mode_sequence.rotate(-mode+1)
 
-    def __set_rotation_constants_and_functions(self, magnet_angle: float):
+    def __set_rotation_constants_and_functions(self):
         """
         This function initializes magnets vectors for each mode.
         It also constructs lambda functions for rotating 
@@ -106,15 +106,8 @@ class ControlModel():
         # Rotation around a given axis, angles based on right hand rule.
         self.rotv = (lambda vect, axis, ang: 
                           Rotation.from_rotvec(ang*axis).apply(vect).squeeze())
-        # Calculate magnet vectors
-        self.rot_increment = 2*np.pi/(n_mode-1)
-        magnet_vect_base =  np.array([np.cos(magnet_angle),
-                                      np.sin(magnet_angle),0])
-        self.magnet_vect = {}
-        for mode in range(1,n_mode):
-            self.magnet_vect[mode] = self.rotv(magnet_vect_base,
-                                               self.rot_vect,
-                                               self.rot_increment*(mode-1))
+        # Set magnet vector
+        self.magnet_vect = np.array([0.0,-1.0,0.0])
 
     def set_steps(self, sweep_theta, sweep_alpha, inc_theta,inc_alpha,inc_rot):
         """
@@ -138,7 +131,7 @@ class ControlModel():
          @type: 1D numpy array.
         """
         # Get magnet vector.
-        magnet_vect = self.magnet_vect[mode]
+        magnet_vect = self.magnet_vect
         # Calculate the cartesian magnet vetor.
         # Rotate alpha around X axis.
         magnet_vect = self.rotx(magnet_vect, ang[1])
@@ -585,8 +578,7 @@ class ControlModel():
                 current_mode = self.mode
                 for body_ang in self.step_theta(current_input[1]):
                     # Convert body ang to field_ang.
-                    field_ang = self.angle_body_to_magnet(body_ang, 
-                                                                  current_mode)
+                    field_ang = self.angle_body_to_magnet(body_ang)
                     # Yield outputs.
                     yield field_ang, self.get_state()
                 for field_ang in self.rotation_walking_field(current_input):
@@ -602,8 +594,7 @@ class ControlModel():
                                                       last_section,
                                                       alternative):
                     # Convert body ang to field_ang.
-                    field_ang = self.angle_body_to_magnet(body_ang, 
-                                                                  current_mode)
+                    field_ang = self.angle_body_to_magnet(body_ang)
                     # Yield outputs.
                     yield field_ang, self.get_state()
 
