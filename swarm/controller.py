@@ -43,11 +43,12 @@ class ControlModel():
         self.specs = specs
         self.__set_rotation_constants_and_functions(-60*np.pi/180)
         self.reset_state(pos, theta, 0, mode)
-        self.theta_step_increment = np.deg2rad(2)
-        self.alpha_step_increment = np.deg2rad(4)
-        self.rot_step_increment = np.deg2rad(8)
-        self.sweep_theta = np.deg2rad(30)  # Max sweep angle
-        self.sweep_alpha = np.deg2rad(20)  # alpha sweep limit.
+        self.theta_step_inc = np.deg2rad(10)
+        self.alpha_step_inc = np.deg2rad(4)
+        self.pivot_step_inc = np.deg2rad(10)
+        self.sweep_theta = np.deg2rad(45)  # Max sweep angle
+        self.sweep_alpha = np.deg2rad(45)  # alpha sweep limit.
+        self.tumble_step_inc = np.deg2rad(20)
 
     def reset_state(self, pos: np.ndarray = None, theta: float = None,
                           alpha: float = None, mode: int = None):
@@ -121,13 +122,13 @@ class ControlModel():
         All parameters should be given in Degrees.
         For definition of the angles see the paper.
         """
-        self.theta_step_increment = np.deg2rad(inc_theta)
-        self.alpha_step_increment = np.deg2rad(inc_alpha)
-        self.rot_step_increment = np.deg2rad(inc_rot)
+        self.theta_step_inc = np.deg2rad(inc_theta)
+        self.alpha_step_inc = np.deg2rad(inc_alpha)
+        self.rot_step_inc = np.deg2rad(inc_rot)
         self.sweep_theta = np.deg2rad(sweep_theta)  # Max sweep angle
         self.sweep_alpha = np.deg2rad(sweep_alpha)  # alpha sweep limit.
     
-    def angle_body_to_magnet(self, ang: np.ndarray, mode: int):
+    def angle_body_to_magnet(self, ang: np.ndarray):
         """
         Converts (theta, alpha) of robots body, to (theta, alpha) of 
         the robots magnets. The converted value can be used as desired
@@ -280,13 +281,14 @@ class ControlModel():
         yield sweep_theta*2, 0.0
 
     # Control related methods
-    def step_alpha(self, desired_alpha:float):
+    def step_alpha(self, desired_alpha:float, inc = None):
         """
         Yields body angles that transitions robot to desired alpha.
         """
+        if inc is None:
+            inc = self.alpha_step_inc
         starting_alpha = self.alpha
-        iterator = self.wrap_range(starting_alpha, desired_alpha,
-                                                     self.alpha_step_increment)
+        iterator = self.wrap_range(starting_alpha, desired_alpha, inc)
         # Skip the first element to avoid repetition.
         try:
             next(iterator)
@@ -310,7 +312,7 @@ class ControlModel():
         """
         starting_theta = self.theta
         iterator = self.wrap_range(starting_theta, desired_theta,
-                                                     self.theta_step_increment)
+                                                     self.theta_step_inc)
         # Skip the first element to avoid repetition.
         try:
             next(iterator)
@@ -380,11 +382,11 @@ class ControlModel():
         # Adjust increment and n_rotation for direction.
         if n_rotation >= 0.0:
             rot_increment = self.rot_increment
-            step_increment = self.rot_step_increment
+            step_increment = self.rot_step_inc
         else:
             n_rotation = -n_rotation
             rot_increment = -self.rot_increment
-            step_increment = -self.rot_step_increment
+            step_increment = -self.rot_step_inc
         # Do the rotations and yield values.
         
         for _ in range(n_rotation):
@@ -475,7 +477,7 @@ class ControlModel():
             step_starting_theta = self.theta
             for theta_s, alpha_s in ControlModel.range_oval(sweep,
                                                       self.sweep_alpha,
-                                                      self.rot_step_increment):
+                                                      self.rot_step_inc):
                 # Update relted states.
                 self.update_alpha(-direction*alpha_s)
                 self.update_theta(step_starting_theta
