@@ -390,6 +390,46 @@ class ControlModel():
             self.reset_state(pos = pos_end)
             # Lift down the robots.
             yield from self.step_alpha(0.0, self.tumble_step_inc)
+    
+    def tumbling(self, input_cmd: np.ndarray, last_section = False):
+        """
+        Yields magnet angles that walks the robot using tumbling mode.
+        @param: Numpy array as [distance to walk, theta, mode]
+        """
+        assert abs(self.alpha) <0.01, "Tumbling should happen at alpha = 0."
+        # Modify the distance to walk and theta is necessary.
+        if input_cmd[0] < 0:
+            input_cmd[0] = -input_cmd[0]
+            input_cmd[1]  = ControlModel.wrap(input_cmd[1] + np.pi)
+        # Calculate position update step.
+        pos_delta = (self.specs.tumbling_distance
+                    *np.array([np.cos(input_cmd[1]), np.sin(input_cmd[1])]
+                    *self.specs.n_robot))
+        # determine rounded number of rotations needed.
+        n_tumbling = round(input_cmd[0]/self.specs.tumbling_distance)
+        # Line up robots for starting with pivot B.
+        start_theta = ControlModel.wrap(input_cmd[1] + np.pi/2)
+        yield from self.step_theta(start_theta)
+        # Set tumbling parameter.
+        alpha_dir = 1
+        next_mode={1:self.mode_sequence[(self.specs.n_mode-1)//2],-1:self.mode}
+        # Perform tumbling.
+        for _ in range(n_tumbling):
+            # Lift the robot.
+            yield from self.step_alpha(alpha_dir*np.pi/2, self.tumble_step_inc)
+            # Update theta and mode
+            self.theta = ControlModel.wrap(self.theta + np.pi)
+            self.mode = next_mode[alpha_dir]
+            self.update_mode_sequence(self.mode)
+            # Update robot's positions at the end of tumble.
+            self.reset_state(pos = self.pos + pos_delta)
+            # Take down the robot.
+            yield from self.step_alpha(0, self.tumble_step_inc)
+            # Update alpha_direction.
+            alpha_dir *= -1
+        # Line up the robots, if this was last section.
+        if last_section is True:
+            yield from self.step_theta(input_cmd[1])
 
     def step_rotation_field(self, n_rotation: int):
         """
