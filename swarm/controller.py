@@ -179,11 +179,11 @@ class ControlModel():
     @staticmethod
     def wrap(angle):
         """Wraps angles between -PI to PI."""
-        wrapped = remainder(angle+np.pi, 2*np.pi)
+        wrapped = remainder(-angle+np.pi, 2*np.pi)
         if wrapped< 0:
             wrapped += 2*np.pi
         wrapped -= np.pi
-        return wrapped
+        return -wrapped
     
     @staticmethod
     def wrap_range(from_ang, to_ang, inc = 1):
