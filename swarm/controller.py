@@ -431,78 +431,6 @@ class ControlModel():
         if last_section is True:
             yield from self.step_theta(input_cmd[1])
 
-    def step_rotation_field(self, n_rotation: int):
-        """
-        Yields magnet angles that rotates the robot for one step.
-        @param: number of required rotations, negative means backward.
-        """
-        assert self.alpha == 0.0, "Rotaiton should happen at alpha = 0."
-        #assert n_rotation != 0, "There is no zero rotation."
-        # Calculate axis of rotation.
-        # Robot initial axis of rotation, fixed along body, +Y axis.
-        rot_axis_base =  np.array([0,1,0]) 
-        # Rotate, theta about +Z, to get current rot_axis.
-        rot_axis = self.rotz(rot_axis_base, self.theta)  
-        # Calculate starting magnet vector by rotating magnet_vect
-        # by current theta.
-        start_magnet_vect = self.rotz(self.magnet_vect[self.mode], self.theta)
-        # Calculate and yield magnetic vectors to perform rotation.
-        # Adjust increment and n_rotation for direction.
-        if n_rotation >= 0.0:
-            rot_increment = self.rot_increment
-            step_increment = self.rot_step_inc
-        else:
-            n_rotation = -n_rotation
-            rot_increment = -self.rot_increment
-            step_increment = -self.rot_step_inc
-        # Do the rotations and yield values.
-        
-        for _ in range(n_rotation):
-            iterator = ControlModel.frange(0, rot_increment, step_increment)
-            # Skip the first element to avoid repetition.
-            try:
-                next(iterator)
-            except StopIteration:
-                pass
-            # Yield the rest
-            for ang in iterator:
-                # First element is ignored to avoid repetition.
-                magnet_vect = self.rotv(start_magnet_vect, rot_axis, ang)
-                # Update states.
-                self.update_rotation_field(step_increment)
-                # Convert to spherical and yield.
-                yield self.cart_to_sph(magnet_vect)
-            # Calculate last one.
-            magnet_vect = self.rotv(start_magnet_vect, rot_axis, rot_increment)
-            # Update states.
-            self.update_rotation_field(rot_increment -ang)
-            # Update starting rotation vector and mode.
-            start_magnet_vect = magnet_vect
-            self.reset_state(mode = self.mode_sequence[1])
-            # Convert to spherical and yield.
-            yield self.cart_to_sph(magnet_vect)
-
-    def update_rotation_field(self, rot_ang: float):
-        # Get how much rotation per current step is done.
-        rot_ratio_done = rot_ang/self.rot_increment
-        rotation_distance = self.specs.rotation_distance
-        n_robot = self.specs.n_robot
-        theta = self.theta
-        # Update the states.
-        for robot in range(n_robot):
-            self.pos[2*robot:2*robot+2] += (
-                                       np.array([np.cos(theta), np.sin(theta)])
-                                       *rot_ratio_done*rotation_distance)
-    
-    def rotation_walking_field(self, input_cmd: np.ndarray):
-        """
-        Yields magnet angles thatwalks the robot using rotation mode.
-        @param: Numpy array as [distance to walk, theta, mode]
-        """
-        # determine rounded number of rotations needed.
-        n_rotation = round(input_cmd[0]/self.specs.rotation_distance)
-        yield from self.step_rotation_field(n_rotation)
-
     def pivot_walking(self, theta: float, sweep: float, steps: int,
                                                          last_section = False):
         """
@@ -604,13 +532,19 @@ class ControlModel():
         try: 
             for section in range(num_sections):
                 current_input = input_series[section,:]
-                current_input_mode = current_input[2]
-                if current_input_mode == 0:
-                    # This is rotation mode.
-                    # Line up the robots and perform the rotation.
-                    for _ in self.step_theta(current_input[1]):
+                current_input_mode = int(current_input[2])
+                if current_input_mode < 0:
+                    # This is mode change request.
+                    cmd_mode = -current_input_mode
+                    cmd_ang = current_input[1]
+                    for _ in  self.step_mode(cmd_mode, cmd_ang):
                         pass
-                    for _ in self.rotation_walking_field(current_input):
+                elif current_input_mode == 0:
+                    # This is tumbling.
+                    if section == (num_sections - 1):
+                        # If last section, robot will finally line up.
+                        last_section = True
+                    for _ in self.tumbling(current_input, last_section):
                         pass
                 else: 
                     # This is pivot walking mode.
@@ -624,7 +558,7 @@ class ControlModel():
                         # If this is last section, robots will line up
                         # in their commanded direction.
                         last_section = True
-                    for _ in self.feedforward_walk(current_input,last_section,
+                    for _ in self.feedforward_walk(current_input, last_section,
                                                                   alternative):
                         pass
         finally:
@@ -646,24 +580,30 @@ class ControlModel():
         last_section = False
         for section in range(num_sections):
             current_input = input_series[section,:]
-            current_input_mode = current_input[2]
-            if current_input_mode == 0:
-                # This is rotation mode.
-                # Line up the robots.
-                current_mode = self.mode
-                for body_ang in self.step_theta(current_input[1]):
+            current_input_mode = int(current_input[2])
+            if current_input_mode < 0:
+                # This is mode change request.
+                cmd_mode = -current_input_mode
+                cmd_ang = current_input[1]
+                for body_ang in self.step_mode(cmd_mode, cmd_ang):
                     # Convert body ang to field_ang.
                     field_ang = self.angle_body_to_magnet(body_ang)
                     # Yield outputs.
                     yield field_ang, self.get_state()
-                for field_ang in self.rotation_walking_field(current_input):
+            elif current_input_mode == 0:
+                # This is tumbling.
+                if section == (num_sections - 1):
+                    # If last section, robot will finally line up.
+                    last_section = True
+                for body_ang in self.tumbling(current_input, last_section):
+                    # Convert body ang to field_ang.
+                    field_ang = self.angle_body_to_magnet(body_ang)
+                    # Yield outputs.
                     yield field_ang, self.get_state()
             else: 
                 # This is pivot walking mode.
-                current_mode = self.mode
                 if section == (num_sections - 1):
-                    # If last section, robot will finally line up in 
-                    # commanded direction.
+                    # If last section, robot will finally line up.
                     last_section = True
                 for body_ang in self.feedforward_walk(current_input,
                                                       last_section,
@@ -672,7 +612,6 @@ class ControlModel():
                     field_ang = self.angle_body_to_magnet(body_ang)
                     # Yield outputs.
                     yield field_ang, self.get_state()
-
 
 class Controller(ControlModel):
     """
@@ -753,9 +692,12 @@ if __name__ == '__main__':
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
     control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
     input_series = np.array([[10,0,1],
-                             [6.5,np.pi/2,0],
+                             [12,0,-2],
+                             [12*2,np.pi/2,0],
                              [10,0,2],
-                             [6.5,0,0]])
+                             [12,0,0]])
+    # Check compatibility
+    control.line_input_compatibility_check(input_series)
     start = time.time()
     for i in control.feedforward_line(input_series,alternative=True):
         str_msg = (",".join(f"{elem:+07.2f}" for elem in i[0]) + "|"
