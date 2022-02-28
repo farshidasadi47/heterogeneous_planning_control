@@ -545,7 +545,7 @@ class ControlModel():
             step_starting_theta = self.theta
             for theta_s, alpha_s in ControlModel.range_oval(sweep,
                                                       self.sweep_alpha,
-                                                      self.rot_step_inc):
+                                                      self.pivot_step_inc):
                 # Update relted states.
                 self.update_alpha(-direction*alpha_s)
                 self.update_theta(step_starting_theta
