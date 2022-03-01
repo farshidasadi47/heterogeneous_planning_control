@@ -437,7 +437,7 @@ class ControlModel():
         Yields body angles for pivot walking with specified sweep angles
         and number of steps.
         """
-        assert steps > 0, "\"steps\" should be positive integer."
+        assert steps >= 0, "\"steps\" should be positive integer."
         direction = 1  # 1 is A pivot, -1 is B pivot.
         pivot = {1:"a", -1:"b"}
         # Line of the robot for currect direction.
@@ -464,7 +464,7 @@ class ControlModel():
         Yields body angles for pivot walking with specified sweep angles
         and number of steps.
         """
-        assert steps > 0, "\"steps\" should be positive integer."
+        assert steps >= 0, "\"steps\" should be positive integer."
         direction = 1  # 1 is A pivot, -1 is B pivot.
         pivot = {1:"a", -1:"b"}
         # Line of the robot for currect direction.
@@ -503,9 +503,12 @@ class ControlModel():
         # Calculate maximum distance the leader can travel in one step.
         d_step_max = pivot_length*np.sin(self.sweep_theta)
         # Number of steps takes to do the pivot walk.
-        n_steps = int(input_cmd[0]//d_step_max) + 1
+        n_steps = int(np.ceil(input_cmd[0]/d_step_max))
         # Compute current sweep angle.
-        d_step = input_cmd[0]/n_steps
+        if n_steps > 0:
+            d_step = input_cmd[0]/n_steps
+        else:
+            d_step = 0
         sweep = np.arcsin(d_step/pivot_length)
         # Do pivot walking.
         if alternative:
@@ -692,6 +695,7 @@ if __name__ == '__main__':
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
     control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
     input_series = np.array([[10,0,1],
+                             [0,0,1],
                              [12,0,-2],
                              [12*2,np.pi/2,0],
                              [10,0,2],
