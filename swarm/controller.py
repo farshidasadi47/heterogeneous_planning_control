@@ -109,7 +109,8 @@ class ControlModel():
         # Set magnet vector
         self.magnet_vect = np.array([0.0,-1.0,0.0])
 
-    def set_steps(self, sweep_theta, sweep_alpha, inc_theta,inc_alpha,inc_rot):
+    def set_steps(self, inc_theta, inc_alpha, inc_pivot,
+                        sweep_theta, sweep_alpha, inc_tumble):
         """
         Sets theta, alpha, and rolling steps parameters.
         All parameters should be given in Degrees.
@@ -117,7 +118,8 @@ class ControlModel():
         """
         self.theta_step_inc = np.deg2rad(inc_theta)
         self.alpha_step_inc = np.deg2rad(inc_alpha)
-        self.rot_step_inc = np.deg2rad(inc_rot)
+        self.pivot_step_inc = np.deg2rad(inc_pivot)
+        self.tumble_step_inc = np.deg2rad(inc_tumble)
         self.sweep_theta = np.deg2rad(sweep_theta)  # Max sweep angle
         self.sweep_alpha = np.deg2rad(sweep_alpha)  # alpha sweep limit.
     

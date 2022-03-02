@@ -234,24 +234,26 @@ class ControlService(Node):
         Sets steps parameters of the ControlModel class.
         """
         print("Enter step parameters in angle: inc_theta, inc_alpha, "
-              + "inc_rot, sweep_theta, sweep_alpha")
+              + "inc_pivot, sweep_theta, sweep_alpha, inc_tumble")
         self.rate.sleep()
         try:
             if self.pipeline.cmd_mode != "idle":
                 # Do not change parameters while something going on.
                 raise ValueError
             step_params=list(map(float,
-                               input("Enter values: ").strip().split(",")))[:5]
-            str_msg = ("[inc_theta, inc_alpha, inc_rot, sweep_theta, "
-                   +"sweep_alpha] = ["
+                               input("Enter values: ").strip().split(",")))[:6]
+            str_msg = ("[inc_theta, inc_alpha, inc_pivot, sweep_theta, "
+                   +"sweep_alpha, inc_tumble] = ["
                    + ",".join(f"{elem:+07.2f}" for elem in step_params) + "]")
             print(str_msg)
-            if len(step_params) != 5:
+            if len(step_params) != 6:
                 raise ValueError
-        except:
-            print("Ooops! values ignored.")
-        # Use the parameters
-        self.control.set_steps(*step_params)
+            # Use the parameters
+            self.control.set_steps(*step_params)
+        except Exception as exc:
+            print("Ooops! exception happened. Values are ignored.")
+            print("Exception details:")
+            print(type(exc).__name__,exc.args)
         return response
 
 class MainExecutor(rclpy.executors.MultiThreadedExecutor):
