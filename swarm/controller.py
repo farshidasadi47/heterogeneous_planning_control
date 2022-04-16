@@ -43,12 +43,13 @@ class ControlModel():
         self.specs = specs
         self.__set_rotation_constants_and_functions()
         self.reset_state(pos, theta, 0, mode)
-        self.theta_step_inc = np.deg2rad(10)
-        self.alpha_step_inc = np.deg2rad(4)
-        self.pivot_step_inc = np.deg2rad(10)
-        self.sweep_theta = np.deg2rad(45)  # Max sweep angle
-        self.sweep_alpha = np.deg2rad(45)  # alpha sweep limit.
-        self.tumble_step_inc = np.deg2rad(20)
+        self.theta_step_inc = np.deg2rad(5)
+        self.theta_rot_step_inc = np.deg2rad(5)
+        self.alpha_step_inc = np.deg2rad(5)
+        self.pivot_step_inc = np.deg2rad(5)
+        self.sweep_theta = np.deg2rad(30)  # Max sweep angle
+        self.sweep_alpha = np.deg2rad(35)  # alpha sweep limit.
+        self.tumble_step_inc = np.deg2rad(5)
 
     def reset_state(self, pos: np.ndarray = None, theta: float = None,
                           alpha: float = None, mode: int = None):
@@ -237,6 +238,8 @@ class ControlModel():
         for ang_1 in iter_1:
             ang_2 = next(iter_2)
             yield ang_1, ang_2
+        # Repeat last, for more delay and accuracy.
+        yield ang_1, ang_2
     
     @staticmethod
     def range_oval(sweep_theta, sweep_alpha, inc):
@@ -259,12 +262,6 @@ class ControlModel():
         #
         iterator = ControlModel.frange(0,np.pi,inc)
         iterator = np.arange(0,np.pi,inc).flat
-        # Skip first element.
-        try:
-            next(iterator)
-        except StopIteration:
-            pass
-        # Yield the rest.
         for ang in iterator:
             # Get corresponding radius on the ellipse.
             r = fr(ang)
@@ -273,6 +270,8 @@ class ControlModel():
             theta = sweep_theta - np.arctan2(r*np.cos(ang), 1)
             yield theta, alpha
         # Yield last one.
+        yield sweep_theta*2, 0.0
+        # Repeat last, for more delay and accuracy.
         yield sweep_theta*2, 0.0
 
     # Control related methods
@@ -284,12 +283,6 @@ class ControlModel():
             inc = self.alpha_step_inc
         starting_alpha = self.alpha
         iterator = self.wrap_range(starting_alpha, desired_alpha, inc)
-        # Skip the first element to avoid repetition.
-        try:
-            next(iterator)
-        except StopIteration:
-            pass
-        # Yield the rest.
         for alpha in iterator:
             self.update_alpha(alpha)
             yield np.array([self.theta, alpha])
@@ -297,6 +290,9 @@ class ControlModel():
         alpha = self.wrap(desired_alpha)
         self.update_alpha(alpha)
         yield np.array([self.theta, alpha])
+        # Repeat last, for more delay and accuracy.
+        if abs(alpha) < 1:
+            yield np.array([self.theta, alpha])
 
     def update_alpha(self, alpha: float):
         self.alpha = ControlModel.wrap(alpha)
@@ -306,14 +302,11 @@ class ControlModel():
         Yields body angles that transitions robot to desired theta.
         """
         starting_theta = self.theta
-        iterator = self.wrap_range(starting_theta, desired_theta,
-                                                     self.theta_step_inc)
-        # Skip the first element to avoid repetition.
-        try:
-            next(iterator)
-        except StopIteration:
-            pass
-        # Yield the rest.
+        if pivot is None:
+            inc = self.theta_rot_step_inc
+        else:
+            inc = self.theta_step_inc
+        iterator = self.wrap_range(starting_theta, desired_theta, inc)
         for theta in iterator:
             self.update_theta(theta, pivot)
             yield np.array([theta, self.alpha])
@@ -321,6 +314,9 @@ class ControlModel():
         theta = self.wrap(desired_theta)
         self.update_theta(theta, pivot)
         yield np.array([theta, self.alpha])
+        # Repeat last, for more delay and accuracy.
+        if abs(self.alpha) < 1:
+            yield np.array([theta, self.alpha])
     
     def update_theta(self, theta:float, pivot: str):
         theta = self.wrap(theta)
@@ -693,15 +689,24 @@ class Pipeline:
         return cmd, states
 
 ########## test section ################################################
+control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
 if __name__ == '__main__':
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
     control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
-    input_series = np.array([[10,0,1],
+    """ input_series = np.array([[10,0,1],
                              [0,0,1],
                              [12,0,-2],
                              [12*2,np.pi/2,0],
                              [10,0,2],
-                             [12,0,0]])
+                             [12,0,0],
+                             [0,np.pi/2,1],
+                             [0,np.pi/4,1]]) """
+    input_series = np.array([[50,0,1],
+                                 [50,np.pi/2,1],
+                                 [50,np.pi,1],
+                                 [50,-np.pi/2,1],
+                                 [0,0,1]])
+    input_series = input_series = np.tile(input_series, (2,1))
     # Check compatibility
     control.line_input_compatibility_check(input_series)
     start = time.time()
@@ -713,4 +718,3 @@ if __name__ == '__main__':
         print(str_msg)
     end = time.time()
     print(f"Elapsed = {(end-start)*1000:+015.2f}milliseconds")
-    
