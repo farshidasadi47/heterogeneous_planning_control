@@ -487,6 +487,31 @@ class ControlModel():
         if last_section:
             # Line up the robot.
             yield from self.step_theta(theta)
+    
+    def pivot_walking_walk(self,input_cmd, alternative = True):
+        """
+        Calls pivot walking and yields field angles and states.
+        @param: Numpy array as [n_steps, starting_theta (degrees)]
+        """
+        assert input_cmd[0] >=0, "n_steps cannot be negative."
+        input_cmd[0] = int(input_cmd[0])
+        input_cmd[1] = np.deg2rad(input_cmd[1])
+        self.reset_state(theta = input_cmd[1])
+        # Do pivot walking.
+        if alternative:
+            for body_ang in self.pivot_walking_alt(input_cmd[1],
+                                 self.sweep_theta, input_cmd[0], False, False):
+                # Convert body ang to field_ang.
+                field_ang = self.angle_body_to_magnet(body_ang)
+                # Yield outputs.
+                yield field_ang, self.get_state()
+        else:
+            for body_ang in self.pivot_walking(input_cmd[1],
+                                 self.sweep_theta, input_cmd[1], False, False):
+                # Convert body ang to field_ang.
+                field_ang = self.angle_body_to_magnet(body_ang)
+                # Yield outputs.
+                yield field_ang, self.get_state()
 
     def feedforward_walk(self, input_cmd: np.ndarray,
                                last_section = False,

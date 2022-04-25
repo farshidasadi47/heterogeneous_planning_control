@@ -150,6 +150,8 @@ class ControlService(Node):
         self.__add_service_server(Empty,'set_idle', self.__set_idle_server_cb)
         self.__add_service_server(Empty,'/feedfrwd_input',
                                                self.__feedfrwd_input_server_cb)
+        self.__add_service_server(Empty,'/pivot_walking',
+                                                self.__pivot_walking_server_cb)
         self.__add_service_server(Empty,'/set_steps',
                                                self.__set_steps_server_cb)
     
@@ -239,6 +241,56 @@ class ControlService(Node):
                 # This error is handled internally, so we pass here.
                 pass
         # Release the data pipeline.
+        self.pipeline.set_cmd_mode("idle")
+        self.rate.sleep()
+        return response
+
+    def __pivot_walking_server_cb(self, request, response):
+        """
+        This service calls pivot_walking function.
+        """
+        # Check if we are not in the middle of another service that 
+        # calls data pipeline, If we are, ignore this service call.
+        alternative = True
+        print("*"*72)
+        regex = r'([+-]?\d+\.?\d*(, *| +)){1}([+-]?\d+\.?\d* *)'
+        self.rate.sleep()
+        if self.pipeline.get_cmd_mode() == "idle":
+            try:
+                # Get the input.
+                print("Enter params: num_steps, starting_theta (in degrees)")
+                in_str = input("Enter values: ").strip()
+                # Check if user input matches the template.
+                if re.fullmatch(regex,in_str) is None:
+                    print("Invalid input. Exitted service request.")
+                    raise ValueError
+                # Parse user input.
+                params = list(map(float,re.findall(r'[+-]?\d+\.?\d*',in_str)))
+                str_msg = (f"[n_steps, starting_theta] = ["
+                         + ",".join(f"{elem:+07.2f}" for elem in params) + "]")
+                print(str_msg)
+                # Change command mode.
+                self.pipeline.set_cmd_mode("server")
+                self.rate.sleep()
+                # Execute main controller and update pipeline.
+                for field, states in self.control.pivot_walking_walk(params,
+                                                                  alternative):
+                    self.pipeline.set_cmd(np.array([*field, 100.0]), states)
+                    self.rate.sleep()
+                # set command to zero
+                self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                self.rate.sleep()
+            except ValueError:
+                # This error is handled internally, so we pass here.
+                pass
+            except AssertionError:
+                # Handled internally and no further action is needed.
+                pass
+        else:
+            print("Not in idle mode. Current server call is ignored.")
+        print("*"*72)
+        # Release the data pipeline and neutral magnetic field.
+        self.pipeline.set_idle(np.zeros(3,dtype=float))
         self.pipeline.set_cmd_mode("idle")
         self.rate.sleep()
         return response
