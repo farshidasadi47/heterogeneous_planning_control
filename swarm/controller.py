@@ -430,7 +430,8 @@ class ControlModel():
             yield from self.step_theta(input_cmd[1])
 
     def pivot_walking(self, theta: float, sweep: float, steps: int,
-                                                         last_section = False):
+                                                         last_section = False,
+                                                         line_up = True):
         """
         Yields body angles for pivot walking with specified sweep angles
         and number of steps.
@@ -439,7 +440,8 @@ class ControlModel():
         direction = 1  # 1 is A pivot, -1 is B pivot.
         pivot = {1:"a", -1:"b"}
         # Line of the robot for currect direction.
-        yield from self.step_theta(theta- sweep)
+        if line_up:
+            yield from self.step_theta(theta- sweep)
         for _ in range(steps):
             # First pivot around A (lift B) and toggle until completed.
             # Lift the robot by sweep_alpha.
@@ -456,7 +458,8 @@ class ControlModel():
             yield from self.step_theta(theta)
 
     def pivot_walking_alt(self, theta: float, sweep: float, steps: int,
-                                                         last_section = False):
+                                                         last_section = False,
+                                                         line_up = True):
         """
         Alternative pivot walking method.
         Yields body angles for pivot walking with specified sweep angles
@@ -466,7 +469,8 @@ class ControlModel():
         direction = 1  # 1 is A pivot, -1 is B pivot.
         pivot = {1:"a", -1:"b"}
         # Line of the robot for currect direction.
-        yield from self.step_theta(theta- sweep)
+        if line_up:
+            yield from self.step_theta(theta- sweep)
         for _ in range(steps):
             step_starting_theta = self.theta
             for theta_s, alpha_s in ControlModel.range_oval(sweep,
