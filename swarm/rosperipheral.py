@@ -6,6 +6,7 @@
 ########## Libraries ###################################################
 import sys
 import time
+import re
 
 import numpy as np
 
@@ -176,19 +177,32 @@ class ControlService(Node):
         """
         Sets field command in idle condition.
         """
-        print("Enter field angles and percentage: theta, alpha, %power")
+        print("*"*72)
+        regex = r'([+-]?\d+\.?\d*(, *| +)){2}([+-]?\d+\.?\d* *)'
+        field = np.array([0.0,0,0.0])
         self.rate.sleep()
-        try:
-            field=list(map(float,
-                               input("Enter values: ").strip().split(",")))[:3]
-            str_msg = (f"[theta, alpha, %power] = ["
-                   + ",".join(f"{elem:+07.2f}" for elem in field) + "]")
-            print(str_msg)
-            if len(field) != 3:
-                raise ValueError
-        except:
-            print("Ooops! values ignored.")
-        self.pipeline.set_idle(field)
+        while True:
+            try:
+                print("Enter field angles and percentage: theta, alpha, %power.")
+                print("Enter \"q\" for quitting.")
+                # Read user input.
+                in_str = input("Enter values: ").strip()
+                # Check if user requests quitting.
+                if re.match('q',in_str) is not None:
+                    print("Exitted \"set_idle\".")
+                    break
+                # Check if user input matches the template.
+                if re.fullmatch(regex,in_str) is None:
+                    raise ValueError
+                # Parse user input.
+                field = list(map(float,re.findall(r'[+-]?\d+\.?\d*',in_str)))
+                str_msg = (f"[theta, alpha, %power] = ["
+                    + ",".join(f"{elem:+07.2f}" for elem in field) + "]")
+                print(str_msg)
+            except:
+                print("Ooops! values ignored. Enter values like the template.")
+            self.pipeline.set_idle(field)
+        print("*"*72)
         return response
 
     def __feedfrwd_input_server_cb(self, request, response):
