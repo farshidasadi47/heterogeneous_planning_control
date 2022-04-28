@@ -354,13 +354,18 @@ class ControlModel():
         # Update theta
         self.theta = theta
     
-    def step_mode(self, des_mode: int, des_ang: float):
+    def step_mode(self, des_mode: int, des_ang: float, line_up = True):
         """
         Yields body angles that transitions robot to desired mode at
         the given angle.
         @param: des_mode: describes the desired mode to go.
         @param: des_ang: describes the angle that center of each robot
                          will go from start to end of movement.
+        @param: line_up: determines if the robots will line_up before
+                performing mode_change.
+                If False, no line_up will be performed and mode change
+                happens from the current states. Thus, des_ang will be
+                irrelevant. This is used for test and calibration.
         """
         str_msg = "Mode change can only be started from alpha = 0."
         assert abs(self.alpha) <.01, str_msg
@@ -369,25 +374,42 @@ class ControlModel():
         # Mode index to get tumbling angles and distance.
         if self.mode != des_mode:
             des_mode_index = self.mode_sequence.index(des_mode)
-            theta_start = des_ang - self.specs.mode_rel_ang[des_mode_index]/2
-            theta_end = des_ang + self.specs.mode_rel_ang[des_mode_index]/2
+            if line_up:
+                theta_start = des_ang-self.specs.mode_rel_ang[des_mode_index]/2
+                theta_end = des_ang + self.specs.mode_rel_ang[des_mode_index]/2
+            else:
+                theta_start = self.theta
+                des_ang = theta_start+self.specs.mode_rel_ang[des_mode_index]/2
+                theta_end = self.theta+self.specs.mode_rel_ang[des_mode_index]
             # Positions 
             pos_start = self.pos
-            pos_delta = (self.specs.mode_distance[des_mode_index]
-              *np.array([np.cos(des_ang), np.sin(des_ang)]*self.specs.n_robot))
+            pos_delta = (self.specs.mode_distance[des_mode_index]*
+                         np.array([np.cos(des_ang), np.sin(des_ang)]*
+                         self.specs.n_robot))
             pos_end = pos_start + pos_delta
             # Line up the robots based on the mode change angle.
             yield from self.step_theta(theta_start)
             # Lift the robots of pivot point A.
             yield from self.step_alpha(-np.pi/2, self.tumble_step_inc)
-            # Update theta and mode
-            self.theta = ControlModel.wrap(theta_end)
-            self.mode = des_mode
-            self.update_mode_sequence(self.mode)
-            # Update robot's positions at the end of tumble.
-            self.reset_state(pos = pos_end)
+            # Update theta and mode, and position.
+            theta_end = ControlModel.wrap(theta_end)
+            self.reset_state(pos = pos_end, theta=theta_end, mode=des_mode)
             # Lift down the robots.
             yield from self.step_alpha(0.0, self.tumble_step_inc)
+    
+    def mode_changing(self, des_mode: int, des_ang: float, line_up = True):
+        """
+        High level command to change mode.
+        @param: des_mode: describes the desired mode to go.
+        @param: des_ang: describes the angle that center of each robot
+                         will go from start to end of movement.
+        @param: line_up: line_up or not before starting.
+        """
+        for body_ang in self.step_mode(des_mode, des_ang, line_up):
+            # Convert body ang to field_ang.
+            field_ang = self.angle_body_to_magnet(body_ang)
+            # Yield outputs.
+            yield field_ang, self.get_state()
     
     def tumbling(self, input_cmd: np.ndarray, last_section = False):
         """
@@ -575,7 +597,7 @@ class ControlModel():
                     # This is mode change request.
                     cmd_mode = -current_input_mode
                     cmd_ang = current_input[1]
-                    for _ in  self.step_mode(cmd_mode, cmd_ang):
+                    for _ in  self.mode_changing(cmd_mode, cmd_ang):
                         pass
                 elif current_input_mode == 0:
                     # This is tumbling.
@@ -623,11 +645,7 @@ class ControlModel():
                 # This is mode change request.
                 cmd_mode = -current_input_mode
                 cmd_ang = current_input[1]
-                for body_ang in self.step_mode(cmd_mode, cmd_ang):
-                    # Convert body ang to field_ang.
-                    field_ang = self.angle_body_to_magnet(body_ang)
-                    # Yield outputs.
-                    yield field_ang, self.get_state()
+                yield from self.mode_changing(cmd_mode, cmd_ang)
             elif current_input_mode == 0:
                 # This is tumbling.
                 if section == (num_sections - 1):
