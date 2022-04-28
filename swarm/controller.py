@@ -539,11 +539,19 @@ class ControlModel():
         sweep = np.arcsin(d_step/pivot_length)
         # Do pivot walking.
         if alternative:
-            yield from self.pivot_walking_alt(input_cmd[1],sweep,
-                                              n_steps,last_section)
+            for body_ang in self.pivot_walking_alt(input_cmd[1],sweep,
+                                                         n_steps,last_section):
+                # Convert body ang to field_ang.
+                field_ang = self.angle_body_to_magnet(body_ang)
+                # Yield outputs.
+                yield field_ang, self.get_state()
         else:
-            yield from self.pivot_walking(input_cmd[1],sweep,
-                                          n_steps,last_section)
+            for body_ang in self.pivot_walking(input_cmd[1],sweep,
+                                                         n_steps,last_section):
+                # Convert body ang to field_ang.
+                field_ang = self.angle_body_to_magnet(body_ang)
+                # Yield outputs.
+                yield field_ang, self.get_state()
 
     def line_input_compatibility_check(self, input_series: np.ndarray,
                                        alternative = True):
@@ -635,13 +643,8 @@ class ControlModel():
                 if section == (num_sections - 1):
                     # If last section, robot will finally line up.
                     last_section = True
-                for body_ang in self.feedforward_walk(current_input,
-                                                      last_section,
-                                                      alternative):
-                    # Convert body ang to field_ang.
-                    field_ang = self.angle_body_to_magnet(body_ang)
-                    # Yield outputs.
-                    yield field_ang, self.get_state()
+                yield from self.feedforward_walk(current_input,
+                                                      last_section,alternative)
 
 class Controller(ControlModel):
     """
