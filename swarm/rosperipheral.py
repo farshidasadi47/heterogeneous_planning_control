@@ -154,6 +154,8 @@ class ControlService(Node):
                                                 self.__pivot_walking_server_cb)
         self.__add_service_server(Empty,'/mode_change',
                                                 self.__mode_change_server_fb)
+        self.__add_service_server(Empty,'/tumbling',
+                                                self.__tumbling_server_fb)
         self.__add_service_server(Empty,'/set_steps',
                                                self.__set_steps_server_cb)
     
@@ -343,6 +345,62 @@ class ControlService(Node):
                 pass
             except AssertionError:
                 # Handled internally and no further action is needed.
+                pass
+        else:
+            print("Not in idle mode. Current server call is ignored.")
+        print("*"*72)
+        # Release the data pipeline and neutral magnetic field.
+        self.pipeline.set_idle(np.zeros(3,dtype=float))
+        self.pipeline.set_cmd_mode("idle")
+        self.rate.sleep()
+        return response
+
+    def __tumbling_server_fb(self, request, response):
+        """
+        This service calls tumbling function and performs tumbling.
+        """
+        print("*"*72)
+        regex = r'([+-]?\d+(, *| +)){2}([+-]?\d+\.?\d* *)'
+        self.rate.sleep()
+        # Check if we are not in the middle of another service that 
+        # calls data pipeline, If we are, ignore this service call.
+        if self.pipeline.get_cmd_mode() == "idle":
+            try:
+                # Get the input.
+                print("Enter params: n_tumble, starting_mode, starting_theta.")
+                in_str = input("Enter values: ").strip()
+                # Check if user input matches the template.
+                if re.fullmatch(regex,in_str) is None:
+                    print("Invalid input. Exitted service request.")
+                    raise ValueError
+                # Parse user input and reset mode, theta.
+                params = list(map(float,re.findall(r'[+-]?\d+\.?\d*',in_str)))
+                str_msg = (f"[n_tumble, starting_mode, starting_theta] = ["
+                         + ",".join(f"{elem:+07.2f}" for elem in params) + "]")
+                print(str_msg)
+                self.control.reset_state(theta=np.deg2rad(params[2]),
+                                         mode=int(params[1]))
+                # Process command
+                des_r = params[0]*self.control.specs.tumbling_distance
+                input_cmd = np.array([des_r, 0.0, 0])
+                # Change command mode.
+                self.pipeline.set_cmd_mode("server")
+                self.rate.sleep()
+                # Execute main controller and update pipeline.
+                for field, states in self.control.tumbling(input_cmd,
+                                                                 False, False):
+                    self.pipeline.set_cmd(np.array([*field, 100.0]), states)
+                    self.rate.sleep()
+                # set command to zero
+                self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                self.rate.sleep()
+            except ValueError:
+                # This error is handled internally, so we pass here.
+                pass
+            except Exception as exc:
+                print("Ooops! exception happened. Values are ignored.")
+                print("Exception details:")
+                print(type(exc).__name__,exc.args)
                 pass
         else:
             print("Not in idle mode. Current server call is ignored.")

@@ -411,12 +411,16 @@ class ControlModel():
             # Yield outputs.
             yield field_ang, self.get_state()
     
-    def tumbling(self, input_cmd: np.ndarray, last_section = False):
+    def step_tumble(self, input_cmd: np.ndarray,
+                          last_section = False, line_up = True):
         """
         Yields magnet angles that walks the robot using tumbling mode.
         @param: Numpy array as [distance to walk, theta, mode]
         """
         assert abs(self.alpha) <0.01, "Tumbling should happen at alpha = 0."
+        if not line_up:
+            # Desired angle command will be overriden in this case.
+            input_cmd[1] = ControlModel.wrap(self.theta - np.pi/2)
         # Modify the distance to walk and theta is necessary.
         if input_cmd[0] < 0:
             input_cmd[0] = -input_cmd[0]
@@ -437,12 +441,10 @@ class ControlModel():
         for _ in range(n_tumbling):
             # Lift the robot.
             yield from self.step_alpha(alpha_dir*np.pi/2, self.tumble_step_inc)
-            # Update theta and mode
-            self.theta = ControlModel.wrap(self.theta + np.pi)
-            self.mode = next_mode[alpha_dir]
-            self.update_mode_sequence(self.mode)
-            # Update robot's positions at the end of tumble.
-            self.reset_state(pos = self.pos + pos_delta)
+            # Update position, theta, and mode
+            self.reset_state(pos = self.pos + pos_delta,
+                             theta = ControlModel.wrap(self.theta + np.pi),
+                             mode = next_mode[alpha_dir])
             # Take down the robot.
             yield from self.step_alpha(0, self.tumble_step_inc)
             # Update alpha_direction.
@@ -450,6 +452,18 @@ class ControlModel():
         # Line up the robots, if this was last section.
         if last_section is True:
             yield from self.step_theta(input_cmd[1])
+
+    def tumbling(self, input_cmd: np.ndarray,
+                       last_section = False, line_up = True):
+        """
+        High level function for step_tumble.
+        @param: Numpy array as [distance to walk, theta, mode]
+        """
+        for body_ang in self.step_tumble(input_cmd, last_section, line_up):
+            # Convert body ang to field_ang.
+            field_ang = self.angle_body_to_magnet(body_ang)
+            # Yield outputs.
+            yield field_ang, self.get_state()
 
     def pivot_walking(self, theta: float, sweep: float, steps: int,
                                                          last_section = False,
@@ -651,11 +665,7 @@ class ControlModel():
                 if section == (num_sections - 1):
                     # If last section, robot will finally line up.
                     last_section = True
-                for body_ang in self.tumbling(current_input, last_section):
-                    # Convert body ang to field_ang.
-                    field_ang = self.angle_body_to_magnet(body_ang)
-                    # Yield outputs.
-                    yield field_ang, self.get_state()
+                yield from self.tumbling(current_input, last_section)
             else: 
                 # This is pivot walking mode.
                 if section == (num_sections - 1):
