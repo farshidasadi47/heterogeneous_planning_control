@@ -219,7 +219,7 @@ class ControlService(Node):
         # Check if we are not in the middle of another service that 
         # calls data pipeline, If we are, ignore this service call.
         interactive = True
-        if self.pipeline.cmd_mode == "idle":
+        if self.pipeline.get_cmd_mode() == "idle":
             try:
                 # Compatibility check,raises ValueError if incompatible.
                 self.control.line_input_compatibility_check(input_series,
@@ -240,6 +240,8 @@ class ControlService(Node):
                 # ValueError can be raised by input_compatibility_check.
                 # This error is handled internally, so we pass here.
                 pass
+        else:
+            print("Not in idle mode. Current server call is ignored.")
         # Release the data pipeline.
         self.pipeline.set_cmd_mode("idle")
         self.rate.sleep()
@@ -299,27 +301,52 @@ class ControlService(Node):
         """
         Sets steps parameters of the ControlModel class.
         """
-        print("Enter step parameters in angle: inc_theta, inc_alpha, "
-              + "inc_pivot, sweep_theta, sweep_alpha, inc_tumble")
+        print("*"*72)
+        print("Current values of parameters:\n"+
+            f"theta_inc = {np.rad2deg(self.control.theta_step_inc)}\n"+
+            f"theta_rot_inc = {np.rad2deg(self.control.theta_rot_step_inc)}\n"+
+            f"alpha_inc = {np.rad2deg(self.control.alpha_step_inc)}\n"+
+            f"pivot_inc = {np.rad2deg(self.control.pivot_step_inc)}\n"+
+            f"sweep_theta = {np.rad2deg(self.control.sweep_theta)}\n"+
+            f"sweep_alpha = {np.rad2deg(self.control.sweep_alpha)}\n"+
+            f"tumble_inc = {np.rad2deg(self.control.tumble_step_inc)}")
+        regex = r'([+-]?\d+\.?\d*(, *| +)){6}([+-]?\d+\.?\d* *)'
         self.rate.sleep()
-        try:
-            if self.pipeline.cmd_mode != "idle":
-                # Do not change parameters while something going on.
-                raise ValueError
-            step_params=list(map(float,
-                               input("Enter values: ").strip().split(",")))[:6]
-            str_msg = ("[inc_theta, inc_alpha, inc_pivot, sweep_theta, "
-                   +"sweep_alpha, inc_tumble] = ["
-                   + ",".join(f"{elem:+07.2f}" for elem in step_params) + "]")
-            print(str_msg)
-            if len(step_params) != 6:
-                raise ValueError
-            # Use the parameters
-            self.control.set_steps(*step_params)
-        except Exception as exc:
-            print("Ooops! exception happened. Values are ignored.")
-            print("Exception details:")
-            print(type(exc).__name__,exc.args)
+        if self.pipeline.get_cmd_mode() == "idle":
+            try:
+                print("Enter new values, separated by comma or space.")
+                # Read user input.
+                in_str = input("Enter values: ").strip()
+                # Check if user input matches the template.
+                if re.fullmatch(regex,in_str) is None:
+                    raise ValueError
+                # Parse input and change parameter.
+                params = list(map(float,re.findall(r'[+-]?\d+\.?\d*',in_str)))
+                self.control.theta_step_inc = np.deg2rad(params[0])
+                self.control.theta_rot_step_inc = np.deg2rad(params[1])
+                self.control.alpha_step_inc = np.deg2rad(params[2])
+                self.control.pivot_step_inc = np.deg2rad(params[3])
+                self.control.sweep_theta = np.deg2rad(params[4])
+                self.control.sweep_alpha = np.deg2rad(params[5])
+                self.control.tumble_step_inc = np.deg2rad(params[6])
+                print("Parameters changed to:\n"+
+            f"theta_inc = {np.rad2deg(self.control.theta_step_inc)}\n"+
+            f"theta_rot_inc = {np.rad2deg(self.control.theta_rot_step_inc)}\n"+
+            f"alpha_inc = {np.rad2deg(self.control.alpha_step_inc)}\n"+
+            f"pivot_inc = {np.rad2deg(self.control.pivot_step_inc)}\n"+
+            f"sweep_theta = {np.rad2deg(self.control.sweep_theta)}\n"+
+            f"sweep_alpha = {np.rad2deg(self.control.sweep_alpha)}\n"+
+            f"tumble_inc = {np.rad2deg(self.control.tumble_step_inc)}")
+                self.rate.sleep()
+            except ValueError:
+                pass
+            except Exception as exc:
+                print("Ooops! exception happened. Values are ignored.")
+                print("Exception details:")
+                print(type(exc).__name__,exc.args)
+        else:
+            print("Not in idle mode. Current server call is ignored.")
+        print("*"*72)
         return response
 
 class MainExecutor(rclpy.executors.MultiThreadedExecutor):
