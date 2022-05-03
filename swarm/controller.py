@@ -469,6 +469,14 @@ class ControlModel():
             # Yield outputs.
             yield field_ang, self.get_state()
 
+    def rotation(self, theta: float):
+        """Rotates robots in place."""
+        for body_ang in self.step_theta(theta):
+            # Convert body ang to field_ang.
+            field_ang = self.angle_body_to_magnet(body_ang)
+            # Yield outputs.
+            yield field_ang, self.get_state() 
+
     def pivot_walking(self, theta: float, sweep: float, steps: int,
                                                          last_section = False,
                                                          line_up = True):
@@ -574,24 +582,22 @@ class ControlModel():
         # Compute current sweep angle.
         if n_steps > 0:
             d_step = input_cmd[0]/n_steps
-        else:
-            d_step = 0
-        sweep = np.arcsin(d_step/pivot_length)
-        # Do pivot walking.
-        if alternative:
-            for body_ang in self.pivot_walking_alt(input_cmd[1],sweep,
+            sweep = np.arcsin(d_step/pivot_length)
+            # Do pivot walking.
+            if alternative:
+                for body_ang in self.pivot_walking_alt(input_cmd[1],sweep,
                                                          n_steps,last_section):
-                # Convert body ang to field_ang.
-                field_ang = self.angle_body_to_magnet(body_ang)
-                # Yield outputs.
-                yield field_ang, self.get_state()
-        else:
-            for body_ang in self.pivot_walking(input_cmd[1],sweep,
+                    # Convert body ang to field_ang.
+                    field_ang = self.angle_body_to_magnet(body_ang)
+                    # Yield outputs.
+                    yield field_ang, self.get_state()
+            else:
+                for body_ang in self.pivot_walking(input_cmd[1],sweep,
                                                          n_steps,last_section):
-                # Convert body ang to field_ang.
-                field_ang = self.angle_body_to_magnet(body_ang)
-                # Yield outputs.
-                yield field_ang, self.get_state()
+                    # Convert body ang to field_ang.
+                    field_ang = self.angle_body_to_magnet(body_ang)
+                    # Yield outputs.
+                    yield field_ang, self.get_state()
 
     def line_input_compatibility_check(self, input_series: np.ndarray,
                                        alternative = True):
@@ -624,6 +630,10 @@ class ControlModel():
                     # This is tumbling.
                     for _ in self.tumbling(current_input, last_section):
                         pass
+                elif current_input_mode == 999:
+                     # This is rotation in place.
+                     for _ in self.rotation(current_input[1]):
+                         pass
                 else: 
                     # This is pivot walking mode.
                     # First check compatibility.
@@ -666,6 +676,9 @@ class ControlModel():
             elif current_input_mode == 0:
                 # This is tumbling.
                 yield from self.tumbling(current_input, last_section)
+            elif current_input_mode == 999:
+                # This is rotation in place.
+                yield from self.rotation(current_input[1])
             else: 
                 # This is pivot walking mode.
                 yield from self.feedforward_walk(current_input,
