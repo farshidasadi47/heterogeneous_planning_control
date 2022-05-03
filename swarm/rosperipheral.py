@@ -265,7 +265,12 @@ class ControlService(Node):
             try:
                 # Get the input.
                 print("Enter params: num_steps, starting_theta (in degrees)")
+                print("Enter \"q\" for quitting.")
                 in_str = input("Enter values: ").strip()
+                # Check if user requests quitting.
+                if re.match('q',in_str) is not None:
+                    print("Exitted \"service server\".")
+                    raise ValueError
                 # Check if user input matches the template.
                 if re.fullmatch(regex,in_str) is None:
                     print("Invalid input. Exitted service request.")
@@ -315,7 +320,12 @@ class ControlService(Node):
             try:
                 # Get the input.
                 print("Enter params: starting_mode, starting_theta.")
+                print("Enter \"q\" for quitting.")
                 in_str = input("Enter values: ").strip()
+                # Check if user requests quitting.
+                if re.match('q',in_str) is not None:
+                    print("Exitted \"service server\".")
+                    raise ValueError
                 # Check if user input matches the template.
                 if re.fullmatch(regex,in_str) is None:
                     print("Invalid input. Exitted service request.")
@@ -368,7 +378,12 @@ class ControlService(Node):
             try:
                 # Get the input.
                 print("Enter params: n_tumble, starting_mode, starting_theta.")
+                print("Enter \"q\" for quitting.")
                 in_str = input("Enter values: ").strip()
+                # Check if user requests quitting.
+                if re.match('q',in_str) is not None:
+                    print("Exitted \"service server\".")
+                    raise ValueError
                 # Check if user input matches the template.
                 if re.fullmatch(regex,in_str) is None:
                     print("Invalid input. Exitted service request.")
@@ -429,10 +444,16 @@ class ControlService(Node):
         if self.pipeline.get_cmd_mode() == "idle":
             try:
                 print("Enter new values, separated by comma or space.")
+                print("Enter \"q\" for quitting.")
                 # Read user input.
                 in_str = input("Enter values: ").strip()
+                # Check if user requests quitting.
+                if re.match('q',in_str) is not None:
+                    print("Exitted \"service server\".")
+                    raise ValueError
                 # Check if user input matches the template.
                 if re.fullmatch(regex,in_str) is None:
+                    print("Invalid input. Exitted service request.")
                     raise ValueError
                 # Parse input and change parameter.
                 params = list(map(float,re.findall(r'[+-]?\d+\.?\d*',in_str)))
