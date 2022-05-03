@@ -397,7 +397,8 @@ class ControlModel():
             # Lift down the robots.
             yield from self.step_alpha(0.0, self.tumble_step_inc)
     
-    def mode_changing(self, des_mode: int, des_ang: float, line_up = True):
+    def mode_changing(self, des_mode: int, des_ang: float,
+                            last_section = False, line_up = True):
         """
         High level command to change mode.
         @param: des_mode: describes the desired mode to go.
@@ -410,6 +411,9 @@ class ControlModel():
             field_ang = self.angle_body_to_magnet(body_ang)
             # Yield outputs.
             yield field_ang, self.get_state()
+        # Line up the robots, if this was last section.
+        if last_section is True:
+            yield from self.step_theta(des_ang)
     
     def step_tumble(self, input_cmd: np.ndarray,
                           last_section = False, line_up = True):
@@ -605,19 +609,19 @@ class ControlModel():
         # Reset states to their initial value in any condition.
         try: 
             for section in range(num_sections):
+                if section == (num_sections - 1):
+                    # If last section, robot will finally line up.
+                    last_section = True
                 current_input = input_series[section,:]
                 current_input_mode = int(current_input[2])
                 if current_input_mode < 0:
                     # This is mode change request.
                     cmd_mode = -current_input_mode
                     cmd_ang = current_input[1]
-                    for _ in  self.mode_changing(cmd_mode, cmd_ang):
+                    for _ in self.mode_changing(cmd_mode, cmd_ang,last_section):
                         pass
                 elif current_input_mode == 0:
                     # This is tumbling.
-                    if section == (num_sections - 1):
-                        # If last section, robot will finally line up.
-                        last_section = True
                     for _ in self.tumbling(current_input, last_section):
                         pass
                 else: 
@@ -628,10 +632,6 @@ class ControlModel():
                                 +" has incompatible mode")
                         raise ValueError(exc_msg)
                     # If no exception is occured, run the section.
-                    if section == (num_sections - 1):
-                        # If this is last section, robots will line up
-                        # in their commanded direction.
-                        last_section = True
                     for _ in self.feedforward_walk(current_input, last_section,
                                                                   alternative):
                         pass
@@ -653,24 +653,21 @@ class ControlModel():
         num_sections = input_series.shape[0]
         last_section = False
         for section in range(num_sections):
+            if section == (num_sections - 1):
+                    # If last section, robot will finally line up.
+                    last_section = True
             current_input = input_series[section,:]
             current_input_mode = int(current_input[2])
             if current_input_mode < 0:
                 # This is mode change request.
                 cmd_mode = -current_input_mode
                 cmd_ang = current_input[1]
-                yield from self.mode_changing(cmd_mode, cmd_ang)
+                yield from self.mode_changing(cmd_mode, cmd_ang, last_section)
             elif current_input_mode == 0:
                 # This is tumbling.
-                if section == (num_sections - 1):
-                    # If last section, robot will finally line up.
-                    last_section = True
                 yield from self.tumbling(current_input, last_section)
             else: 
                 # This is pivot walking mode.
-                if section == (num_sections - 1):
-                    # If last section, robot will finally line up.
-                    last_section = True
                 yield from self.feedforward_walk(current_input,
                                                       last_section,alternative)
 
