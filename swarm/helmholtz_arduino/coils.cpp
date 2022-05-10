@@ -27,15 +27,15 @@ void set_coil(float voltage_percentage){
     // Sets voltage of the given coil.
     // Input: voltage_percentage, voltage applied in terms of max voltage.
     // Output: None.
-
+    float deadband = .01;
     // Set the current direction.
-    if (voltage_percentage>0){
+    if (voltage_percentage>deadband){
         // Saturate percentage.
         if (voltage_percentage>100){voltage_percentage=100;}
         // Flow from A to B.
         digitalWrite(INA,HIGH);
         digitalWrite(INB,LOW);
-    }else if (voltage_percentage<0){
+    }else if (voltage_percentage<-deadband){
         // Saturate percentage.
         if (voltage_percentage<(-100)){voltage_percentage=(-100);}
         // Flow from B to A.
@@ -64,16 +64,16 @@ void set_magnetic_field(float theta, float alpha, float power_percentage){
     theta = theta*PI/180;
     alpha = alpha*PI/180;
     // Convert Spherical to cartesian, considering magnetic correction.
-    // x coordinate, m2, middle coil, +x when corrent flows B to A.
-    float ex = power_percentage*cos(alpha)*cos(theta)*m2_correction_factor;
-    // y coordinate, m3, big coil,    +y when current flows B to A.
-    float ey = power_percentage*cos(alpha)*sin(theta)*m3_correction_factor;
+    // x coordinate, m2, middle coil, +x when corrent flows A to B.
+    float ex = power_percentage*cos(alpha)*cos(theta)*m1_correction_factor;
+    // y coordinate, m3, big coil,    +y when current flows A to B.
+    float ey = power_percentage*cos(alpha)*sin(theta)*m2_correction_factor;
     // z coordinate, m1, small coil,  +z when current flows A to B.
-    float ez = power_percentage*sin(alpha)*m1_correction_factor;
+    float ez = power_percentage*sin(alpha)*m3_correction_factor;
     // Apply the voltages.
-    set_coil<INA1, INB1, PWM1>(ez);
-    set_coil<INB2, INA2, PWM2>(ex);
-    set_coil<INB3, INA3, PWM3>(ey);
+    set_coil<INA1, INB1, PWM1>(ex);
+    set_coil<INA2, INB2, PWM2>(ey);
+    set_coil<INA3, INB3, PWM3>(ez);
 
     return;
 }
