@@ -649,7 +649,8 @@ class ControlModel():
             # Reset the states to its initials.
             self.reset_state(*states)
 
-    def feedforward_line(self, input_series:np.ndarray, alternative = True):
+    def feedforward_line(self, input_series:np.ndarray,
+                               alternative = True, has_last_section = True):
         """
         Generates magnetic field angles and state transition of the
         milli-robots, to execute a series of linear input commands
@@ -664,8 +665,8 @@ class ControlModel():
         last_section = False
         for section in range(num_sections):
             if section == (num_sections - 1):
-                    # If last section, robot will finally line up.
-                    last_section = True
+                # If last section, robot will finally line up.
+                last_section = has_last_section
             current_input = input_series[section,:]
             current_input_mode = int(current_input[2])
             if current_input_mode < 0:

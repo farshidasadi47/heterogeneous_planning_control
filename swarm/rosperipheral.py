@@ -150,6 +150,8 @@ class ControlService(Node):
         self.__add_service_server(Empty,'set_idle', self.__set_idle_server_cb)
         self.__add_service_server(Empty,'/feedfrwd_input',
                                                self.__feedfrwd_input_server_cb)
+        self.__add_service_server(Empty,'/feedfrwd_single',
+                                              self.__feedfrwd_single_server_cb)
         self.__add_service_server(Empty,'/pivot_walking',
                                                 self.__pivot_walking_server_cb)
         self.__add_service_server(Empty,'/mode_change',
@@ -243,6 +245,68 @@ class ControlService(Node):
             except ValueError:
                 # ValueError can be raised by input_compatibility_check.
                 # This error is handled internally, so we pass here.
+                pass
+        else:
+            print("Not in idle mode. Current server call is ignored.")
+        # Release the data pipeline.
+        self.pipeline.set_cmd_mode("idle")
+        self.rate.sleep()
+        return response
+
+    def __feedfrwd_single_server_cb(self, request, response):
+        """
+        This service calls feedforward_line function of ControlModel
+         class and executes a given input_series in single_step mode.
+        """
+        input_series = np.array([[50,0,1],
+                                 [12,np.pi/2,-2],
+                                 [12*4,np.pi,0],
+                                 [50,-np.pi/2,2],
+                                 [12,-np.pi/2,-1]])
+        regex = r'^q'
+        msg_str = "Enter \"q\" for quitting, anything else for proceeding: "
+        num_sections = input_series.shape[0]
+        last_section = False
+        # Check if we are not in the middle of another service that 
+        # calls data pipeline, If we are, ignore this service call.
+        interactive = True
+        if self.pipeline.get_cmd_mode() == "idle":
+            try:
+                # Compatibility check,raises ValueError if incompatible.
+                self.control.line_input_compatibility_check(input_series,
+                                                            interactive)
+                for section in range(num_sections):
+                    if section == (num_sections - 1):
+                        # If last section,call with robot final line up.
+                        last_section = True
+                    # Print current section.
+                    current_input = input_series[[section],:]
+                    input_str = ",".join(f"{elem:+07.2f}"
+                                                for elem in current_input[0,:])
+                    print('Current section input: ' + input_str)
+                    # Get the input.
+                    in_str = input(msg_str).strip()
+                    # Check if user requests quitting.
+                    if re.fullmatch(regex,in_str) is not None:
+                        print("Exitted \"service server\".")
+                        break
+                    # Change command mode.
+                    self.pipeline.set_cmd_mode("server")
+                    self.rate.sleep()
+                    # Execute main controller and update pipeline.
+                    for field, states in self.control.feedforward_line(
+                                       current_input,interactive,last_section):
+                        self.pipeline.set_cmd(np.array([*field,100.0]), states)
+                        self.rate.sleep()
+                    # set command to zero
+                    self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                    # Release the data pipeline.
+                    self.pipeline.set_cmd_mode("idle")
+                    self.rate.sleep()
+            except Exception as exc:
+                print("Ooops! exception happened. Values are ignored.")
+                print("Exception details:")
+                print(type(exc).__name__,exc.args)
                 pass
         else:
             print("Not in idle mode. Current server call is ignored.")
