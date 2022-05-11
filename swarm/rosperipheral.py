@@ -219,7 +219,7 @@ class ControlService(Node):
          class and executes a given input_series.
         """
         input_series = np.array([[10,0,1],
-                                 [6.5*3,np.pi/2,0],
+                                 [6.5*3,np.pi/2,-2],
                                  [10,0,2],
                                  [6.5,0,0]])
         # Check if we are not in the middle of another service that 

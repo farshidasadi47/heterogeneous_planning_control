@@ -413,7 +413,11 @@ class ControlModel():
             yield field_ang, self.get_state()
         # Line up the robots, if this was last section.
         if last_section is True:
-            yield from self.step_theta(des_ang)
+            for body_ang in self.step_theta(des_ang):
+                # Convert body ang to field_ang.
+                field_ang = self.angle_body_to_magnet(body_ang)
+                # Yield outputs.
+                yield field_ang, self.get_state()
     
     def step_tumble(self, input_cmd: np.ndarray,
                           last_section = False, line_up = True):
