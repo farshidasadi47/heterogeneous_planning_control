@@ -2,7 +2,6 @@ test.*
 test*.*
 test/
 result_sim/
-rosws/
 
 .vscode/
 ########## python .gitignore ###########################################

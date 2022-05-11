@@ -29,8 +29,8 @@ def consequtive(letters, pivot_separation, delay):
         xf = values[i+1]
         # Set up and solve the current step.
         planning = planner.Planner(swarm, n_outer = outer)
-        planning.get_optimization(solver_name='knitro', boundary=False)
-        sol, U_sol, X_sol, P_sol, UZ, U, X = planning.solve_optimization(xf,boundary)
+        planning.get_optimization(solver_name='knitro', boundary=boundary)
+        sol, U_sol, X_sol, P_sol, UZ, U, X = planning.solve_optimization(xf)
         # Append current section plan
         UTOT += [U]
         if delay >0:
@@ -64,6 +64,9 @@ if __name__ == '__main__':
     swarm_specs=model.SwarmSpecs(pivot_separation, 5, 10)
     swarm = model.Swarm(xi, angle, mode, swarm_specs)
     
+    # planning = planner.Planner(swarm, n_outer = outer)
+    # solver = planning.get_optimization(solver_name='knitro', boundary=boundary)
+    # sol, U_sol, X_sol, P_sol, UZ, U, X = planning.solve_optimization(xf)
     # swarm.reset_state(xi,0,1)
     anim =swarm.simanimation(U,10000,boundary=boundary,last_section=last_section,save =False)
     
