@@ -1,10 +1,14 @@
+#%%
 ########################################################################
 # This files hold classes and functions that simulates the milirobot 
 # system.
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
 import os
+from itertools import combinations
+from collections import deque
 from math import remainder
+
 import numpy as np
 np.set_printoptions(precision=4, suppress=True)
 import matplotlib.pyplot as plt
@@ -26,25 +30,25 @@ def wrap(angle):
 class SwarmSpecs:
     """This class stores specifications of swarm of milirobots."""
     
-    def __init__(self,
-                pivot_seperation: np.array,
-                rotation_distance,
-                tumbling_distance):
-        if (pivot_seperation.ndim != 2):
-            raise ValueError('pivot_seperation should be a 2D numpy array')
-        if (pivot_seperation.shape[0]%2 != 0):
-            print("Control algorithm is designed for robots with even sides.")
-        self.n_mode = pivot_seperation.shape[0] + 1
-        self.n_robot = pivot_seperation.shape[1]
-        self.pivot_seperation = np.vstack((np.ones(self.n_robot),
-                                           pivot_seperation.astype(float)))
-        self.rotation_distance = rotation_distance
-        self.tumbling_distance = tumbling_distance
-        self.beta = np.zeros_like(self.pivot_seperation)
+    def __init__(self, pivot_length: np.array, tumbling_length,*,
+                      theta_inc = np.deg2rad(5), alpha_inc = np.deg2rad(5),
+                      rot_inc = np.deg2rad(5), pivot_inc = np.deg2rad(5),
+                      tumble_inc = np.deg2rad(2), theta_sweep = np.deg2rad(30),
+                      alpha_sweep = np.deg2rad(30)):
+        msg = '\"pivot_length\" should be a 2D numpy array.'
+        assert pivot_length.ndim == 2, msg
+        msg = "Robots should have even number of sides."
+        assert pivot_length.shape[0]%2 == 0, msg
+        self.n_mode = pivot_length.shape[0] + 1
+        self.n_robot = pivot_length.shape[1]
+        self.pivot_length = np.vstack((np.ones(self.n_robot)*tumbling_length,
+                                       pivot_length.astype(float)))
+        self.tumbling_length = tumbling_length
+        self.beta = np.zeros_like(self.pivot_length)
         # beta := pivot_seperation_robot_j/pivot_seperation_robot_1
         for mode in range(self.n_mode):
-            self.beta[mode,:] = (self.pivot_seperation[mode,:]
-                                 /self.pivot_seperation[mode,0])
+            self.beta[mode,:] = (self.pivot_length[mode,:]
+                                 /self.pivot_length[mode,0])
         self.B = np.zeros((self.n_mode,2*self.n_robot,2))
         for mode in range(self.n_mode):
             for robot in range(self.n_robot):
@@ -59,76 +63,125 @@ class SwarmSpecs:
             angle = i*self.rot_inc
             self.mode_rel_ang.append(angle)
         # Mode change distances relative to current mode.
-        self.mode_distance = [0]
+        self.mode_rel_length = [0]
         for i in range(1,self.n_mode-1):
-            dist = (self.tumbling_distance
+            dist = (self.tumbling_length
                    *np.sqrt(2-2*np.cos(self.mode_rel_ang[i])))/2
-            self.mode_distance.append(dist)
-        # Angles to put the robot before mode change.
-        # space boundaries
+            self.mode_rel_length.append(dist)
+        # Space boundaries
         self.ubx = 120
         self.uby = 95
-        
+        self.lbx = -self.ubx
+        self.lby = -self.uby
+        self.rcoil = 120
+        # Some parameters related to planning
+        self.robot_pairs = list(combinations(range(self.n_robot),2))
+        self.d_min = self.tumbling_length*1.5
+        # Adjusted space boundaries for planning.
+        self.ubsx = self.ubx-self.tumbling_length*1.75
+        self.lbsx = -self.ubsx
+        self.ubsy = self.uby - self.tumbling_length*1.75
+        self.lbsy = -self.ubsy
+        self.rscoil = self.rcoil - self.tumbling_length
+        # Plotting and vision markers.
+        self._colors = ['k','r','b','g','m','y','c']
+        self._markers = ['o','s','P','h','*','+','x','d']
+        # Experimental execution parameters.
+        self.theta_inc = theta_inc
+        self.alpha_inc = alpha_inc
+        self.rot_inc = rot_inc
+        self.pivot_inc = pivot_inc
+        self.tumble_inc = tumble_inc
+        self.theta_sweep = theta_sweep
+        self.alpha_sweep = alpha_sweep
 
+    @classmethod
+    def robo3(cls):
+        pivot_length = np.array([[9,7,5],[7,5,9]])
+        return cls(pivot_length, 10)
+    
+    @classmethod
+    def robo4(cls):
+        pivot_length = np.array([[9,7,5,3],[7,5,3,9],[5,3,9,7],[3,9,7,5]])
+        return cls(pivot_length,10)
+
+    @classmethod
+    def robo5(cls):
+        pivot_length = np.array([[11,9,7,5,3],[9,7,5,3,11],
+                                 [7,5,3,11,9],[5,3,11,9,7],[3,11,9,7,5]])
+        return cls(pivot_length,10)
+    
 class Swarm:
     """This class holds current state of swarm of milirobots."""
     
     def __init__(self, position, angle, mode, specs: SwarmSpecs):
         self.specs = specs
         self.reset_state(position, angle, mode)
-        self.__plot_colors = None
-        self.__plot_markers = None
-        self.__simulate_result = None
+        self._simulate_result = None
 
-    def reset_state(self,position, angle, mode):
-        if (position.shape[0]//2 != self.specs.n_robot):
-            error_message = """Position does not match number of the robots."""
-            raise ValueError(error_message)
+    def reset_state(self, position, angle, mode):
+        msg = "Position does not match number of the robots in spec."
+        assert (position.shape[0]//2 == self.specs.n_robot), msg
         self.position = position
         self.angle = angle
         self.mode = mode
+        self.update_mode_sequence(mode)
+    
+    def update_mode_sequence(self,mode: int):
+        self.mode_sequence = deque(range(1,self.specs.n_mode))
+        self.mode_sequence.rotate(-mode+1)
 
-    def update_state(self, u, is_rotation = False):
-        """This function updates the position, angle, and mode of swarm
-        of milirobots based on given input and mode.
-        The function receives up to two inputs.
-        u: a numpy array as [r,theta]
-           r:     distance to travel
-           theta: angle to travel
-        is_rotation: is an optional input that represents an intention
-        to travel in rotation mode.
+    def update_state(self, u: np.ndarray, mode: int):
         """
+        This function updates the position, angle, and mode of swarm
+        of milirobots based on given input.
+        ----------
+        Parameters
+        ----------
+        u: numpy.ndarray
+           A numpy array as [r,theta]
+           r:     Distance to travel
+           theta: Angle to travel
+        mode: int
+              The mode motion is performed.
+        """
+        n_mode = self.specs.n_mode
         u = u.astype(float)
-        rotations = 0
-        B = self.specs.B
-        if is_rotation is False:
-            mode = self.mode
-        else:
-            mode = 0
-
         r = u[0]
         theta = u[1]
-        # determine number of rotations, if any, and then update r
-        if mode == 0:
-            # If the movement is in rotation mode, r should be
-            # an integer multiple of rotation_distance
-            rotations = np.floor(r/self.specs.rotation_distance)
-            r = rotations*self.specs.rotation_distance
-
+        mode = int(mode)
+        # Modify input based on requested motion mode.
+        if mode < 0:
+            # Mode change, r is irrelevant in this case.
+            rel_mode_index = self.mode_sequence.index(-mode)
+            r = self.specs.mode_rel_length[rel_mode_index]
+            B = self.specs.B[0,:,:]
+            self.update_mode_sequence(-mode)
+            self.mode = -mode
+        elif mode == 0:
+            # Tumbling. Modify based on tumbling distance.
+            rotations = np.round(r/self.specs.tumbling_length).astype(int)
+            r = rotations*self.specs.tumbling_length
+            B = self.specs.B[mode,:,:]
+            # Update mode if needed.
+            if rotations%2:
+                self.update_mode_sequence(self.mode_sequence[n_mode//2])
+                self.mode = self.mode_sequence[0]
+        else:
+            # Pivot walking
+            B = self.specs.B[mode,:,:]
+        # Convert input to cartesian.
         u[0] = r*np.cos(theta)
         u[1] = r*np.sin(theta)
         # Update states of swarm of milirobots
-        self.position = self.position + np.dot(B[mode,:,:],u)
+        self.position = self.position + np.dot(B,u)
         self.angle = theta
-        if mode == 0:
-            # If there are rotations, calculate mode after rotations.
-            self.mode = int((self.mode + rotations - 1)%(self.specs.n_mode - 1) + 1)
-    
+
     def simulate(self, input_series, position = None,
                  angle = None, mode = None):
         """Simulates the swarm for a given logical series of input."""
-        if (input_series.ndim != 2):
-            raise ValueError('Input series should be a 2D numpy array')
+        msg = 'Input series should be a 2D numpy array.'
+        assert (input_series.ndim == 2), msg
         if position is None:
             position = self.position
         if angle is None:
@@ -141,82 +194,43 @@ class Swarm:
         Angle = self.angle
         Mode = self.mode
         Input = np.array([], dtype=float).reshape(input_series.shape[0],0)
-
+        # Execute input section by secton.
         for section in range(input_series.shape[1]):
-            current_input_mode = input_series[2,section]
-            if current_input_mode == 0:
-                is_rotation = True
-            else: 
-                is_rotation = False
-                if current_input_mode != self.mode:
-                    print("Input series section: {:02d} has incompatible mode".
-                          format(section + 1))
+            cmd_mode = int(input_series[2,section])
+            cmd_r = input_series[0,section]
+            cmd_angle = input_series[1,section]
+            # Determine stepping parameters.
+            if cmd_mode < 0:
+                # Mode_change. Done in one step. The r is irrelevant.
+                steps = np.array([cmd_r])
+            else:
+                if cmd_mode>0 and cmd_mode != self.mode:
+                    print(f"Input series section: "
+                         +f"{section+1:02d} has incompatible mode.")
                     break
-            current_r = input_series[0,section]
-            current_angle = input_series[1,section]
-            steps = int(current_r//self.specs.rotation_distance)
-            rem_r =  current_r%self.specs.rotation_distance
+                steps = np.arange(0,cmd_r,self.specs.tumbling_length)
+                steps = np.append(steps, cmd_r)
+                steps = np.diff(steps)
+                if steps.size == 0: # This lets simulate zero inputs.
+                    steps = np.array([0])
             # Implementing current input section in smaller steps
-            for step in range(1,steps+1):
-                step_input = np.array([self.specs.rotation_distance,
-                                       current_angle, current_input_mode]).T
+            for step in steps:
+                step_input = np.array([step,cmd_angle, cmd_mode]).T
                 Input = np.hstack((Input,step_input.reshape(-1,1)))
                 # Applying current step
-                self.update_state(step_input[:2], is_rotation)
+                self.update_state(step_input[:2], step_input[2])
                 Position = np.hstack((Position,self.position.reshape(-1,1)))
                 Angle = np.hstack((Angle,self.angle))
                 Mode = np.hstack((Mode,self.mode))
-            # Implementing remainder of section
-            step_input = np.array([rem_r,
-                                   current_angle, current_input_mode]).T
-            Input = np.hstack((Input,step_input.reshape(-1,1)))
-
-            self.update_state(step_input[:2], is_rotation)
-            Position = np.hstack((Position,self.position.reshape(-1,1)))
-            Angle = np.hstack((Angle,self.angle))
-            Mode = np.hstack((Mode,self.mode))
-            """ # Changing to next mode if needed
-            if (section+1 < input_series.shape[1]):
-                # If this is not last section.
-                if (current_input_mode != input_series[2, section +1] and
-                    input_series[2, section +1] != 0):
-                    # If there was a mode change, go to next mode.
-                    is_rotation = True
-                    step_input = np.array([self.specs.rotation_distance,
-                                           current_angle, 0]).T
-                    Input = np.hstack((Input,step_input.reshape(-1,1)))
-                    self.update_state(step_input[:2], is_rotation)
-                    Position = np.hstack((Position,
-                                          self.position.reshape(-1,1)))
-                    Angle = np.hstack((Angle,self.angle))
-                    Mode = np.hstack((Mode,self.mode)) """
+        # Find the indexes where mode change happened.
         mode_change_index = np.where(Input[2,:-1] != Input[2,1:])[0]+1
         mode_change_index = np.concatenate(([0],mode_change_index,
                                             [Position.shape[1]-1]))
-        self.__simulate_result = (Position, Angle, Mode,
+        self._simulate_result = (Position, Angle, Mode,
                                   Input, mode_change_index)
-    
-    def simulate_simple(self, input_series):
-        """Simulates the swarm for a given simple series of input."""
-        if (input_series.ndim != 2):
-            raise ValueError('Input series should be a 2D numpy array')
-        
-        Position = self.position.reshape(-1,1)
-        U = input_series[:2.:]
-        X = np.zeros_like(U)
-        X[:,0] = Position
-        
-        for i in range(input_series.shape[1]-1):
-            mode = input_series[2,i]
-            X[:,i+1] = X[:,i] + np.dot(self.specs.B[mode,:,:],U[:,i])
-        
-        return X, U
 
-    
-    def __simplot_set(self, ax, boundary = False):
+    def _simplot_set(self, ax, boundary = False):
         """Sets the plot configuration. """
-        self.__colors = ['k','r','b','g','m','y','c',]
-        self.__markers = ['o','s','P','h','*','+','x','d']
         if boundary is True:
             ax.set_ylim([-self.specs.uby,self.specs.uby])
             ax.set_xlim([-self.specs.ubx,self.specs.ubx])
@@ -225,28 +239,46 @@ class Swarm:
         ax.set_ylabel('y axis')
         ax.set_aspect('equal', adjustable='box')
         ax.grid()
-    
-    def __simplot_plot(self, ax, plot_length, last_section = False):
+
+    def _simplot_plot(self, ax, plot_length, last_section = False):
         """Plots the result of simulation for the given length."""
-        tumbling_distance = self.specs.tumbling_distance
+        tumbling_length = self.specs.tumbling_length
+        # Geometry of robot symbols.
+        aspect_ratio = 2
+        h = np.sqrt(tumbling_length**2/(aspect_ratio**2+1))
+        w = aspect_ratio*h
         # Get the simulation results.
         (Position, Angle, Mode, Input,
-         mode_change_index) = self.__simulate_result
-        # Draw initial positions and hold it
+         mode_change_index) = self._simulate_result
+        # Draw initial positions and hold it.
         for robot in range(self.specs.n_robot):
-            current_mode = Input[2,0].astype(int)
+            cmd_mode = Input[2,0].astype(int)
+            if cmd_mode <0:
+                cmd_mode = 0
+            cmd_ang = Input[1,0] - np.pi/2
             ax.plot(Position[2*robot,0],
                     Position[2*robot+1,0],
-                    color = self.__colors[current_mode],
-                    marker = self.__markers[robot],
+                    color = self.specs._colors[cmd_mode],
+                    marker = self.specs._markers[robot],
                     linewidth=1,
                     markerfacecolor='none')
+            # Draw a rectangle as the robot.
+            x = -(w*np.cos(cmd_ang) - h*np.sin(cmd_ang))/2
+            y = -(w*np.sin(cmd_ang) + h*np.cos(cmd_ang))/2
+            rect = plt.Rectangle([Position[2*robot,0] + x,
+                                 Position[2*robot+1,0] + y] ,
+                                 width = w,
+                                 height = h,
+                                 angle = np.rad2deg(cmd_ang),
+                                 linestyle='--', linewidth=0.5,
+                                 edgecolor='k', facecolor = "None")
             # Draw circle bounding the robots
             circle = plt.Circle([Position[2*robot,0],
                                  Position[2*robot+1,0]],
-                                 radius=tumbling_distance/2,
+                                 radius=tumbling_length/2,
                                  linestyle='--', linewidth=0.5,
                                  edgecolor='k', facecolor = "None")
+            ax.add_patch(rect)
             ax.add_patch(circle)
         # Draw the rest till reacing given plot length.
         for robot in range(self.specs.n_robot):
@@ -266,37 +298,56 @@ class Swarm:
                 if last_section == False:
                     # If 'last_section' is set to False, all path
                     # will be drawn.
-                    current_mode = Input[2,start_index].astype(int)
+                    cmd_mode = Input[2,start_index].astype(int)
+                    if cmd_mode <0:
+                        cmd_mode = 0
                     ax.plot(Position[2*robot,start_index:end_index+1],
                             Position[2*robot+1,start_index:end_index+1],
-                            color = self.__colors[current_mode],
-                            marker = self.__markers[robot],
+                            color = self.specs._colors[cmd_mode],
+                            marker = self.specs._markers[robot],
                             linewidth=1,
                             markerfacecolor='none')
             # Plot last section
             label = "robot: {:1d}".format(robot)
-            current_mode = Input[2,start_index].astype(int)
+            cmd_mode = Input[2,start_index].astype(int)
+            if cmd_mode <0:
+                cmd_mode = 0
+            cmd_ang = Input[1,min(end_index, Input.shape[1]-1)] - np.pi/2
             ax.plot(Position[2*robot,start_index:end_index+1],
                     Position[2*robot+1,start_index:end_index+1],
-                    color = self.__colors[current_mode],
-                    marker = self.__markers[robot],
+                    color = self.specs._colors[cmd_mode],
+                    marker = self.specs._markers[robot],
                     linewidth=1,
                     label = label,
                     markerfacecolor='none')
+            # Draw a rectangle as the robot.
+            x = -(w*np.cos(cmd_ang) - h*np.sin(cmd_ang))/2
+            y = -(w*np.sin(cmd_ang) + h*np.cos(cmd_ang))/2
+            rect = plt.Rectangle([Position[2*robot,end_index] + x,
+                                 Position[2*robot+1,end_index] + y] ,
+                                 width = w,
+                                 height = h,
+                                 angle = np.rad2deg(cmd_ang),
+                                 edgecolor='k', facecolor = "None")
             # Draw circle bounding the robots
             circle = plt.Circle([Position[2*robot,end_index],
                                  Position[2*robot+1,end_index]],
-                                 radius=tumbling_distance/2,
+                                 radius=tumbling_length/2,
                                  edgecolor='k', facecolor = "None")
+            ax.add_patch(rect)
             ax.add_patch(circle)
         # Draw usable space boundaries
-        rectangle = plt.Rectangle([-(self.specs.ubx-tumbling_distance/2),
-                                   -(self.specs.uby-tumbling_distance/2)],
-                                  2*(self.specs.ubx-tumbling_distance/2),
-                                  2*(self.specs.uby-tumbling_distance/2),
+        rectangle = plt.Rectangle([-(self.specs.ubx-tumbling_length/2),
+                                   -(self.specs.uby-tumbling_length/2)],
+                                  2*(self.specs.ubx-tumbling_length/2),
+                                  2*(self.specs.uby-tumbling_length/2),
                                   linestyle='--', linewidth=1,
                                   edgecolor='k', facecolor='none')
+        coil = plt.Circle((0,0),radius=self.specs.rcoil,
+                                linestyle='--', linewidth=1,
+                                edgecolor='k', facecolor='none')
         ax.add_patch(rectangle)
+        ax.add_patch(coil)
         ax.legend(handlelength=0)
         plt.show()
 
@@ -320,15 +371,15 @@ class Swarm:
         self.simulate(input_series)
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
-        self.__simplot_set(ax, boundary)
+        self._simplot_set(ax, boundary)
         # plot the figure
-        self.__simplot_plot(ax, plot_length, last_section)
+        self._simplot_plot(ax, plot_length, last_section)
         return fig, ax
     
-    def __animate(self, i, ax, boundary, last_section):
+    def _animate(self, i, ax, boundary, last_section):
         ax.clear()
-        self.__simplot_set(ax, boundary)
-        self.__simplot_plot(ax, i, last_section)
+        self._simplot_set(ax, boundary)
+        self._simplot_plot(ax, i, last_section)
         return ax
 
     def simanimation(self,input_series, anim_length = 10000,
@@ -348,12 +399,12 @@ class Swarm:
         self.reset_state(position, angle, mode)
         # Simulate the system
         self.simulate(input_series)
-        anim_length = min(anim_length, self.__simulate_result[0].shape[1])
+        anim_length = min(anim_length, self._simulate_result[0].shape[1])
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
-        self.__simplot_set(ax, boundary)
+        self._simplot_set(ax, boundary)
         # Animating
-        anim = animation.FuncAnimation(fig, self.__animate,
+        anim = animation.FuncAnimation(fig, self._animate,
                                        fargs=(ax,boundary,last_section),
                                    interval=250, frames=range(1,anim_length+1))
         # Saving animation.
@@ -380,36 +431,32 @@ class Swarm:
 
 ########## test section ################################################
 if __name__ == '__main__':
-    swarm_specs = SwarmSpecs(np.array([[9,7,5,3],[3,5,7,9],[3,2,6,9]]), 5, 10)
+    swarm_specs = SwarmSpecs(np.array([[10,8,6,4],[8,6,4,10],[6,4,10,8],[4,10,8,6]]), 10)
     swarm = Swarm(np.array([0,0,10,0,20,0,30,0]), 0, 1, swarm_specs)
     #input_series = np.array([[100,np.pi/4,1]]).T
-    input_series = np.array([[50,np.pi/4,1],
-                             [100,-np.pi/2,1],
-                             [5,-np.pi/2,0],
-                             [20,np.pi,2],
-                             [5,np.pi,0],
-                             [25,np.pi/2,3],
-                             [5,np.pi/2,0],
-                             [20,np.pi,1],
-                             ]).T
-    #sim = swarm.simulate(input_series)
-    #print(swarm.specs.pivot_seperation)
+    input_series = np.array([[50,np.pi/2,1],
+                                [100,0,1],
+                                [10,-np.pi/2,-2],
+                                [20,np.pi,2],
+                                [10,np.pi,-3],
+                                [25,np.pi/2,3],
+                                [10*9,np.pi/2,0],
+                                [20,np.pi,1],
+                                [20,np.pi,-4],
+                                ]).T
+    #swarm.simulate(input_series)
+    #print(swarm.specs.pivot_length)
     #print(swarm.specs.beta)
     #print(swarm.specs.B)
     #print(swarm.mode)
     #print(swarm.specs.beta)
-    #print(sim[4])
-    #print(sim[0][:,sim[4]].T)
-    #print(sim[3][:,sim[4]].T)
-    #print(sim[0][:,[19,20,21,22]].T)
-    #print(sim[4])
-    #print(np.floor(swarm.specs.rotation_distance/swarm.specs.rotation_distance))
-    #print(sim[0][:,-1])
-    #swarm.reset_state(sim[0][:,-1], sim[1][-1],sim[2][-1])
-    #u = np.array([swarm.specs.rotation_distance,swarm.angle,0])
-    #swarm.update_state(u[:2],True)
-    #print(swarm.position)
     length = 10000
-    swarm.simplot(input_series,length, boundary=True, last_section=False)
-    #print(swarm.__simulate_result[0][:,swarm.__simulate_result[4]].T)
-    #anim = swarm.simanimation(input_series,length,boundary=True, last_section=True, save = False)
+    #swarm.simplot(input_series,length, boundary=False, last_section=False)
+    #print(swarm._simulate_result[0][:,swarm._simulate_result[4]].T)
+    anim = swarm.simanimation(input_series,length,boundary=False, last_section=True, save = False)
+    #sim = swarm._simulate_result # (Position, Angle, Mode,Input, mode_change_index)
+    #print(sim[0].T)
+    #print(sim[1])
+    #print(sim[2])
+    #print(sim[3].shape)
+    #print(sim[4])
