@@ -30,6 +30,8 @@ class Localization():
         self._roi = None
         if save_image:
             self._save_image()
+        else:
+            self._calibrate()
 
     def _set_camera_settings(self):
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._w)
@@ -98,6 +100,75 @@ class Localization():
         finally:
             self.cap.release()
             cv2.destroyWindow("img")
+    
+    def _calibrate(self):
+        """
+        Uses a chess board to calibrate the camera and remove distortion.
+        """
+        n_row, n_col = 6, 7  # Change this based on your chessboard.
+        # First try to read calibration image files.
+        img_dir_prefix = self._img_dir_prefix
+        img_name_prefix = self._img_name_prefix
+        img_directory = os.path.join(os.getcwd(),img_dir_prefix)
+        img_path = os.path.join(img_directory,"*.jpg")
+        # termination criteria
+        criteria=(cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+        # prepare object points, like (0,0,0), (1,0,0), ...,(6,5,0)
+        objp = np.zeros((n_row*n_col,3), np.float32)
+        objp[:,:2] = np.mgrid[0:n_row,0:n_col].T.reshape(-1,2)
+        # Arrays to store object points and image points.
+        objpoints = [] # 3d point in real world space
+        imgpoints = [] # 2d points in image plane.
+        try:
+            images = glob.glob(img_path)
+            if not len(images):
+                raise IOError
+            for fname in images:
+                img = cv2.imread(fname)
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                # Find the chess board corners
+                ret, corners=cv2.findChessboardCorners(gray,(n_row,n_col),None)
+                # If found, add object points, image points.
+                if ret == True:
+                    objpoints.append(objp)
+                    corners2 = cv2.cornerSubPix(gray,corners, (11,11),
+                                                             (-1,-1), criteria)
+                    imgpoints.append(corners2)
+            # Get calibration parameters.
+            ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints,
+                                                            imgpoints,
+                                                            gray.shape[::-1],
+                                                            None, None)
+            self._mtx = mtx
+            self._dist = dist
+            h, w = self._h, self._w
+            nmtx,roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h), 1, (w,h))
+            self._nmtx = nmtx
+            self._roi = roi
+
+        except IOError:
+            print("Ooops! calibration images are not found in:")
+            print(os.path.join(".",img_dir_prefix,img_name_prefix,"ij.jpg"))
+            print("Initialize class with \"save_image = True\".")
+        except KeyboardInterrupt:
+            print("Interrupted by user.")
+            pass
+        except Exception as exc:
+            print("Ooops! exception happened.")
+            print("Exception details:")
+            print(type(exc).__name__,exc.args)
+            pass
+        finally:
+            cv2.destroyAllWindows()
+    
+    def _undistort(self, img, crop = True):
+        # undistort
+        dst = cv2.undistort(img, self._mtx, self._dist, None, self._nmtx)
+        # crop the image
+        if crop:
+            x, y, w, h = self._roi
+            dst = dst[y:y+h, x:x+w]
+        return dst
 ########## test section ################################################
 if __name__ == '__main__':
     camera = Localization()
