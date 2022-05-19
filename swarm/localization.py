@@ -5,29 +5,37 @@
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
 import os
+import sys
 import time
 import glob
 
 import numpy as np
+import matplotlib.pyplot as plt
 import cv2
 
 ########## classes and functions #######################################
 class Localization():
     """
-    This class holds methods to localize robots on the plane.
+    This class holds methods to localize robots on the workspace.
+    To find robots, different colors are used for them. Camera frames
+    are filterred based on specific color ranges to localize robots.
     """
     def __init__(self, save_image = False):
-        self.camera_matrix = None
-        self.cap = cv2.VideoCapture(0)
-        self._h = 480
-        self._w = 640
+        self.cap = cv2.VideoCapture(-1)
+        if not self.cap.isOpened():
+            print("Cannot open camera.")
+            sys.exit()
+        self._W = 640
+        self._H = 480
         self._set_camera_settings()
+        # Calibration parameters.
         self._img_name_prefix = "cal_img"
         self._img_dir_prefix = "calibration_img"
         self._mtx = None
         self._dist = None
         self._nmtx = None
-        self._roi = None
+        self._roi_undistort = None
+        # Calibration
         if save_image:
             self._save_image()
         else:
@@ -48,8 +56,8 @@ class Localization():
             return True
 
     def _set_camera_settings(self):
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._w)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._h)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._W)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._H)
         self.cap.set(cv2.CAP_PROP_FPS, 30)
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
 
@@ -152,10 +160,10 @@ class Localization():
                                                             None, None)
             self._mtx = mtx
             self._dist = dist
-            h, w = self._h, self._w
+            h, w = self._H, self._W
             nmtx,roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h), 1, (w,h))
             self._nmtx = nmtx
-            self._roi = roi
+            self._roi_undistort = roi
 
         except IOError:
             print("Ooops! calibration images are not found in:")
