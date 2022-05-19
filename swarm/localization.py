@@ -32,6 +32,20 @@ class Localization():
             self._save_image()
         else:
             self._calibrate()
+    
+    def __enter__(self):
+        """To be able to use the class in with statement."""
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        """To be able to use it in with statement."""
+        if self.cap is not None:
+            self.cap.release()
+        cv2.destroyAllWindows()
+        # Catch exceptions
+        if exc_type == KeyboardInterrupt:
+            print("Interrupted by user.")
+            return True
 
     def _set_camera_settings(self):
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._w)
@@ -97,9 +111,6 @@ class Localization():
             print("Exception details:")
             print(type(exc).__name__,exc.args)
             pass
-        finally:
-            self.cap.release()
-            cv2.destroyWindow("img")
     
     def _calibrate(self):
         """
@@ -158,8 +169,6 @@ class Localization():
             print("Exception details:")
             print(type(exc).__name__,exc.args)
             pass
-        finally:
-            cv2.destroyAllWindows()
     
     def _undistort(self, img, crop = True):
         # undistort
