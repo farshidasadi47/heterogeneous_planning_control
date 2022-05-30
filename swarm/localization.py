@@ -28,6 +28,11 @@ class Localization():
         self._W = 640
         self._H = 480
         self._set_camera_settings()
+        self._colors = {'k':(  0,  0,  0),'r':(  0,  0,255),'b':(255,  0,  0),
+                        'g':(  0,255,  0),'w':(255,255,255)}
+                        #,'m':(255,  0,255),
+                        #'y':(  0,255,255),'c':(255,255,  0)}
+        self._set_hsv_ranges()
         # Calibration parameters.
         self._img_name_prefix = "cal_img"
         self._img_dir_prefix = "calibration_img"
@@ -58,8 +63,36 @@ class Localization():
     def _set_camera_settings(self):
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._W)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._H)
-        self.cap.set(cv2.CAP_PROP_FPS, 30)
-        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+        #self.cap.set(cv2.CAP_PROP_FPS, 30)
+        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
+    
+    def _set_hsv_ranges(self):
+        """
+        Defines HSV color ranges for different colors available in 
+        _colors. These ranges are used for localizing robot.
+        Depending on the exact color used, ranges should be modified.
+        To find appropriate ranges use get_color_ranges method.
+        """
+        hsv_ranges = {}
+        # Black or 'k'
+        hsv_ranges['k'] = {'lb': [np.array([  0,  0,  0],dtype=np.uint8)],
+                           'ub': [np.array([179,255, 30],dtype=np.uint8)]}
+        # Red or 'r'
+        hsv_ranges['r'] = {'lb': [np.array([  0, 50, 60],dtype=np.uint8),
+                                  np.array([165, 50, 60],dtype=np.uint8)],
+                           'ub': [np.array([ 10,255,255],dtype=np.uint8),
+                                  np.array([179,255,255],dtype=np.uint8)]}
+        # Blue or 'b'
+        hsv_ranges['b'] = {'lb': [np.array([116, 60, 31],dtype=np.uint8)],
+                           'ub': [np.array([130,255,255],dtype=np.uint8)]}
+        # Green or 'g'
+        hsv_ranges['g'] = {'lb': [np.array([ 90, 20, 10],dtype=np.uint8)],
+                           'ub': [np.array([115,255, 95],dtype=np.uint8)]}
+        # White or 'w'
+        hsv_ranges['w'] = {'lb': [np.array([ 95, 10,160],dtype=np.uint8)],
+                           'ub': [np.array([125, 90,255],dtype=np.uint8)]}
+        #
+        self._hsv_ranges = hsv_ranges
 
     def _save_image(self):
         """
