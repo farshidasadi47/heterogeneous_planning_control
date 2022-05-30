@@ -300,6 +300,83 @@ class Localization():
             pass
         return np.mean(mm2pixel)
 
+    def get_color_ranges(self):
+        """
+        Gives HSV code of the point clicked by mouse.
+        Use this function to get appropriate values for _set_hsv_ranges.
+        Part of this the function is totally from stackoverflow.
+        """
+        # Define local event callbacks for mouse.
+        # mouse callback function
+        def mouse_cb(event,x,y,flags,param):
+            nonlocal frame
+            # Event happens when left mouse key is released.
+            if event == cv2.EVENT_LBUTTONUP:
+                # Print HSV color of mouse position.
+                bgr = frame[y:y+1,x:x+1]
+                hsv = cv2.cvtColor(bgr,cv2.COLOR_BGR2HSV).squeeze()
+                bgr = bgr.squeeze()
+                msg = f"Hue: {hsv[0]:3d}, Sat: {hsv[1]:3d}, Val: {hsv[2]:3d}||"
+                msg += f"B: {bgr[0]:3d}, G: {bgr[1]:3d}, R: {bgr[2]:3d}."
+                print(msg)
+        
+        def nothing(x):
+            pass
+        #
+        cv2.namedWindow("cam",cv2.WINDOW_AUTOSIZE)
+        cv2.setMouseCallback('cam',mouse_cb)
+        # Hue is from 0-179 for Opencv
+        cv2.createTrackbar('H_min', 'cam', 0, 179, nothing)
+        cv2.createTrackbar('S_min', 'cam', 0, 255, nothing)
+        cv2.createTrackbar('V_min', 'cam', 0, 255, nothing)
+        cv2.createTrackbar('H_max', 'cam', 0, 179, nothing)
+        cv2.createTrackbar('S_max', 'cam', 0, 255, nothing)
+        cv2.createTrackbar('V_max', 'cam', 0, 255, nothing)
+        # Set default value for Max HSV trackbars
+        cv2.setTrackbarPos('H_max', 'cam', 179)
+        cv2.setTrackbarPos('S_max', 'cam', 255)
+        cv2.setTrackbarPos('V_max', 'cam', 255)
+
+        # Initialize HSV min/max values
+        h_min = s_min = v_min = h_max = s_max = v_max = 0
+        print('*'*72)
+        print('Click to get HSV. Press escape to quit.')
+        while True:
+            # Read frame
+            has_frame, frame = self.cap.read()
+            if not has_frame:
+                break
+            # Get current positions of all trackbars
+            h_min = cv2.getTrackbarPos('H_min', 'cam')
+            s_min = cv2.getTrackbarPos('S_min', 'cam')
+            v_min = cv2.getTrackbarPos('V_min', 'cam')
+            h_max = cv2.getTrackbarPos('H_max', 'cam')
+            s_max = cv2.getTrackbarPos('S_max', 'cam')
+            v_max = cv2.getTrackbarPos('V_max', 'cam')
+            # Adjust trackbars if necessary.
+            h_min = min(h_min,h_max)
+            s_min = min(s_min,s_max)
+            v_min = min(v_min,v_max)
+            cv2.setTrackbarPos('H_min', 'cam', h_min)
+            cv2.setTrackbarPos('S_min', 'cam', s_min)
+            cv2.setTrackbarPos('V_min', 'cam', v_min)
+            # Set minimum and maximum HSV values to display
+            lower = np.array([h_min, s_min, v_min])
+            upper = np.array([h_max, s_max, v_max])
+            # Convert to HSV format and color threshold
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            mask = cv2.inRange(hsv, lower, upper)
+            mask_inverted = cv2.bitwise_not(mask)
+            mask_inverted = cv2.cvtColor(mask_inverted,cv2.COLOR_GRAY2BGR)
+            filterred = cv2.bitwise_and(frame, frame, mask=mask)
+            filterred = cv2.bitwise_or(filterred,mask_inverted)
+            image = np.concatenate((frame, filterred), axis=1)
+            cv2.imshow('cam',filterred)
+            # Press escape to quit.
+            if cv2.waitKey(20) & 0xFF == 27:
+                break
+
 ########## test section ################################################
 if __name__ == '__main__':
     camera = Localization()
+    #camera.get_color_ranges()
