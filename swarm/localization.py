@@ -7,6 +7,7 @@
 import os
 import sys
 import time
+from itertools import combinations
 import glob
 
 import numpy as np
@@ -45,6 +46,8 @@ class Localization():
             self._save_image()
         else:
             self._calibrate()
+            # Pixel to mm conversion factor, found via _find_scale.
+            self._p2mm = 0.52845085 # self._find_scale()
     
     def __enter__(self):
         """To be able to use the class in with statement."""
@@ -219,6 +222,84 @@ class Localization():
             x, y, w, h = self._roi
             dst = dst[y:y+h, x:x+w]
         return dst
+
+    @staticmethod
+    def _find_distance(points):
+        """
+        Calculates distance of points in a list or 2D numpy array.
+        ----------
+        Parameters
+        ----------
+        points: numpy nd.array
+            2D array of points.
+        ----------
+        Returns
+        ----------
+        distances: numpy nd.array
+            Orderred array of distances between all unique pairs.
+        """
+        distances = []
+        # Produces all unique pair of indexes.
+        indexes = combinations(range(points.shape[0]),2)
+        # Calculate distance for them.
+        for index in indexes:
+            dist = np.linalg.norm(points[index[0],:] - points[index[1],:])
+            distances += [dist]
+        return np.array(distances)
+
+    def _find_scale(self):
+        """
+        Finds "mm/pixel" of the undistorded image.
+        """
+        n_row, n_col = 6, 7  # Change this based on your chessboard.
+        # First try to read calibration image files.
+        img_dir_prefix = self._img_dir_prefix
+        img_name_prefix = self._img_name_prefix
+        img_directory = os.path.join(os.getcwd(),img_dir_prefix)
+        img_path = os.path.join(img_directory,"*.jpg")
+        # termination criteria
+        criteria=(cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+        # prepare object points, like (0,0,0), (1,0,0), ...,(6,5,0)
+        objp = np.zeros((n_row*n_col,3), np.float32)
+        objp[:,:2] = np.mgrid[0:n_row,0:n_col].T.reshape(-1,2)
+        distances = self._find_distance(objp)*20
+        # Arrays to store object points and image points.
+        imgpoints = [] # 2d points in image plane.
+        mm2pixel = []
+        try:
+            images = glob.glob(img_path)
+            if not len(images):
+                raise IOError
+            for fname in images:
+                # Read image and undistort it.
+                img = cv2.imread(fname)
+                img = self._undistort(img)
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                # Find the chess board corners
+                ret, corners=cv2.findChessboardCorners(gray,(n_row,n_col),None)
+                # If found, add object points, image points.
+                if ret == True:
+                    corners2 = cv2.cornerSubPix(gray,corners, (11,11),
+                                                (-1,-1), criteria).squeeze()
+                    imgpoints.append(corners2)
+                    # Calculate scaling.
+                    distance_pix = distances/self._find_distance(corners2)
+                    mm2pixel += [np.mean(distance_pix)]
+        #
+        except IOError:
+            print("Ooops! calibration images are not found in:")
+            print(os.path.join(".",img_dir_prefix,img_name_prefix,"ij.jpg"))
+            print("Initialize class with \"save_image = True\".")
+        except KeyboardInterrupt:
+            print("Interrupted by user.")
+            pass
+        except Exception as exc:
+            print("Ooops! exception happened.")
+            print("Exception details:")
+            print(type(exc).__name__,exc.args)
+            pass
+        return np.mean(mm2pixel)
+
 ########## test section ################################################
 if __name__ == '__main__':
     camera = Localization()
