@@ -460,7 +460,7 @@ class ControlService(Node):
                 self.control.reset_state(theta=np.deg2rad(params[2]),
                                          mode=int(params[1]))
                 # Process command
-                des_r = params[0]*self.control.specs.tumbling_distance
+                des_r = params[0]*self.control.specs.tumbling_length
                 input_cmd = np.array([des_r, 0.0, 0])
                 # Change command mode.
                 self.pipeline.set_cmd_mode("server")
