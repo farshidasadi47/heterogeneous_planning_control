@@ -25,8 +25,7 @@ np.set_printoptions(precision=2, suppress=True)
 @dataclass
 class Robots:
     pivot_separation: np.ndarray
-    rotation_distance: float
-    tumbling_distance: float
+    tumbling_length: float
     def to_list(self):
         return list(vars(self).values())
 
@@ -65,8 +64,8 @@ class ControlModel():
             error_message = """Position does not match number of the robots."""
             raise ValueError(error_message)
         #
-        pivot_seperation = self.specs.pivot_seperation[mode,:]
-        leg_vect = np.array([0,self.specs.pivot_seperation[mode,0]/2,0])
+        pivot_length = self.specs.pivot_length[mode,:]
+        leg_vect = np.array([0,self.specs.pivot_length[mode,0]/2,0])
         self.pos = pos.astype(float)
         # Calculate leg positions.
         self.posa = np.zeros_like(self.pos)
@@ -75,10 +74,10 @@ class ControlModel():
         leg_vect = self.rotz(np.array([0,1.0,0]), theta)[:2]
         for robot in range(self.specs.n_robot):
             # a is half way along +y or leg_vect.
-            self.posa[2*robot:2*robot+2] = (pivot_seperation[robot]*leg_vect/2
+            self.posa[2*robot:2*robot+2] = (pivot_length[robot]*leg_vect/2
                                             + self.pos[2*robot:2*robot+2])
             # b is half way along -y or -leg_vect
-            self.posb[2*robot:2*robot+2] = (-pivot_seperation[robot]*leg_vect/2
+            self.posb[2*robot:2*robot+2] = (-pivot_length[robot]*leg_vect/2
                                             + self.pos[2*robot:2*robot+2])
         self.theta = theta
         self.alpha = alpha
@@ -320,7 +319,7 @@ class ControlModel():
     
     def update_theta(self, theta:float, pivot: str):
         theta = self.wrap(theta)
-        pivot_seperation = self.specs.pivot_seperation[self.mode,:]
+        pivot_length = self.specs.pivot_length[self.mode,:]
         # Leg vector, along +y (robot body frame) axis.
         leg_vect = self.rotz(np.array([0,1.0,0]), theta)[:2]
         # Update positions of all robots.
@@ -329,18 +328,18 @@ class ControlModel():
                 # posa remains intact.
                 # pos is half way across -leg_vect.
                 self.pos[2*robot:2*robot+2] = (self.posa[2*robot:2*robot+2]
-                                       -pivot_seperation[robot]*leg_vect/2)
+                                       -pivot_length[robot]*leg_vect/2)
                 # posb is across -leg_vect.
                 self.posb[2*robot:2*robot+2] = (self.posa[2*robot:2*robot+2]
-                                             -pivot_seperation[robot]*leg_vect)
+                                             -pivot_length[robot]*leg_vect)
             elif pivot == "b":
                 # posb remains intact.
                 # pos is half way across leg_vect.
                 self.pos[2*robot:2*robot+2] = (self.posb[2*robot:2*robot+2]
-                                       +pivot_seperation[robot]*leg_vect/2)
+                                       +pivot_length[robot]*leg_vect/2)
                 # posb is across leg_vect.
                 self.posa[2*robot:2*robot+2] = (self.posb[2*robot:2*robot+2]
-                                             +pivot_seperation[robot]*leg_vect)
+                                             +pivot_length[robot]*leg_vect)
             elif pivot == None:
                 # Rotationg around center.
                 assert abs(self.alpha) <.01
@@ -383,7 +382,7 @@ class ControlModel():
                 theta_end = self.theta+self.specs.mode_rel_ang[des_mode_index]
             # Positions 
             pos_start = self.pos
-            pos_delta = (self.specs.mode_distance[des_mode_index]*
+            pos_delta = (self.specs.mode_rel_length[des_mode_index]*
                          np.array([np.cos(des_ang), np.sin(des_ang)]*
                          self.specs.n_robot))
             pos_end = pos_start + pos_delta
@@ -434,11 +433,11 @@ class ControlModel():
             input_cmd[0] = -input_cmd[0]
             input_cmd[1]  = ControlModel.wrap(input_cmd[1] + np.pi)
         # Calculate position update step.
-        pos_delta = (self.specs.tumbling_distance
+        pos_delta = (self.specs.tumbling_length
                     *np.array([np.cos(input_cmd[1]), np.sin(input_cmd[1])]
                     *self.specs.n_robot))
         # determine rounded number of rotations needed.
-        n_tumbling = round(input_cmd[0]/self.specs.tumbling_distance)
+        n_tumbling = round(input_cmd[0]/self.specs.tumbling_length)
         # Line up robots for starting with pivot B.
         start_theta = ControlModel.wrap(input_cmd[1] + np.pi/2)
         yield from self.step_theta(start_theta)
@@ -578,7 +577,7 @@ class ControlModel():
             raise ValueError(exc_msg)
         # Determine current sweep angle.
         # Get pivot length of leader robot in current mode.
-        pivot_length = self.specs.pivot_seperation[self.mode,0]
+        pivot_length = self.specs.pivot_length[self.mode,0]
         # Calculate maximum distance the leader can travel in one step.
         d_step_max = pivot_length*np.sin(self.sweep_theta)
         # Number of steps takes to do the pivot walk.
@@ -695,7 +694,7 @@ class Controller(ControlModel):
     """
     def __init__(self, n_robot, pos, theta, mode):
         self.robots = dict()
-        self.robots[3] = Robots(np.array([[9,8,7],[8,7,9]]), 6.5, 12)
+        self.robots[3] = Robots(np.array([[9,8,7],[8,7,9]]), 12)
         self.control_def(n_robot, pos, theta, mode)
 
     def control_def(self, n_robot: int, pos: np.ndarray,
@@ -768,20 +767,20 @@ control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
 if __name__ == '__main__':
     #pivot_separation = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
     control = Controller(3,np.array([0,0,20,0,40,0]),0,1)
-    """ input_series = np.array([[10,0,1],
+    input_series = np.array([[10,0,1],
                              [0,0,1],
                              [12,0,-2],
                              [12*2,np.pi/2,0],
                              [10,0,2],
                              [12,0,0],
                              [0,np.pi/2,1],
-                             [0,np.pi/4,1]]) """
-    input_series = np.array([[50,0,1],
+                             [0,np.pi/4,1]])
+    """ input_series = np.array([[50,0,1],
                                  [50,np.pi/2,1],
                                  [50,np.pi,1],
                                  [50,-np.pi/2,1],
                                  [0,0,1]])
-    input_series = input_series = np.tile(input_series, (2,1))
+    input_series = input_series = np.tile(input_series, (2,1)) """
     # Check compatibility
     control.line_input_compatibility_check(input_series)
     start = time.time()
