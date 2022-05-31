@@ -391,6 +391,58 @@ class Localization():
             print("Ooops! exception happened. Exception details:")
             print(type(exc).__name__,exc.args)
             pass
+    
+    @staticmethod
+    def _pixel_state_from_rotated_rect(rect):
+        """
+        Retrieve position and angle of robot from its cv2.RotatedRect.
+        ----------
+        Parameters
+        ----------
+        rect: cv2.RotatedRect object tuple.
+        ----------
+        Returns
+        ----------
+        pixel_state: numpy nd.array
+            pixel_state = [x_pixel, y_pixel, angle]
+        """
+        pixel_state = np.zeros(3,dtype=float)
+        pixel_state[:2] = rect[0] 
+        pixel_state[2] = np.deg2rad(rect[2])
+        if rect[1][0] > rect[1][1]:
+            # Since we want the angle of the normal to longer side.
+            pixel_state[2] -= np.pi/2
+        return pixel_state
+
+    def _find_robot(self, hsv, color):
+        """
+        Finds and returns position and angle of robot with specific 
+        color in the given hsv frame.
+        """
+        real_robo_area = 4*10/self._p2mm**2
+        mask = np.zeros(hsv.shape[:2],dtype=np.uint8)
+        for lb, ub in zip(self._hsv_ranges[color]['lb'],
+                                                self._hsv_ranges[color]['ub']):
+            mask += cv2.inRange(hsv, lb, ub)
+        # Find the external contours in the masked image
+        contours, _ = cv2.findContours(mask, cv2.RETR_CCOMP,
+                                                    cv2.CHAIN_APPROX_SIMPLE)
+        if not len(contours):
+            return None
+        areas = np.array([cv2.contourArea(cnt) for cnt in contours])
+        #areas = np.ma.masked_less(areas, .25*real_robo_area)
+        # Filter contours with areas outside of expected range.
+        areas=np.ma.masked_outside(areas,.25*real_robo_area,1.4*real_robo_area)
+        if areas.count() == 0:
+            return None
+        # Find the nearest area to size of our physical robots
+        idx = (np.abs(areas - real_robo_area)).argmin()
+        cnt = contours[idx]
+        rect = cv2.minAreaRect(cnt)
+        pixel_state = self._pixel_state_from_rotated_rect(rect)
+        box = cv2.boxPoints(rect)
+        box = np.int0(box)
+        return pixel_state, box
 
     def get_color_ranges(self):
         """
