@@ -559,6 +559,42 @@ class Localization():
             k = cv2.waitKey(20) & 0xFF
             if k == 27:
                 break
+    
+    def stream_with_choice(self):
+        """
+        Main camera loop that streams camera data.
+        """
+        try:
+            counter = 0
+            undistort = False
+            alive = True
+            cv2.namedWindow("cam",cv2.WINDOW_KEEPRATIO)
+            while alive:
+                has_frame, frame = self.cap.read()
+                if not has_frame:
+                    break
+                if undistort:
+                    frame = self._undistort(frame)
+                cv2.imshow("cam", frame)
+                time_str = f"{time.time()%1e4:+010.3f}|{counter:+010d}"
+                print(time_str)
+                counter += 1
+                # Read the key
+                key = cv2.waitKey(10)
+                if key == 27:
+                    alive = False
+                elif key == ord('U') or key == ord('u'):
+                    undistort = True
+                elif key == ord('P') or key == ord('p'):
+                    undistort = False
+        except KeyboardInterrupt:
+            print("Interrupted by user.")
+            pass
+        except Exception as exc:
+            print("Ooops! exception happened.")
+            print("Exception details:")
+            print(type(exc).__name__,exc.args)
+            pass
 
     def get_color_ranges(self):
         """
@@ -641,3 +677,4 @@ if __name__ == '__main__':
     camera = Localization()
     camera.stream_test()
     #camera.get_color_ranges()
+    #camera.stream_with_choice()
