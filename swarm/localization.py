@@ -532,6 +532,33 @@ class Localization():
             return ret, frame, robot_states
         else:
             return ret, frame, None
+    
+    def stream_test(self,draw_robots = True, draw_grid = True):
+        """Streams camera video with requested options."""
+        cv2.namedWindow('frame',cv2.WINDOW_AUTOSIZE)#WINDOW_KEEPRATIO)
+        then = 0
+        counter = 1
+        while(1):
+            # Take each frame
+            _, frame, robot_states = self.get_frame(draw_robots, draw_grid)
+            cv2.imshow('frame',frame)
+            now = time.time()
+            freq = 1/(now - then)
+            then = now
+            print_str = f"{now%1e4:+010.3f}|{freq:010.3f}|{counter:+06d}||"
+            rob_str = ""
+            none = 'None'
+            for i, (k,v) in enumerate(robot_states.items()):
+                if v is None:
+                    rob_str += f"'{k:1s}': {none:>21s},"
+                else:
+                    rob_str += (f"'{k:1s}': {v[0]:+06.1f},{v[1]:+06.1f},"
+                                 f"{np.rad2deg(v[-1]):+07.2f}|")
+            print(print_str + rob_str[:-1])
+            counter += 1
+            k = cv2.waitKey(20) & 0xFF
+            if k == 27:
+                break
 
     def get_color_ranges(self):
         """
@@ -612,4 +639,5 @@ class Localization():
 ########## test section ################################################
 if __name__ == '__main__':
     camera = Localization()
+    camera.stream_test()
     #camera.get_color_ranges()
