@@ -41,6 +41,12 @@ class Localization():
         self._dist = None
         self._nmtx = None
         self._roi_undistort = None
+        # Space boundary parameters.
+        self._roi_frame = None
+        self._roi_space = None
+        self._space_limits_mm = None # (ubx, uby) symmetric space.
+        self._center = None          # (center_x, center_y)
+        self._mask_space = None      # Mask for work space.
         # Calibration
         if save_image:
             self._save_image()
@@ -48,6 +54,7 @@ class Localization():
             self._calibrate()
             # Pixel to mm conversion factor, found via _find_scale.
             self._p2mm = 0.52845085 # self._find_scale()
+            self._get_n_set_space()
     
     def __enter__(self):
         """To be able to use the class in with statement."""
@@ -214,14 +221,29 @@ class Localization():
             print(type(exc).__name__,exc.args)
             pass
     
-    def _undistort(self, img, crop = True):
+    def _undistort(self, img):
         # undistort
         dst = cv2.undistort(img, self._mtx, self._dist, None, self._nmtx)
-        # crop the image
-        if crop:
-            x, y, w, h = self._roi
-            dst = dst[y:y+h, x:x+w]
         return dst
+    
+    @staticmethod
+    def _crop(img, roi):
+        """
+        Crops image.
+        ----------
+        Parameters
+        ----------
+        img: numpy nd.array
+            An image array.
+        roi: 1D array
+            roi = (top_left_x, top_left_y, width, heigth)
+        ----------
+        Returns
+        ----------
+        img: numpy nd.array
+        """
+        x, y, w, h = roi
+        return img[y:y+h, x:x+w]
 
     @staticmethod
     def _find_distance(points):
@@ -299,6 +321,76 @@ class Localization():
             print(type(exc).__name__,exc.args)
             pass
         return np.mean(mm2pixel)
+    
+    def _get_n_set_space(self):
+        """
+        Determines boundaries of rectangular work space in the camera frame.
+        Look up open cv python tutorial for details.
+        """
+        # Our space boundary, edit based on space dimensions.
+        W_mm = 240
+        H_mm = 190
+        offset = 20
+        try:
+            for _ in range(10):
+                # Take each frame
+                _, frame = self.cap.read()
+            # Undistort
+            frame = self._undistort(frame)
+            H, W, _ = frame.shape
+            # Space boundary is painted black for ease of image processing.
+            # Change color space and get a mask for color of space boundary.
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            mask = np.zeros(hsv.shape[:2],dtype=np.uint8)
+            for lb, ub in zip(self._hsv_ranges['k']['lb'],
+                                                  self._hsv_ranges['k']['ub']):
+                mask += cv2.inRange(hsv, lb, ub)
+            # Find the space boundary ractangle among all contours.
+            contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP,
+                                                        cv2.CHAIN_APPROX_SIMPLE)
+            msg='Border not found. Work space must be inside camera field of view.'
+            if not len(contours):
+                raise IOError(msg)
+            # Get area of external contours bounding internal contours.
+            external_areas = [cv2.contourArea(contours[idx]) if elem >-1 else 0
+                                    for idx,elem in enumerate(hierarchy[0,:,2])]
+            # Find index of space border.
+            space_area = max(external_areas)
+            space_border_index = external_areas.index(space_area)
+            space_border_index = hierarchy[0,space_border_index,2]
+            cnt = contours[space_border_index]
+            # If the specified contour area is significantly smaller than 
+            # our physical space, workspace is out of camera field of view.
+            if space_area < .85*W_mm*H_mm/self._p2mm**2:
+                raise IOError(msg)
+            # Approximate contour and derive space boundaries.
+            epsilon = 0.1*cv2.arcLength(cnt,True)
+            approx = cv2.approxPolyDP(cnt,epsilon,True)
+            x,y,w,h = cv2.boundingRect(approx)
+            # Make w and h odd so we have a definite pixelwise center.
+            w = w if w%2 else w-1
+            h = h if h%2 else h-1
+            # Calculate offset
+            left = W - (x+w)
+            down = H - (y + h)
+            offset = min((x,y, left, down, offset))
+            # Calculate ROIs
+            roi_frame = (x-offset, y-offset, w+2*offset, h+2*offset)
+            roi_space = (offset, offset, w, h)
+            center = (int(w/2+offset), int(h/2+offset))
+            # Make mask for space.
+            mask_space = np.zeros((roi_frame[3], roi_frame[2]), dtype=np.uint8)
+            mask_space[offset:offset+h, offset:offset+w] = 255
+            #
+            self._roi_frame = roi_frame # Used for cropping frames.
+            self._roi_space = roi_space
+            self._space_limits_mm = ((w-1)*self._p2mm/2, (h-1)*self._p2mm/2)
+            self._center = center
+            self._mask_space = mask_space
+        except Exception as exc:
+            print("Ooops! exception happened. Exception details:")
+            print(type(exc).__name__,exc.args)
+            pass
 
     def get_color_ranges(self):
         """
