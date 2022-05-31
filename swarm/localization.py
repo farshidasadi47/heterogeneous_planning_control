@@ -444,6 +444,95 @@ class Localization():
         box = np.int0(box)
         return pixel_state, box
 
+    def _pixel2cartesian(self, point):
+        """
+        Converts pixel coordinate and angle to cartesian equivalent.
+        ----------
+        Parameters
+        ----------
+        point: 1D array
+            point = [x_pixel, y_pixel, angle: optional]
+        ----------
+        Returns
+        ----------
+        cartesian: 1D array
+            cartesian = [x, y, angle: optional]
+        """
+        cartesian = np.zeros_like(point,dtype=float)
+        cartesian[-1] = -point[-1]                             # Angle
+        cartesian[0] = (point[0] - self._center[0])*self._p2mm # x
+        cartesian[1] = (self._center[1] - point[1])*self._p2mm # y
+        return cartesian
+    
+    def _cartesian2pixel(self,point):
+        """Does opposite of _pixel2cartesian."""
+        pixel = np.zeros(2,dtype=int)
+        pixel[0] = int(point[0]/self._p2mm) + self._center[0]
+        pixel[1] = self._center[1] - int(point[1]/self._p2mm)
+        return pixel
+    
+    def _draw_grid(self,frame, x_spacing = 20, y_spacing = 20):
+        """Draws grid lines on a given frame with specified spacing."""
+        color = (99,180,40) # kind of green
+        ubx, uby = self._space_limits_mm
+        lbx, lby = -ubx, -uby
+        _, _, w, h = self._roi_frame
+        # Origin
+        frame = cv2.circle(frame, self._center, 10, color, 1,cv2.LINE_AA)
+        frame = cv2.ellipse(frame, self._center,(10,10), 
+                                                 0,90,180,color,-1,cv2.LINE_AA)
+        frame = cv2.ellipse(frame, self._center,(10,10), 
+                                                 0,270,360,color,-1,cv2.LINE_AA)                                        
+        # Vertical lines.
+        vertical_r = np.arange(0.0,ubx, x_spacing)
+        vertical_l = np.arange(-x_spacing,lbx,-x_spacing)
+        vertical = np.concatenate((vertical_l, vertical_r))
+        for vert in vertical:
+            pixel = self._cartesian2pixel([vert,0.0])
+            frame =cv2.line(frame,(pixel[0],0),(pixel[0],h),color,1,cv2.LINE_8)
+        # Horizontal lines.
+        horizontal_u = np.arange(0.0,uby, y_spacing)
+        horizontal_d = np.arange(-y_spacing,lby,-y_spacing)
+        horizontal = np.concatenate((horizontal_d, horizontal_u))
+        for horz in horizontal:
+            pixel = self._cartesian2pixel([0.0,horz])
+            frame =cv2.line(frame,(0,pixel[1]),(w,pixel[1]),color,1,cv2.LINE_8)
+        return frame
+
+    def get_frame(self, draw_robots = True, draw_grid= False):
+        """
+        Gets one frame from camera, process it and returns the frame.
+        """
+        # Take frame.
+        ret, frame = self.cap.read()
+        if ret:
+            # Process frame.
+            frame = self._undistort(frame)
+            frame = self._crop(frame,self._roi_frame)
+            masked = cv2.bitwise_and(frame,frame, mask=self._mask_space)
+            hsv = cv2.cvtColor(masked, cv2.COLOR_BGR2HSV)
+            # Draw grid if requested.
+            if draw_grid:
+                frame = self._draw_grid(frame)
+            # Find robots, if any and process them.
+            robots = {color: self._find_robot(hsv,color)
+                                              for color in self._colors.keys()}
+            robot_states = {}
+            for k, v in robots.items():
+                if v is None:
+                    robot_states[k] = None
+                    continue
+                pixel_state, box = v
+                robot_states[k] = self._pixel2cartesian(pixel_state)
+                if draw_robots:
+                    cv2.drawContours(frame,[box],-1,self._colors[k],2)
+            # Draw space borders.
+            x,y,w,h = self._roi_space
+            cv2.rectangle(frame,(x,y),(x+w,y+h),(255,255,255),1)
+            return ret, frame, robot_states
+        else:
+            return ret, frame, None
+
     def get_color_ranges(self):
         """
         Gives HSV code of the point clicked by mouse.
