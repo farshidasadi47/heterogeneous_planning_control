@@ -1,7 +1,7 @@
 #%%
 ########################################################################
 # This module is responsible for classes and methods that publish
-# and subscribe to the peripherals (arduino and probably camera).
+# and subscribe to the arduino for openloop control.
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
 import sys
@@ -18,11 +18,11 @@ from geometry_msgs.msg import Point32
 from std_srvs.srv import Empty
 
 # from "foldername" import filename, this is for ROS compatibility.
-from swarm import controller, model
+from swarm import openloop, model
 ########## Definiitons #################################################
 class Peripherals(Node):
     """Main executor for arduino comunications."""
-    def __init__(self, pipeline: controller.Pipeline,
+    def __init__(self, pipeline: openloop.Pipeline,
                        rate = 100, name="peripherals"):
         # If rclpy.init() is not called, call it.
         if rclpy.ok() is not True:
@@ -137,8 +137,8 @@ class Peripherals(Node):
 
 class ControlService(Node):
     """This class holds services that control swarm of milirobot."""
-    def __init__(self, pipeline: controller.Pipeline,
-                       control: controller.Controller, rate = 100):
+    def __init__(self, pipeline: openloop.Pipeline,
+                       control: openloop.Controller, rate = 100):
         # If rclpy.init() is not called, call it.
         if rclpy.ok() is not True:
             rclpy.init(args = sys.argv)
@@ -550,8 +550,8 @@ class MainExecutor(rclpy.executors.MultiThreadedExecutor):
         super().__init__()
         #
         specs = model.SwarmSpecs.robo3()
-        pipeline = controller.Pipeline()
-        control = controller.Controller(specs,np.array([0,0,20,0,40,0]),0,1)
+        pipeline = openloop.Pipeline()
+        control = openloop.Controller(specs,np.array([0,0,20,0,40,0]),0,1)
         # Set initialize pipeline states.
         pipeline.set_state(control.get_state())
         # Add nodes.
@@ -572,8 +572,10 @@ class MainExecutor(rclpy.executors.MultiThreadedExecutor):
             print("Interrupted by user.")
             return True
 
+def main():
+    with MainExecutor(50) as executor:
+        executor.spin()
+
 ########## Test section ################################################
 if __name__ == "__main__":
-    with MainExecutor(50) as executor:
-        #executor = MainExecutor(50)
-        executor.spin()
+    main()
