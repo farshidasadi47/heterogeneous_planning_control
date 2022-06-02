@@ -33,7 +33,7 @@ class Controller():
     def __init__(self, specs: model.SwarmSpecs,
                        pos: np.ndarray, theta: float, mode: int):
         self.specs = specs
-        self.__set_rotation_constants_and_functions()
+        self._set_rotation_constants_and_functions()
         self.reset_state(pos, theta, 0, mode)
         self.theta_step_inc = np.deg2rad(5)
         self.theta_rot_step_inc = np.deg2rad(5)
@@ -84,7 +84,7 @@ class Controller():
         self.mode_sequence = deque(range(1,self.specs.n_mode))
         self.mode_sequence.rotate(-mode+1)
 
-    def __set_rotation_constants_and_functions(self):
+    def _set_rotation_constants_and_functions(self):
         """
         This function initializes magnets vectors for each mode.
         It also constructs lambda functions for rotating 

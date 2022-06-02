@@ -39,13 +39,13 @@ class Peripherals(Node):
         depth=1)
         #self.qos_profile = rclpy.qos.qos_profile_system_default.reliability
         # Add arduino publishers.
-        self.__add_publisher(Point32,"/arduino_field_cmd")
+        self._add_publisher(Point32,"/arduino_field_cmd")
         # Order of adding subscriber and times matters.
         # Add arduino subscribers.
-        self.__add_subscriber(Point32,"/arduino_field_fb",
-                                                    self.__arduino_field_fb_cb)
+        self._add_subscriber(Point32,"/arduino_field_fb",
+                                                    self._arduino_field_fb_cb)
         # Add timer
-        self.timer = self.create_timer(1/rate, self.__timer_callback)
+        self.timer = self.create_timer(1/rate, self._timer_callback)
         # Get all publishers and subscribers.
         self.pubs_dict = {pub.topic_name:pub for pub in self.publishers}
         self.pubs_dict.pop('/parameter_events')
@@ -53,7 +53,7 @@ class Peripherals(Node):
         # Cusdtruct publisher and subscription instance variables.
         self.pubs_msgs = dict()
         self.subs_msgs = dict()
-        self.__construct_msgs()
+        self._construct_msgs()
 
     def __enter__(self):
         """To be able to use the class in with statement."""
@@ -69,15 +69,15 @@ class Peripherals(Node):
             print("Interrupted by user.")
             return True
     
-    def __add_publisher(self, msg_type, topic: str):
+    def _add_publisher(self, msg_type, topic: str):
         """Creates publisher."""
         self.create_publisher(msg_type,topic,self.qos_profile)
     
-    def __add_subscriber(self, msg_type, topic:str, callback):
+    def _add_subscriber(self, msg_type, topic:str, callback):
         """Creates subscriber."""
         self.create_subscription(msg_type,topic,callback,self.qos_profile)
     
-    def __construct_msgs(self):
+    def _construct_msgs(self):
         """Constructs a dictionaries containing pubs and subs msgs."""
         # Publishers
         for k, v in self.pubs_dict.items():
@@ -86,7 +86,7 @@ class Peripherals(Node):
         for k, v in self.subs_dict.items():
             self.subs_msgs[k] = v.msg_type()  # v is a subscriber.
 
-    def __arduino_field_fb_cb(self, msg):
+    def _arduino_field_fb_cb(self, msg):
         """Call back for /arduino_field_fb."""
         # Update the message.
         # Note that the dict key should match its corresponding
@@ -114,7 +114,7 @@ class Peripherals(Node):
                                    self.subs_msgs["/arduino_field_fb"].z])
         return arduino_field_fb
     
-    def __timer_callback(self):
+    def _timer_callback(self):
         """This contains the hardware communication loop."""
         # Read last values from pipeline.
         field, states = self.pipeline.get_cmd()
@@ -147,19 +147,19 @@ class ControlService(Node):
         self.control = control
         self.rate = self.create_rate(rate)
         # Action servers
-        self.__add_service_server(Empty,'set_idle', self.__set_idle_server_cb)
-        self.__add_service_server(Empty,'/feedfrwd_input',
-                                               self.__feedfrwd_input_server_cb)
-        self.__add_service_server(Empty,'/feedfrwd_single',
-                                              self.__feedfrwd_single_server_cb)
-        self.__add_service_server(Empty,'/pivot_walking',
-                                                self.__pivot_walking_server_cb)
-        self.__add_service_server(Empty,'/mode_change',
-                                                self.__mode_change_server_fb)
-        self.__add_service_server(Empty,'/tumbling',
-                                                self.__tumbling_server_fb)
-        self.__add_service_server(Empty,'/set_steps',
-                                               self.__set_steps_server_cb)
+        self._add_service_server(Empty,'set_idle', self._set_idle_server_cb)
+        self._add_service_server(Empty,'/feedfrwd_input',
+                                               self._feedfrwd_input_server_cb)
+        self._add_service_server(Empty,'/feedfrwd_single',
+                                              self._feedfrwd_single_server_cb)
+        self._add_service_server(Empty,'/pivot_walking',
+                                                self._pivot_walking_server_cb)
+        self._add_service_server(Empty,'/mode_change',
+                                                self._mode_change_server_fb)
+        self._add_service_server(Empty,'/tumbling',
+                                                self._tumbling_server_fb)
+        self._add_service_server(Empty,'/set_steps',
+                                               self._set_steps_server_cb)
     
     def __enter__(self):
         """To be able to use the class in with statement."""
@@ -175,13 +175,13 @@ class ControlService(Node):
             print("Interrupted by user.")
             return True
 
-    def __add_service_server(self, srv_type, srv_name: str, callback):
+    def _add_service_server(self, srv_type, srv_name: str, callback):
         """Adds an action server and puts it into a dictionary."""
         self.create_service(srv_type, srv_name, callback)
 
     # Callbacks
     # Servers
-    def __set_idle_server_cb(self, request, response):
+    def _set_idle_server_cb(self, request, response):
         """
         Sets field command in idle condition.
         """
@@ -213,7 +213,7 @@ class ControlService(Node):
         print("*"*72)
         return response
 
-    def __feedfrwd_input_server_cb(self, request, response):
+    def _feedfrwd_input_server_cb(self, request, response):
         """
         This service calls feedforward_line function of Controller
          class and executes a given input_series.
@@ -255,7 +255,7 @@ class ControlService(Node):
         self.rate.sleep()
         return response
 
-    def __feedfrwd_single_server_cb(self, request, response):
+    def _feedfrwd_single_server_cb(self, request, response):
         """
         This service calls feedforward_line function of Controller
          class and executes a given input_series in single_step mode.
@@ -319,7 +319,7 @@ class ControlService(Node):
         self.rate.sleep()
         return response
 
-    def __pivot_walking_server_cb(self, request, response):
+    def _pivot_walking_server_cb(self, request, response):
         """
         This service calls pivot_walking function.
         """
@@ -376,7 +376,7 @@ class ControlService(Node):
         self.rate.sleep()
         return response
 
-    def __mode_change_server_fb(self, request, response):
+    def _mode_change_server_fb(self, request, response):
         """
         This service calls mode_changing function and performs one
         mode change.
@@ -437,7 +437,7 @@ class ControlService(Node):
         self.rate.sleep()
         return response
 
-    def __tumbling_server_fb(self, request, response):
+    def _tumbling_server_fb(self, request, response):
         """
         This service calls tumbling function and performs tumbling.
         """
@@ -500,7 +500,7 @@ class ControlService(Node):
         self.rate.sleep()
         return response
     
-    def __set_steps_server_cb(self, request, response):
+    def _set_steps_server_cb(self, request, response):
         """
         Sets steps parameters of the Controller class.
         """
