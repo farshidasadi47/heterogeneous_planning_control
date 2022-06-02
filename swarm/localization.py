@@ -158,8 +158,6 @@ class Localization():
             print("Interrupted by user.")
             pass
         except Exception as exc:
-            print("Ooops! exception happened.")
-            print("Exception details:")
             print(type(exc).__name__,exc.args)
             pass
     
@@ -216,8 +214,6 @@ class Localization():
             print("Interrupted by user.")
             pass
         except Exception as exc:
-            print("Ooops! exception happened.")
-            print("Exception details:")
             print(type(exc).__name__,exc.args)
             pass
     
@@ -316,8 +312,6 @@ class Localization():
             print("Interrupted by user.")
             pass
         except Exception as exc:
-            print("Ooops! exception happened.")
-            print("Exception details:")
             print(type(exc).__name__,exc.args)
             pass
         return np.mean(mm2pixel)
@@ -388,7 +382,6 @@ class Localization():
             self._center = center
             self._mask_space = mask_space
         except Exception as exc:
-            print("Ooops! exception happened. Exception details:")
             print(type(exc).__name__,exc.args)
             pass
     
@@ -591,8 +584,6 @@ class Localization():
             print("Interrupted by user.")
             pass
         except Exception as exc:
-            print("Ooops! exception happened.")
-            print("Exception details:")
             print(type(exc).__name__,exc.args)
             pass
 

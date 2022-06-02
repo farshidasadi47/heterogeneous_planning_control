@@ -244,9 +244,8 @@ class ControlService(Node):
                 self.pipeline.set_cmd(np.zeros(3,dtype=float))
                 self.pipeline.set_state(states)
                 self.rate.sleep()
-            except ValueError:
-                # ValueError can be raised by input_compatibility_check.
-                # This error is handled internally, so we pass here.
+            except Exception as exc:
+                print(type(exc).__name__,exc.args)
                 pass
         else:
             print("Not in idle mode. Current server call is ignored.")
@@ -308,8 +307,6 @@ class ControlService(Node):
                     self.pipeline.set_cmd_mode("idle")
                     self.rate.sleep()
             except Exception as exc:
-                print("Ooops! exception happened. Values are ignored.")
-                print("Exception details:")
                 print(type(exc).__name__,exc.args)
                 pass
         else:
@@ -361,11 +358,8 @@ class ControlService(Node):
                 self.pipeline.set_cmd(np.zeros(3,dtype=float))
                 self.pipeline.set_state(states)
                 self.rate.sleep()
-            except ValueError:
-                # This error is handled internally, so we pass here.
-                pass
-            except AssertionError:
-                # Handled internally and no further action is needed.
+            except Exception as exc:
+                print(type(exc).__name__,exc.args)
                 pass
         else:
             print("Not in idle mode. Current server call is ignored.")
@@ -422,11 +416,8 @@ class ControlService(Node):
                 self.pipeline.set_cmd(np.zeros(3,dtype=float))
                 self.pipeline.set_state(states)
                 self.rate.sleep()
-            except ValueError:
-                # This error is handled internally, so we pass here.
-                pass
-            except AssertionError:
-                # Handled internally and no further action is needed.
+            except Exception as exc:
+                print(type(exc).__name__,exc.args)
                 pass
         else:
             print("Not in idle mode. Current server call is ignored.")
@@ -483,12 +474,7 @@ class ControlService(Node):
                 self.pipeline.set_cmd(np.zeros(3,dtype=float))
                 self.pipeline.set_state(states)
                 self.rate.sleep()
-            except ValueError:
-                # This error is handled internally, so we pass here.
-                pass
             except Exception as exc:
-                print("Ooops! exception happened. Values are ignored.")
-                print("Exception details:")
                 print(type(exc).__name__,exc.args)
                 pass
         else:
@@ -547,12 +533,9 @@ class ControlService(Node):
             f"sweep_alpha = {np.rad2deg(self.control.sweep_alpha)}\n"+
             f"tumble_inc = {np.rad2deg(self.control.tumble_step_inc)}")
                 self.rate.sleep()
-            except ValueError:
-                pass
             except Exception as exc:
-                print("Ooops! exception happened. Values are ignored.")
-                print("Exception details:")
                 print(type(exc).__name__,exc.args)
+                pass
         else:
             print("Not in idle mode. Current server call is ignored.")
         print("*"*72)
