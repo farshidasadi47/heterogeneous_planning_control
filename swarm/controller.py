@@ -22,7 +22,7 @@ from swarm import model
 
 np.set_printoptions(precision=2, suppress=True)
 ########## classes and functions #######################################
-class ControlModel():
+class Controller():
     """
     This class holds controlers for pivot walking and rolling of
     swarm of millirobots.
@@ -186,13 +186,13 @@ class ControlModel():
         Yields a range of wrapped angle that goes from \"from_ang\"
         to \"to_ang\".
         """
-        diff = float(ControlModel.wrap(to_ang - from_ang))
+        diff = float(Controller.wrap(to_ang - from_ang))
         if diff < 0:
             inc *= -1
-        diff = ControlModel.round_to_zero(diff)
+        diff = Controller.round_to_zero(diff)
         to_ang = from_ang + diff
-        for ang in ControlModel.frange(from_ang, to_ang, inc):
-            yield ControlModel.wrap(ang)
+        for ang in Controller.frange(from_ang, to_ang, inc):
+            yield Controller.wrap(ang)
     
     @staticmethod
     def wrap_range_twin(*,from_1, to_1, inc_1, from_2, to_2, inc_2):
@@ -202,16 +202,16 @@ class ControlModel():
         """
         assert_str = "Cannot handle cases that \"from_i == to_i\" is True."
         assert (from_1 != to_1 and from_2!= to_2), assert_str
-        diff_1 = float(ControlModel.wrap(to_1 - from_1))
-        diff_2 = float(ControlModel.wrap(to_2 - from_2))
+        diff_1 = float(Controller.wrap(to_1 - from_1))
+        diff_2 = float(Controller.wrap(to_2 - from_2))
         # modify sign of increments if necessary.
         if diff_1 < 0:
             inc_1 *= -1
         if diff_2 < 0:
             inc_2 *= -1
         # Round up to a precision to avoid numerical problems.
-        diff_1 = ControlModel.round_to_zero(diff_1)
-        diff_2 = ControlModel.round_to_zero(diff_2)
+        diff_1 = Controller.round_to_zero(diff_1)
+        diff_2 = Controller.round_to_zero(diff_2)
         #
         to_1 = from_1 + diff_1
         to_2 = from_2 + diff_2
@@ -224,8 +224,8 @@ class ControlModel():
             inc_1 = diff_1/n_longer
             inc_2 = diff_2/n_longer
         # Get generators.
-        iter_1 = ControlModel.frange(from_1, to_1, inc_1)
-        iter_2 = ControlModel.frange(from_2, to_2, inc_2)
+        iter_1 = Controller.frange(from_1, to_1, inc_1)
+        iter_2 = Controller.frange(from_2, to_2, inc_2)
         # Yield the values.
         for ang_1 in iter_1:
             ang_2 = next(iter_2)
@@ -252,7 +252,7 @@ class ControlModel():
                          /np.sqrt((np.tan(sweep_alpha)*np.cos(ang))**2
                                  +(np.tan(sweep_theta)*np.sin(ang))**2))
         #
-        iterator = ControlModel.frange(0,np.pi,inc)
+        iterator = Controller.frange(0,np.pi,inc)
         iterator = np.arange(0,np.pi,inc).flat
         for ang in iterator:
             # Get corresponding radius on the ellipse.
@@ -287,7 +287,7 @@ class ControlModel():
             yield np.array([self.theta, alpha])
 
     def update_alpha(self, alpha: float):
-        self.alpha = ControlModel.wrap(alpha)
+        self.alpha = Controller.wrap(alpha)
 
     def step_theta(self, desired_theta:float, pivot: str = None):
         """
@@ -384,7 +384,7 @@ class ControlModel():
             # Lift the robots of pivot point A.
             yield from self.step_alpha(-np.pi/2, self.tumble_step_inc)
             # Update theta and mode, and position.
-            theta_end = ControlModel.wrap(theta_end)
+            theta_end = Controller.wrap(theta_end)
             self.reset_state(pos = pos_end, theta=theta_end, mode=des_mode)
             # Lift down the robots.
             yield from self.step_alpha(0.0, self.tumble_step_inc)
@@ -420,11 +420,11 @@ class ControlModel():
         assert abs(self.alpha) <0.01, "Tumbling should happen at alpha = 0."
         if not line_up:
             # Desired angle command will be overriden in this case.
-            input_cmd[1] = ControlModel.wrap(self.theta - np.pi/2)
+            input_cmd[1] = Controller.wrap(self.theta - np.pi/2)
         # Modify the distance to walk and theta is necessary.
         if input_cmd[0] < 0:
             input_cmd[0] = -input_cmd[0]
-            input_cmd[1]  = ControlModel.wrap(input_cmd[1] + np.pi)
+            input_cmd[1]  = Controller.wrap(input_cmd[1] + np.pi)
         # Calculate position update step.
         pos_delta = (self.specs.tumbling_length
                     *np.array([np.cos(input_cmd[1]), np.sin(input_cmd[1])]
@@ -432,7 +432,7 @@ class ControlModel():
         # determine rounded number of rotations needed.
         n_tumbling = round(input_cmd[0]/self.specs.tumbling_length)
         # Line up robots for starting with pivot B.
-        start_theta = ControlModel.wrap(input_cmd[1] + np.pi/2)
+        start_theta = Controller.wrap(input_cmd[1] + np.pi/2)
         yield from self.step_theta(start_theta)
         # Set tumbling parameter.
         alpha_dir = 1
@@ -443,7 +443,7 @@ class ControlModel():
             yield from self.step_alpha(alpha_dir*np.pi/2, self.tumble_step_inc)
             # Update position, theta, and mode
             self.reset_state(pos = self.pos + pos_delta,
-                             theta = ControlModel.wrap(self.theta + np.pi),
+                             theta = Controller.wrap(self.theta + np.pi),
                              mode = next_mode[alpha_dir])
             # Take down the robot.
             yield from self.step_alpha(0, self.tumble_step_inc)
@@ -517,7 +517,7 @@ class ControlModel():
             yield from self.step_theta(theta- sweep)
         for _ in range(steps):
             step_starting_theta = self.theta
-            for theta_s, alpha_s in ControlModel.range_oval(sweep,
+            for theta_s, alpha_s in Controller.range_oval(sweep,
                                                       self.sweep_alpha,
                                                       self.pivot_step_inc):
                 # Update relted states.
@@ -735,7 +735,7 @@ class Pipeline:
 ########## test section ################################################
 if __name__ == '__main__':
     specs = model.SwarmSpecs.robo3()
-    control = ControlModel(specs,np.array([0,0,20,0,40,0]),0,1)
+    control = Controller(specs,np.array([0,0,20,0,40,0]),0,1)
     input_series = np.array([[10,0,1],
                              [0,0,1],
                              [12,0,-2],

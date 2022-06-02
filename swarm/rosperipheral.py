@@ -138,7 +138,7 @@ class Peripherals(Node):
 class ControlService(Node):
     """This class holds services that control swarm of milirobot."""
     def __init__(self, pipeline: controller.Pipeline,
-                       control: controller.ControlModel, rate = 100):
+                       control: controller.Controller, rate = 100):
         # If rclpy.init() is not called, call it.
         if rclpy.ok() is not True:
             rclpy.init(args = sys.argv)
@@ -215,7 +215,7 @@ class ControlService(Node):
 
     def __feedfrwd_input_server_cb(self, request, response):
         """
-        This service calls feedforward_line function of ControlModel
+        This service calls feedforward_line function of Controller
          class and executes a given input_series.
         """
         input_series = np.array([[10,0,1],
@@ -257,7 +257,7 @@ class ControlService(Node):
 
     def __feedfrwd_single_server_cb(self, request, response):
         """
-        This service calls feedforward_line function of ControlModel
+        This service calls feedforward_line function of Controller
          class and executes a given input_series in single_step mode.
         """
         input_series = np.array([[50,0,1],
@@ -502,7 +502,7 @@ class ControlService(Node):
     
     def __set_steps_server_cb(self, request, response):
         """
-        Sets steps parameters of the ControlModel class.
+        Sets steps parameters of the Controller class.
         """
         print("*"*72)
         print("Current values of parameters:\n"+
@@ -568,7 +568,7 @@ class MainExecutor(rclpy.executors.MultiThreadedExecutor):
         #
         specs = model.SwarmSpecs.robo3()
         pipeline = controller.Pipeline()
-        control = controller.ControlModel(specs,np.array([0,0,20,0,40,0]),0,1)
+        control = controller.Controller(specs,np.array([0,0,20,0,40,0]),0,1)
         # Set initialize pipeline states.
         pipeline.set_state(control.get_state())
         # Add nodes.
