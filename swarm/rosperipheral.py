@@ -18,7 +18,7 @@ from geometry_msgs.msg import Point32
 from std_srvs.srv import Empty
 
 # from "foldername" import filename, this is for ROS compatibility.
-from swarm import controller
+from swarm import controller, model
 ########## Definiitons #################################################
 class Peripherals(Node):
     """Main executor for arduino comunications."""
@@ -124,7 +124,7 @@ class Peripherals(Node):
         # Read latest subscriber values.
         field_fb = self.get_subs_values()
         # printing
-        time_counter_msg = f"{time.time()%1e4:+010.3f}|{self.counter:+010d}|"
+        time_counter_msg = f"{time.time()%1e3:+08.3f}|{self.counter:06d}|"
         cmd_msg = (",".join(f"{elem:+07.2f}" for elem in field) + "|"
                   +",".join(f"{elem:+07.2f}" for elem in field_fb) + "|"
                   +",".join(f"{elem:+07.2f}" for elem in states[0]) + "|"
@@ -138,7 +138,7 @@ class Peripherals(Node):
 class ControlService(Node):
     """This class holds services that control swarm of milirobot."""
     def __init__(self, pipeline: controller.Pipeline,
-                       control: controller.Controller, rate = 100):
+                       control: controller.ControlModel, rate = 100):
         # If rclpy.init() is not called, call it.
         if rclpy.ok() is not True:
             rclpy.init(args = sys.argv)
@@ -219,9 +219,9 @@ class ControlService(Node):
          class and executes a given input_series.
         """
         input_series = np.array([[10,0,1],
-                                 [6.5*3,np.pi/2,-2],
+                                 [10,np.pi/2,-2],
                                  [10,0,2],
-                                 [6.5,0,0]])
+                                 [10,0,0]])
         # Check if we are not in the middle of another service that 
         # calls data pipeline, If we are, ignore this service call.
         interactive = True
@@ -237,10 +237,12 @@ class ControlService(Node):
                 for field, states in self.control.feedforward_line(
                                                                  input_series,
                                                                  interactive):
-                    self.pipeline.set_cmd(np.array([*field, 100.0]), states)
+                    self.pipeline.set_cmd(np.array([*field, 100.0]))
+                    self.pipeline.set_state(states)
                     self.rate.sleep()
                 # set command to zero
-                self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                self.pipeline.set_cmd(np.zeros(3,dtype=float))
+                self.pipeline.set_state(states)
                 self.rate.sleep()
             except ValueError:
                 # ValueError can be raised by input_compatibility_check.
@@ -259,10 +261,10 @@ class ControlService(Node):
          class and executes a given input_series in single_step mode.
         """
         input_series = np.array([[50,0,1],
-                                 [12,np.pi/2,-2],
-                                 [12*4,np.pi,0],
+                                 [10,np.pi/2,-2],
+                                 [10*4,np.pi,0],
                                  [50,-np.pi/2,2],
-                                 [12,-np.pi/2,-1]])
+                                 [10,-np.pi/2,-1]])
         regex = r'^q'
         msg_str = "Enter \"q\" for quitting, anything else for proceeding: "
         num_sections = input_series.shape[0]
@@ -296,10 +298,12 @@ class ControlService(Node):
                     # Execute main controller and update pipeline.
                     for field, states in self.control.feedforward_line(
                                        current_input,interactive,last_section):
-                        self.pipeline.set_cmd(np.array([*field,100.0]), states)
+                        self.pipeline.set_cmd(np.array([*field,100.0]))
+                        self.pipeline.set_state(states)
                         self.rate.sleep()
                     # set command to zero
-                    self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                    self.pipeline.set_cmd(np.zeros(3,dtype=float))
+                    self.pipeline.set_state(states)
                     # Release the data pipeline.
                     self.pipeline.set_cmd_mode("idle")
                     self.rate.sleep()
@@ -350,10 +354,12 @@ class ControlService(Node):
                 # Execute main controller and update pipeline.
                 for field, states in self.control.pivot_walking_walk(params,
                                                                   alternative):
-                    self.pipeline.set_cmd(np.array([*field, 100.0]), states)
+                    self.pipeline.set_cmd(np.array([*field, 100.0]))
+                    self.pipeline.set_state(states)
                     self.rate.sleep()
                 # set command to zero
-                self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                self.pipeline.set_cmd(np.zeros(3,dtype=float))
+                self.pipeline.set_state(states)
                 self.rate.sleep()
             except ValueError:
                 # This error is handled internally, so we pass here.
@@ -409,10 +415,12 @@ class ControlService(Node):
                 # Execute main controller and update pipeline.
                 for field, states in self.control.mode_changing(des_mode,
                                                                        0,False):
-                    self.pipeline.set_cmd(np.array([*field, 100.0]), states)
+                    self.pipeline.set_cmd(np.array([*field, 100.0]))
+                    self.pipeline.set_state(states)
                     self.rate.sleep()
                 # set command to zero
-                self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                self.pipeline.set_cmd(np.zeros(3,dtype=float))
+                self.pipeline.set_state(states)
                 self.rate.sleep()
             except ValueError:
                 # This error is handled internally, so we pass here.
@@ -468,10 +476,12 @@ class ControlService(Node):
                 # Execute main controller and update pipeline.
                 for field, states in self.control.tumbling(input_cmd,
                                                                  False, False):
-                    self.pipeline.set_cmd(np.array([*field, 100.0]), states)
+                    self.pipeline.set_cmd(np.array([*field, 100.0]))
+                    self.pipeline.set_state(states)
                     self.rate.sleep()
                 # set command to zero
-                self.pipeline.set_cmd(np.zeros(3,dtype=float), states)
+                self.pipeline.set_cmd(np.zeros(3,dtype=float))
+                self.pipeline.set_state(states)
                 self.rate.sleep()
             except ValueError:
                 # This error is handled internally, so we pass here.
@@ -556,8 +566,9 @@ class MainExecutor(rclpy.executors.MultiThreadedExecutor):
             rclpy.init(args = sys.argv)
         super().__init__()
         #
-        pipeline = controller.Pipeline(3)
-        control = controller.Controller(3,np.array([0,0,20,0,40,0]),0,1)
+        specs = model.SwarmSpecs.robo3()
+        pipeline = controller.Pipeline()
+        control = controller.ControlModel(specs,np.array([0,0,20,0,40,0]),0,1)
         # Set initialize pipeline states.
         pipeline.set_state(control.get_state())
         # Add nodes.
