@@ -36,7 +36,9 @@ class Localization():
         self._set_hsv_ranges()
         # Calibration parameters.
         self._img_name_prefix = "cal_img"
-        self._img_dir_prefix = "calibration_img"
+        # Change based on your real package directory.
+        package_dir = r"/home/fasadi/ws/src/swarm/swarm"
+        self._img_dir_prefix = os.path.join(package_dir,"calibration_img")
         self._mtx = None
         self._dist = None
         self._nmtx = None
@@ -86,7 +88,7 @@ class Localization():
         hsv_ranges = {}
         # Black or 'k'
         hsv_ranges['k'] = {'lb': [np.array([  0,  0,  0],dtype=np.uint8)],
-                           'ub': [np.array([179,255, 30],dtype=np.uint8)]}
+                           'ub': [np.array([179,255, 40],dtype=np.uint8)]}
         # Red or 'r'
         hsv_ranges['r'] = {'lb': [np.array([  0, 50, 60],dtype=np.uint8),
                                   np.array([165, 50, 60],dtype=np.uint8)],
@@ -112,7 +114,7 @@ class Localization():
         """
         # Create object points.
         img_name_prefix = self._img_name_prefix
-        img_dir_prefix = self._img_dir_prefix
+        img_directory = self._img_dir_prefix
         try:
             counter = 0
             alive = True
@@ -132,7 +134,6 @@ class Localization():
                     # Set file name for saving animation.
                     img_index = 1
                     img_name = f"{img_name_prefix}_{img_index:02d}.jpg"
-                    img_directory = os.path.join(os.getcwd(),img_dir_prefix)
                     # If the directory does not exist, make one.
                     if not os.path.exists(img_directory):
                         os.mkdir(img_directory)
@@ -169,8 +170,7 @@ class Localization():
         # First try to read calibration image files.
         img_dir_prefix = self._img_dir_prefix
         img_name_prefix = self._img_name_prefix
-        img_directory = os.path.join(os.getcwd(),img_dir_prefix)
-        img_path = os.path.join(img_directory,"*.jpg")
+        img_path = os.path.join(img_dir_prefix,img_name_prefix + r"_??.jpg")
         # termination criteria
         criteria=(cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
         # prepare object points, like (0,0,0), (1,0,0), ...,(6,5,0)
@@ -208,7 +208,7 @@ class Localization():
 
         except IOError:
             print("Ooops! calibration images are not found in:")
-            print(os.path.join(".",img_dir_prefix,img_name_prefix,"ij.jpg"))
+            print(img_path)
             print("Initialize class with \"save_image = True\".")
         except KeyboardInterrupt:
             print("Interrupted by user.")
