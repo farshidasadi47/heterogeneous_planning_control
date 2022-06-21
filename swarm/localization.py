@@ -532,14 +532,16 @@ class Localization():
                 frame = self._draw_grid(frame)
             # Find robots, if any and process them.
             robots = {color: self._find_robot(hsv,color)
-                                                for color in self._hsv_ranges}
-            robot_states = {}
-            for k, v in robots.items():
+                                          for color in self._hsv_ranges.keys()}
+            robot_states = np.zeros(len(self._hsv_ranges)*3,dtype=float)
+            for i,(k, v) in enumerate(robots.items()):
                 if v is None:
-                    robot_states[k] = None
+                    current_state = np.ones(3,dtype=float)*999.0
+                    robot_states[3*i:3*i+3] = current_state
                     continue
                 pixel_state, box = v
-                robot_states[k] = self._pixel2cartesian(pixel_state)
+                current_state = self._pixel2cartesian(pixel_state)
+                robot_states[3*i:3*i+3] = current_state
                 if draw_robots:
                     cv2.drawContours(frame,[box],-1,self._colors[k],2)
             # Draw space borders.
@@ -564,8 +566,9 @@ class Localization():
             print_str = f"{now%1e4:+010.3f}|{freq:010.3f}|{counter:+06d}||"
             rob_str = ""
             none = 'None'
-            for i, (k,v) in enumerate(robot_states.items()):
-                if v is None:
+            for i, k in enumerate(self._hsv_ranges):
+                v = robot_states[3*i:3*i+3]
+                if 999 in v:
                     rob_str += f"'{k:1s}': {none:>21s},"
                 else:
                     rob_str += (f"'{k:1s}': {v[0]:+06.1f},{v[1]:+06.1f},"
