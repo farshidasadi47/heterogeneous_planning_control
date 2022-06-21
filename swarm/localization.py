@@ -14,6 +14,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
+try:
+    from swarm import model
+except ModuleNotFoundError:
+    import model
 ########## classes and functions #######################################
 class Localization():
     """
@@ -29,10 +33,7 @@ class Localization():
         self._W = 640
         self._H = 480
         self._set_camera_settings()
-        self._colors = {'k':(  0,  0,  0),'r':(  0,  0,255),'b':(255,  0,  0),
-                        'g':(  0,255,  0),'w':(255,255,255)}
-                        #,'m':(255,  0,255),
-                        #'y':(  0,255,255),'c':(255,255,  0)}
+        model.define_colors(self)
         self._set_hsv_ranges()
         # Calibration parameters.
         self._img_name_prefix = "cal_img"
@@ -509,7 +510,7 @@ class Localization():
                 frame = self._draw_grid(frame)
             # Find robots, if any and process them.
             robots = {color: self._find_robot(hsv,color)
-                                              for color in self._colors.keys()}
+                                                for color in self._hsv_ranges}
             robot_states = {}
             for k, v in robots.items():
                 if v is None:

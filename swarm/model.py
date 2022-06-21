@@ -26,6 +26,12 @@ def wrap(angle):
         wrapped += 2*np.pi
     wrapped -= np.pi
     return wrapped
+
+def define_colors(self):
+    self._colors = {'k':(  0,  0,  0), 'r':(  0,  0,255), 'b':(255,  0,  0),
+                    'g':(  0,255,  0), 'm':(255,  0,255), 'w':(255,255,255),
+                    'y':(  0,255,255), 'c':(255,255,  0)}
+    self._markers = ['o','s','P','h','*','+','x','d']
 ########## Classes #####################################################
 class SwarmSpecs:
     """This class stores specifications of swarm of milirobots."""
@@ -84,8 +90,8 @@ class SwarmSpecs:
         self.lbsy = -self.ubsy
         self.rscoil = self.rcoil - self.tumbling_length
         # Plotting and vision markers.
-        self._colors = ['k','r','b','g','m','y','c']
-        self._markers = ['o','s','P','h','*','+','x','d']
+        define_colors(self)
+        self._colors = list(self._colors.keys())
         # Experimental execution parameters.
         self.theta_inc = theta_inc
         self.alpha_inc = alpha_inc
@@ -94,6 +100,7 @@ class SwarmSpecs:
         self.tumble_inc = tumble_inc
         self.theta_sweep = theta_sweep
         self.alpha_sweep = alpha_sweep
+        self.tolerance = 2.0
 
     @classmethod
     def robo3(cls):
