@@ -25,13 +25,15 @@ class Localization():
     To find robots, different colors are used for them. Camera frames
     are filterred based on specific color ranges to localize robots.
     """
-    def __init__(self, save_image = False):
+    def __init__(self, raw = False):
         self.cap = cv2.VideoCapture(-1)
         if not self.cap.isOpened():
             print("Cannot open camera.")
             sys.exit()
         self._W = 640
         self._H = 480
+        self._fps = 60
+        self._fmtcap = 'YUYV'
         self._set_camera_settings()
         model.define_colors(self)
         self._set_hsv_ranges()
@@ -51,13 +53,15 @@ class Localization():
         self._center = None          # (center_x, center_y)
         self._mask_space = None      # Mask for work space.
         # Calibration
-        if save_image:
-            self._save_image()
+        if raw:
+            pass
         else:
-            self._calibrate()
+            # New camera does not have image distortion.
+            #self._calibrate() 
             # Pixel to mm conversion factor, found via _find_scale.
-            self._p2mm = 0.52845085 # self._find_scale()
+            self._p2mm = 0.48970705 #self._find_scale()
             self._get_n_set_space()
+            print("Space set.")
     
     def __enter__(self):
         """To be able to use the class in with statement."""
@@ -74,10 +78,13 @@ class Localization():
             return True
 
     def _set_camera_settings(self):
+        self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.cap.set(cv2.CAP_PROP_FOCUS, 260)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._W)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._H)
-        #self.cap.set(cv2.CAP_PROP_FPS, 30)
-        self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'YUYV'))
+        self.cap.set(cv2.CAP_PROP_FPS, 60)
+        self.cap.set(cv2.CAP_PROP_FOURCC,cv2.VideoWriter_fourcc(*self._fmtcap))
     
     def _set_hsv_ranges(self):
         """
@@ -87,23 +94,25 @@ class Localization():
         To find appropriate ranges use get_color_ranges method.
         """
         hsv_ranges = {}
-        # Black or 'k'
-        hsv_ranges['k'] = {'lb': [np.array([  0,  0,  0],dtype=np.uint8)],
-                           'ub': [np.array([179,255, 40],dtype=np.uint8)]}
-        # Red or 'r'
-        hsv_ranges['r'] = {'lb': [np.array([  0, 50, 60],dtype=np.uint8),
-                                  np.array([165, 50, 60],dtype=np.uint8)],
-                           'ub': [np.array([ 10,255,255],dtype=np.uint8),
-                                  np.array([179,255,255],dtype=np.uint8)]}
-        # Blue or 'b'
-        hsv_ranges['b'] = {'lb': [np.array([116, 60, 31],dtype=np.uint8)],
-                           'ub': [np.array([130,255,255],dtype=np.uint8)]}
-        # Green or 'g'
-        hsv_ranges['g'] = {'lb': [np.array([ 90, 20, 10],dtype=np.uint8)],
-                           'ub': [np.array([115,255, 95],dtype=np.uint8)]}
-        # White or 'w'
-        hsv_ranges['w'] = {'lb': [np.array([ 95, 10,160],dtype=np.uint8)],
-                           'ub': [np.array([125, 90,255],dtype=np.uint8)]}
+        if self._fps == 60:
+            # For raw format.
+            # Black or 'k'
+            hsv_ranges['k'] = {'lb': [np.array([  0,  0,  0],dtype=np.uint8)],
+                               'ub': [np.array([179,255, 50],dtype=np.uint8)]}
+            # Red or 'r'
+            hsv_ranges['r'] = {'lb': [np.array([  0,120, 40],dtype=np.uint8),
+                                      np.array([160,120, 40],dtype=np.uint8)],
+                               'ub': [np.array([ 20,255,255],dtype=np.uint8),
+                                      np.array([179,255,255],dtype=np.uint8)]}
+            # Blue or 'b'
+            hsv_ranges['b'] = {'lb': [np.array([110, 30, 35],dtype=np.uint8)],
+                               'ub': [np.array([130,255,255],dtype=np.uint8)]}
+            # Green or 'g'
+            hsv_ranges['g'] = {'lb': [np.array([ 70, 50,  0],dtype=np.uint8)],
+                               'ub': [np.array([ 95,255,160],dtype=np.uint8)]}
+            # White or 'w'
+            hsv_ranges['w'] = {'lb': [np.array([ 90, 20, 90],dtype=np.uint8)],
+                               'ub': [np.array([120,130,255],dtype=np.uint8)]}
         #
         self._hsv_ranges = hsv_ranges
 
@@ -195,6 +204,10 @@ class Localization():
                     corners2 = cv2.cornerSubPix(gray,corners, (11,11),
                                                              (-1,-1), criteria)
                     imgpoints.append(corners2)
+                    # Draw and display the corners
+                    #cv2.drawChessboardCorners(img,(n_row,n_col),corners2, ret)
+                #cv2.imshow('img', img)
+                #cv2.waitKey(0)
             # Get calibration parameters.
             ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints,
                                                             imgpoints,
@@ -292,7 +305,7 @@ class Localization():
             for fname in images:
                 # Read image and undistort it.
                 img = cv2.imread(fname)
-                img = self._undistort(img)
+                #img = self._undistort(img)
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 # Find the chess board corners
                 ret, corners=cv2.findChessboardCorners(gray,(n_row,n_col),None)
@@ -327,11 +340,11 @@ class Localization():
         H_mm = 190
         offset = 20
         try:
-            for _ in range(10):
+            for _ in range(60):
                 # Take each frame
                 _, frame = self.cap.read()
             # Undistort
-            frame = self._undistort(frame)
+            #frame = self._undistort(frame)
             H, W, _ = frame.shape
             # Space boundary is painted black for ease of image processing.
             # Change color space and get a mask for color of space boundary.
@@ -426,7 +439,7 @@ class Localization():
         areas = np.array([cv2.contourArea(cnt) for cnt in contours])
         #areas = np.ma.masked_less(areas, .25*real_robo_area)
         # Filter contours with areas outside of expected range.
-        areas=np.ma.masked_outside(areas,.25*real_robo_area,1.4*real_robo_area)
+        areas=np.ma.masked_outside(areas,.4*real_robo_area,2*real_robo_area)
         if areas.count() == 0:
             return None
         # Find the nearest area to size of our physical robots
@@ -501,7 +514,7 @@ class Localization():
         ret, frame = self.cap.read()
         if ret:
             # Process frame.
-            frame = self._undistort(frame)
+            #frame = self._undistort(frame)
             frame = self._crop(frame,self._roi_frame)
             masked = cv2.bitwise_and(frame,frame, mask=self._mask_space)
             hsv = cv2.cvtColor(masked, cv2.COLOR_BGR2HSV)
@@ -568,7 +581,8 @@ class Localization():
                 if not has_frame:
                     break
                 if undistort:
-                    frame = self._undistort(frame)
+                    #frame = self._undistort(frame)
+                    pass
                 cv2.imshow("cam", frame)
                 time_str = f"{time.time()%1e4:+010.3f}|{counter:+010d}"
                 print(time_str)
@@ -629,6 +643,8 @@ class Localization():
         h_min = s_min = v_min = h_max = s_max = v_max = 0
         print('*'*72)
         print('Click to get HSV. Press escape to quit.')
+        for _ in range(60):
+            has_frame, frame = self.cap.read()
         while True:
             # Read frame
             has_frame, frame = self.cap.read()
@@ -661,12 +677,14 @@ class Localization():
             image = np.concatenate((frame, filterred), axis=1)
             cv2.imshow('cam',filterred)
             # Press escape to quit.
-            if cv2.waitKey(20) & 0xFF == 27:
+            if cv2.waitKey(1) & 0xFF == 27:
+                cv2.destroyAllWindows()
                 break
 
 ########## test section ################################################
 if __name__ == '__main__':
-    camera = Localization()
+    camera = Localization(raw = False)
     camera.stream_test()
-    #camera.get_color_ranges()
+    camera.get_color_ranges()
     #camera.stream_with_choice()
+    #print(camera._find_scale())
