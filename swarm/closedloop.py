@@ -121,6 +121,14 @@ class Controller():
         return [theta, alpha] # Should be list.
     
     @staticmethod
+    def cart2pol(cart):
+        return (np.linalg.norm(cart), np.arctan2(cart[1],cart[0]))
+
+    @staticmethod
+    def pol2cart(pol):
+        return (pol[0]*np.cos(pol[1]), pol[0]*np.sin(pol[1]))
+    
+    @staticmethod
     def frange(start, stop=None, step=None):
         """Float version of python range"""
         # This function is from stackoverflow.
@@ -511,11 +519,128 @@ class Controller():
         finally:
             # Reset the states to its initials.
             self.reset_state(*states[:-2])
+    
+    # Closed loop related functions.
+    def modify_angles(self,angles,angle):
+        """
+        Modifies recorded angle of robots based on the given angle.
+        Recorded angle is the minimum angle of robot w.r.t. x axis ccw
+        and it is +-pi/2 range.
+        ----------
+        Parameters
+        ----------
+        angles: array of radians.
+        angle: scalar
+        ----------
+        Returns
+        ----------
+        angles: array, modified angles.
+        """
+        for i, ang in enumerate(angles):
+            a = [ang, ang + np.pi]
+            idx = np.argmin([abs(self.wrap(a[0]-angle)),
+                             abs(self.wrap(a[1]-angle))])
+            angles[i] = a[idx]
+        return angles
+            
+    def process_robots(self, robot_states, any_robot = True):
+        """
+        Returns pos and theta angle of robots found.
+        ----------
+        Parameters
+        ----------
+        robot_states: array [xi, yi, theta_i, ...]
+        any_robot: Boolean, Default: True
+            If true, it only return states for the first robot found.
+        ----------
+        Exception
+        ----------
+        ValueError, if no robot found.
+        ----------
+        Returns
+        ----------
+        position: np.array [x_i,y_i, ...]
+        angle: theta
+        """
+        n_robot = self.specs.n_robot
+        positions, angles = [], []
+        robot_states = np.array(robot_states,dtype=float)
+        robot_states = np.reshape(robot_states,(-1,3))
+        if any_robot:
+            # Returns the first robot that it found.
+            for state in robot_states:
+                if 999 not in state:
+                    positions.extend(state[:2])
+                    angles.append(state[2])
+                    break
+            positions *= n_robot
+            angles *= n_robot
+            if not positions:
+                raise ValueError("No robots found.")
+        else:
+            # Looks for all robots available in current robot specs.
+            for robot in range(n_robot):
+                state = robot_states[robot]
+                if 999 in state:
+                    raise ValueError("One or more robot is missing.")
+                positions.extend(state[:2])
+                angles.append(state[2])
+        # Fix angle to closest one.
+        angles = self.modify_angles(angles,self.theta)
+        return np.array(positions), angles[0]
+
+    def get_polar_cmd(self, xi, xf, average = False):
+        """
+        Converts [xf - xi] from cartesian to polar [r, theta]
+        ----------
+        Parameters
+        ----------
+        xi, xf: array of initial and final positions.
+        average: Boolean, default = True, averages over all robots.
+        ----------
+        Returns
+        ----------
+        polar: array [r, theta]
+        """
+        beta = self.specs.beta[self.mode]
+        xf, xi = np.array(xf,dtype=float), np.array(xi,dtype=float)
+        e = np.reshape(xf - xi, (-1, 2))
+        polar = np.zeros_like(e)
+        for i, cart in enumerate(e):
+            polar[i,:] = Controller.cart2pol(cart)
+            # Currect r to be based on leader robot.
+            polar[i,0] = polar[i,0]/beta[i]
+        if average:
+            polar = np.mean(polar,axis=0).tolist()
+        else:
+            polar = polar[0]
+        return polar
+    
+    def closed_pivot_cart(self, xf, last = False, average = False):
+        """
+        Generates and yields body angles for closed loop pivot walking.
+        @param: Numpy array as [distance to walk, theta, mode]
+        """
+        line_up = True
+        cnt = 0
+        while True:
+            state_fb = yield None
+            xi, _ = state_fb
+            self.reset_state(pos = xi)
+            # Calculate equivalent polar command.
+            input_cmd = self.get_polar_cmd(xi, xf, average)
+            # Determine walking parameters.
+            steps, sweep = self.get_pivot_params(input_cmd[0],input_cmd[1])
+            yield from self.pivot_walking(input_cmd[1],sweep,1,False,line_up)
+            if steps < 2: break
+            line_up = False
+            cnt += 1
 
 ########## test section ################################################
 if __name__ == '__main__':
     specs = model.SwarmSpecs.robo3()
     xi = np.array([0,0,20,0,40,0])
+    xf = np.array([10,0,20,0,40,0])
     control = Controller(specs,xi,0,1)
     #control.reset_state(theta= np.deg2rad(-30))
     phi = np.deg2rad(135)
@@ -538,11 +663,18 @@ if __name__ == '__main__':
     iterator = control.feedforward_pivot([10,phi,1], last= False)
     control.compatibility_check(input_series)
     iterator = control.feedforward_line(input_series,has_last=True)
-    for _ in iterator:
-        i = control.get_state()
-        #self.pos,self.theta,self.alpha,self.mode,self.posa,self.posb
-        str_msg = (",".join(f"{elem:+07.2f}" for elem in i[0]) + "| "
-                  +f"{np.rad2deg(i[1]):+07.2f},{np.rad2deg(i[2]):+07.2f}| "
-                  +f"{i[3]:01d}"
-                  )
-        print(str_msg)
+    iterator = control.closed_pivot_cart(xf, last = False, average = False)
+    try:
+        for field in iterator:
+            if field is None:
+                field = iterator.send((xi,0))
+            i = control.get_state()
+            #self.pos,self.theta,self.alpha,self.mode,self.posa,self.posb
+            str_msg = (",".join(f"{elem:+07.2f}" for elem in i[0]) + "| "
+                    +f"{i[3]:01d}| " 
+                    +f"{np.rad2deg(i[1]):+07.2f},{np.rad2deg(i[2]):+07.2f}| "
+                    +",".join(f"{elem:+07.2f}" for elem in field)
+                    )
+            print(str_msg)
+    except StopIteration:
+        pass
