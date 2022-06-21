@@ -425,6 +425,20 @@ class Controller():
         sweep = np.arcsin(d_step/pivot_length) if steps else 0
         return steps, sweep
 
+    def pivot_walking_walk(self,input_cmd, last = False, line_up = True):
+        """
+        Calls pivot walking and yields field angles and states.
+        @param: Numpy array as [n_steps, starting_theta (degrees)]
+        """
+        assert input_cmd[0] >=0, "n_steps cannot be negative."
+        steps = int(input_cmd[0])
+        phi = np.deg2rad(input_cmd[1])
+        self.reset_state(theta = phi)
+        if not line_up: # Adjust for taking full step in first step.
+            phi = self.wrap(phi + np.pi/6)
+            line_up = True
+        yield from self.pivot_walking(phi,self.theta_sweep,steps,last,line_up)
+
     def feedforward_pivot(self, input_cmd, last= False):
         """
         Generates and yields body angles for pivot walking.
@@ -498,7 +512,8 @@ class Controller():
 ########## test section ################################################
 if __name__ == '__main__':
     specs = model.SwarmSpecs.robo3()
-    control = Controller(specs,np.array([0,0,20,0,40,0]),0,1)
+    xi = np.array([0,0,20,0,40,0])
+    control = Controller(specs,xi,0,1)
     #control.reset_state(theta= np.deg2rad(-30))
     phi = np.deg2rad(135)
     sweep = np.deg2rad(30)
@@ -509,11 +524,12 @@ if __name__ == '__main__':
                              [12*2,np.pi/2,0],
                              [10,0,2],
                              [12,0,0],
-                             [0,np.pi/2,1],
+                             [0,np.pi/2,999],
                              [0,np.pi/4,1]])
     iterator = control.step_mode(mode, phi, last=False, line_up= True)
     iterator = control.step_tumble(phi, 2, last= False,line_up= True)
     iterator = control.step_pivot(phi, sweep, 10,last= False,line_up= True)
+    iterator = control.pivot_walking_walk([2,0], last= False,line_up= True)
     iterator = control.mode_changing([0,phi,mode], last= False, line_up=True)
     iterator = control.tumbling([20,phi],last=False, line_up=True)
     iterator = control.feedforward_pivot([10,phi,1], last= False)
