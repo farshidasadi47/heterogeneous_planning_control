@@ -372,6 +372,10 @@ class Controller():
         yield from map(self.body2magnet,
                        self.step_tumble(input_cmd[1], steps, last, line_up))
 
+    def rotation(self, input_cmd):
+        """Rotates robots in place."""
+        yield from map(self.body2magnet,self.step_theta(input_cmd[1]))
+
     def step_pivot(self, phi, sweep, steps: int, last= False, line_up= True):
         """
         Yields field angles for pivot walking with specified sweep angles
@@ -401,6 +405,11 @@ class Controller():
         if last:
             # Line up the robot.
             yield from self.step_theta(phi + cte)
+
+    def pivot_walking(self, phi, sweep, steps:int, last= False, line_up= True):
+        """Wrapper arounf step_pivot."""
+        yield from map(self.body2magnet,
+                       self.step_pivot(phi, sweep, steps, last, line_up))
     
     def get_pivot_params(self, r, phi):
         """
@@ -427,18 +436,18 @@ class Controller():
             raise ValueError(exc_msg)
         # Determine walking parameters.
         steps, sweep = self.get_pivot_params(input_cmd[0],input_cmd[1])
-        yield from self.step_pivot(input_cmd[1],sweep,steps,last,line_up=True)
+        yield from self.pivot_walking(input_cmd[1],sweep,steps,
+                                                             last,line_up=True)
     
     def feedforward_line(self, input_series, has_last= True):
         """
         Yields magnetic field for executing series of input feedforward.
         @param: 2D array of commands as [distance, angle, mode] per row.
         """
-        input_series = np.array(input_series)
-        num_sections = input_series.shape[0]
+        num_sections = len(input_series)
         for section in range(num_sections):
             last = False if (section < num_sections-1) else has_last
-            input_cmd = input_series[section,:]
+            input_cmd = input_series[section]
             input_mode = int(input_cmd[2])
             if input_mode < 0:
                 # This is mode change request.
@@ -448,7 +457,7 @@ class Controller():
                 yield from self.tumbling(input_cmd, last)
             elif input_mode == 999:
                 # This is rotation in place.
-                yield from self.step_theta(input_cmd[1])
+                yield from self.rotation(input_cmd)
             else: 
                 # This is pivot walking mode.
                 yield from self.feedforward_pivot(input_cmd,last)
@@ -474,7 +483,7 @@ class Controller():
                     for _ in  self.tumbling(input_cmd, False): pass
                 elif input_mode == 999:
                      # This is rotation in place.
-                    for _ in self.step_theta(input_cmd[1]): pass
+                    for _ in self.rotation(input_cmd): pass
                 else: 
                     # This is pivot walking mode.
                     if input_mode != self.mode:
