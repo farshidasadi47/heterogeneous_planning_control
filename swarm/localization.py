@@ -127,9 +127,8 @@ class Localization():
         img_directory = self._img_dir_prefix
         try:
             counter = 0
-            alive = True
             save_img = False
-            while alive:
+            while True:
                 has_frame, frame = self.cap.read()
                 if not has_frame:
                     break
@@ -162,7 +161,8 @@ class Localization():
                 #
                 key = cv2.waitKey(1)
                 if key == 27:
-                    alive = False
+                    cv2.destroyAllWindows()
+                    break
                 elif key == ord('S') or key == ord('s'):
                     save_img = True
         except KeyboardInterrupt:
@@ -230,6 +230,8 @@ class Localization():
         except Exception as exc:
             print(type(exc).__name__,exc.args)
             pass
+        finally:
+            cv2.destroyAllWindows()
     
     def _undistort(self, img):
         # undistort
@@ -356,9 +358,8 @@ class Localization():
             # Find the space boundary ractangle among all contours.
             contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP,
                                                         cv2.CHAIN_APPROX_SIMPLE)
-            msg='Border not found. Work space must be inside camera field of view.'
             if not len(contours):
-                raise IOError(msg)
+                raise IOError
             # Get area of external contours bounding internal contours.
             external_areas = [cv2.contourArea(contours[idx]) if elem >-1 else 0
                                     for idx,elem in enumerate(hierarchy[0,:,2])]
@@ -370,7 +371,7 @@ class Localization():
             # If the specified contour area is significantly smaller than 
             # our physical space, workspace is out of camera field of view.
             if space_area < .85*W_mm*H_mm/self._p2mm**2:
-                raise IOError(msg)
+                raise IOError
             # Approximate contour and derive space boundaries.
             epsilon = 0.1*cv2.arcLength(cnt,True)
             approx = cv2.approxPolyDP(cnt,epsilon,True)
@@ -388,13 +389,17 @@ class Localization():
             center = (int(w/2+offset), int(h/2+offset))
             # Make mask for space.
             mask_space = np.zeros((roi_frame[3], roi_frame[2]), dtype=np.uint8)
-            mask_space[offset:offset+h, offset:offset+w] = 255
+            mask_space[roi_space[1]:roi_space[1]+roi_space[3],
+                       roi_space[0]:roi_space[0]+roi_space[2]] = 255
             #
             self._roi_frame = roi_frame # Used for cropping frames.
             self._roi_space = roi_space
             self._space_limits_mm = ((w-1)*self._p2mm/2, (h-1)*self._p2mm/2)
             self._center = center
             self._mask_space = mask_space
+        except IOError:
+            print('Border not found.')
+            pass
         except Exception as exc:
             print(type(exc).__name__,exc.args)
             pass
@@ -563,8 +568,9 @@ class Localization():
                                  f"{np.rad2deg(v[-1]):+07.2f}|")
             print(print_str + rob_str[:-1])
             counter += 1
-            k = cv2.waitKey(20) & 0xFF
+            k = cv2.waitKey(1) & 0xFF
             if k == 27:
+                cv2.destroyAllWindows()
                 break
     
     def stream_with_choice(self):
@@ -573,24 +579,28 @@ class Localization():
         """
         try:
             counter = 0
+            then = time.time()
             undistort = False
-            alive = True
             cv2.namedWindow("cam",cv2.WINDOW_KEEPRATIO)
-            while alive:
+            while True:
                 has_frame, frame = self.cap.read()
                 if not has_frame:
                     break
+                cv2.imshow("cam", frame)
                 if undistort:
                     #frame = self._undistort(frame)
                     pass
-                cv2.imshow("cam", frame)
-                time_str = f"{time.time()%1e4:+010.3f}|{counter:+010d}"
-                print(time_str)
+                now = time.time()
+                freq = 1/(now - then)
+                then = now
+                msg = f"{now%1e4:+010.3f}|{freq:010.3f}|{counter:+06d}"
+                print(msg)
                 counter += 1
                 # Read the key
                 key = cv2.waitKey(10)
                 if key == 27:
-                    alive = False
+                    cv2.destroyAllWindows()
+                    break
                 elif key == ord('U') or key == ord('u'):
                     undistort = True
                 elif key == ord('P') or key == ord('p'):
