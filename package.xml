@@ -19,11 +19,16 @@
   <exec_depend>scipy</exec_depend>
   <exec_depend>matplotlib</exec_depend>
   <exec_depend>casadi</exec_depend>
+  <exec_depend>image_transport</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>opencv-python</exec_depend>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>turtlesim</exec_depend>
 
 
   <export>
