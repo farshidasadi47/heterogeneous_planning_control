@@ -363,10 +363,14 @@ class Localization():
             # Get area of external contours bounding internal contours.
             external_areas = [cv2.contourArea(contours[idx]) if elem >-1 else 0
                                     for idx,elem in enumerate(hierarchy[0,:,2])]
-            # Find index of space border.
-            space_area = max(external_areas)
-            space_border_index = external_areas.index(space_area)
-            space_border_index = hierarchy[0,space_border_index,2]
+            # Find index of external border.
+            external_border_index = external_areas.index(max(external_areas))
+            # Workspace is the biggest internal contour.
+            internal_areas = [cv2.contourArea(contours[idx])
+                                if elem == external_border_index else 0
+                                for idx, elem in enumerate(hierarchy[0,:,3])]
+            space_area = max(internal_areas)
+            space_border_index = internal_areas.index(space_area)
             cnt = contours[space_border_index]
             # If the specified contour area is significantly smaller than 
             # our physical space, workspace is out of camera field of view.
@@ -385,7 +389,7 @@ class Localization():
             offset = min((x,y, left, down, offset))
             # Calculate ROIs
             roi_frame = (x-offset, y-offset, w+2*offset, h+2*offset)
-            roi_space = (offset, offset, w, h)
+            roi_space = (offset + 6, offset + 6, w - 12, h - 12)
             center = (int(w/2+offset), int(h/2+offset))
             # Make mask for space.
             mask_space = np.zeros((roi_frame[3], roi_frame[2]), dtype=np.uint8)
