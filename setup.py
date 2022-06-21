@@ -22,6 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'open = swarm.rosopen:main',
+            'closed = swarm.rosclosed:main',
             'getvideo = swarm.rosclosed:get_video',
             'showvideo = swarm.rosclosed:show_video'
         ],

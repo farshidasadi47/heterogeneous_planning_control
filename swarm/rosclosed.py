@@ -214,6 +214,199 @@ class ShowVideo(NodeTemplate):
         cv2.imshow('workspace',img)
         cv2.waitKey(1)
 
+class ControlNode(NodeTemplate):
+    """Contains all control related service servers."""
+    def __init__(self, control: closedloop.Controller, rate = 50):
+        super().__init__("controlservice")
+        self.control = control
+        self.cmd_mode = "idle"
+        self.rate = self.create_rate(rate)
+        # Add publishers and subscribers.
+        self._add_publisher(Point32,"/arduino_field_cmd")
+        self._add_subscriber(Point32,"/arduino_field_fb",
+                                                    self._arduino_field_fb_cb)
+        self._add_subscriber(Float32MultiArray,"/state_fb",
+                                            self._state_fb_cb, reliable= False)
+        # Custruct publisher and subscription instance variables.
+        self._construct_pubsub_msgs()
+        # Service and action servers
+        self._add_service_server(Empty,'set_idle', self._set_idle_server_cb)
+        # Open loops with information from camera.
+        self._add_action_server(RotateAbsolute,'/pivot_walking',
+                                                self._pivot_walking_server_cb)
+    
+    def _arduino_field_fb_cb(self, msg):
+        """Call back for /arduino_field_fb."""
+        # Reads arduino field feedback.
+        self.subs_msgs["/arduino_field_fb"].x = msg.x
+        self.subs_msgs["/arduino_field_fb"].y = msg.y
+        self.subs_msgs["/arduino_field_fb"].z = msg.z
+    
+    def _state_fb_cb(self,msg):
+        self.subs_msgs['/state_fb'].data = msg.data
+
+    def publish_field(self, field):
+        """Publishes all given messages."""
+        # Update all values to be published. 
+        self.pubs_msgs["/arduino_field_cmd"].x = field[0]
+        self.pubs_msgs["/arduino_field_cmd"].y = field[1]
+        self.pubs_msgs["/arduino_field_cmd"].z = field[2]
+        # Publish topics.
+        self.pubs_dict["/arduino_field_cmd"].publish(
+                                    self.pubs_msgs["/arduino_field_cmd"])
+    
+    def get_subs_values(self):
+        """Return the current value of subscribers as an array."""
+        field_fb= [self.subs_msgs["/arduino_field_fb"].x,
+                   self.subs_msgs["/arduino_field_fb"].y,
+                   self.subs_msgs["/arduino_field_fb"].z]
+        feedback = self.subs_msgs['/state_fb'].data 
+        return field_fb, feedback
+    
+    def print_stats(self, field, field_fb, state, state_fb, cnt):
+        msg = (
+             f"{time.time()%1e3:+8.3f}|{cnt:05d}|"
+            +"".join(f"{elem:+07.2f}" for elem in field[:2]) + "|"
+            +"".join(f"{elem:+07.2f}" for elem in field_fb[:2]) + "|"
+            +"".join(f"{elem:+07.2f}" for elem in state_fb[0]) + "|"
+            + f"{np.rad2deg(state_fb[1]):+07.2f}" + '|'
+            +"".join(f"{elem:+07.2f}" for elem in state[0]) + "|"
+            +f"{np.rad2deg(state[1]):+07.2f},{np.rad2deg(state[2]):+07.2f}| "
+            +f"{state[3]:01d}"
+            )
+        print(msg)
+
+    # Service and action servar callbacks
+    def _set_idle_server_cb(self, request, response):
+        """
+        Sets field command in idle condition.
+        """
+        print("*"*72)
+        regex = r'([+-]?\d+\.?\d*(, *| +)){2}([+-]?\d+\.?\d* *)'
+        field = [0.0,0.0,0.0]
+        self.cmd_mode = "idle"
+        self.rate.sleep()
+        while True:
+            try:
+                print("Enter body angles deg and power: theta, alpha, %power.")
+                print("Enter \"q\" for quitting.")
+                # Read user input.
+                in_str = input("Enter values: ").strip()
+                # Check if user requests quitting.
+                if re.match('q',in_str) is not None:
+                    print("Exitted \"set_idle\".")
+                    break
+                # Check if user input matches the template.
+                if re.fullmatch(regex,in_str) is None:
+                    raise ValueError
+                # Parse user input.
+                body =list(map(float,re.findall(r'[+-]?\d+\.?\d*',in_str)))
+                field= self.control.body2magnet(np.deg2rad(body[:2]))+[body[2]]
+                msg1 = (f"body[theta, alpha, %power] = ["
+                    + ",".join(f"{elem:+07.2f}" for elem in body) + "], ")
+                msg2 = (f"field[theta, alpha, %power] = ["
+                    + ",".join(f"{elem:+07.2f}" for elem in field) + "]")
+                print(msg1 + msg2)
+            except:
+                print("Ooops! values ignored. Enter values like the template.")
+            self.publish_field(field)
+        self.publish_field([0.0]*3)
+        print("*"*72)
+        return response
+    
+    def _pivot_walking_server_cb(self, goal_handle):
+        """
+        This service calls pivot_walking function.
+        """
+        # Ignore the call if we are in the middle of another process.
+        cnt = 0
+        field = [0.0]*3
+        print("*"*72)
+        regex = r'([+-]?\d+\.?\d*(, *| +)){1}([+-]?\d+\.?\d* *)'
+        self.rate.sleep()
+        if self.cmd_mode == "idle":
+            self.cmd_mode = "busy"
+            try:
+                # Get the input.
+                print("Enter params: num_steps, starting_theta (in degrees)")
+                print("Enter \"q\" for quitting.")
+                in_str = input("Enter values: ").strip()
+                # Check if user requests quitting.
+                if re.match('q',in_str) is not None:
+                    print("Exitted \"service server\".")
+                    raise ValueError
+                # Check if user input matches the template.
+                if re.fullmatch(regex,in_str) is None:
+                    print("Invalid input. Exitted service request.")
+                    raise ValueError
+                # Parse user input.
+                i_cmd = list(map(float,re.findall(r'[+-]?\d+\.?\d*',in_str)))
+                msg = (f"[n_steps, starting_theta] = ["
+                         + ",".join(f"{elem:+07.2f}" for elem in i_cmd) + "]")
+                print(msg)
+                # Get current position
+                _, feedback = self.get_subs_values()
+                self.publish_field(field)
+                xi, theta_i = self.control.process_robots(feedback)
+                msg_i = f"xi: [" + ",".join(f"{i:+07.2f}" for i in xi) + "]"
+                msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
+                print(msg_i)
+                self.rate.sleep()
+                # Change command mode and execute.
+                iterator=self.control.pivot_walking_walk(i_cmd,line_up=False)
+                self.rate.sleep()
+                # Execute main controllr.
+                for field in iterator:
+                    field.append(self.control.power)
+                    state = self.control.get_state()[:4]
+                    # Get the first robot found.
+                    field_fb, feedback = self.get_subs_values()
+                    state_fb = self.control.process_robots(feedback)
+                    self.publish_field(field)
+                    self.print_stats(field, field_fb, state, state_fb,cnt)
+                    cnt += 1
+                    self.rate.sleep()
+                # Get current position
+                field_fb, feedback = self.get_subs_values()
+                state_fb = self.control.process_robots(feedback)
+                self.print_stats(field, field_fb, state, state_fb,cnt)
+                self.rate.sleep()
+                print(msg_i)
+                _ , feedback = self.get_subs_values()
+                xf, theta_f = self.control.process_robots(feedback)
+                msg = f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
+                msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
+                print(msg)
+                polar_dist = self.control.get_polar_cmd(xi,xf,average=False)
+                polar_dist[1] = np.rad2deg(polar_dist[1])
+                print(f"r:{polar_dist[0]:+07.2f},phi: {polar_dist[1]:+07.2f}")
+                # Set commands to zero.
+                self.publish_field([0.0]*3)
+                self.rate.sleep()
+            except Exception as exc:
+                print(type(exc).__name__,exc.args)
+                pass
+        else:
+            print("Not in idle mode. Current server call is ignored.")
+        print("*"*72)
+        # Neutral magnetic field.
+        goal_handle.succeed()
+        result = RotateAbsolute.Result()
+        self.publish_field([0.0]*3)
+        self.cmd_mode = "idle"
+        self.rate.sleep()
+        return result
+
+class MainExecutor(MultiThreadedExecutorTemplate):
+    """Main executor for arduino comunications."""
+    def __init__(self, rate = 50):
+        super().__init__()
+        specs = model.SwarmSpecs.robo3()
+        control = closedloop.Controller(specs,np.array([0,0,20,0,40,0]),0,1)
+        # Add nodes.
+        self.add_node(ControlNode(control, rate))
+        print("*"*72 + "\nMain executor is initialized.\n" + "*"*72)
+
 class GetVideoExecutor(MultiThreadedExecutorTemplate):
     """Main executor for getting camera frames and feedback."""
     def __init__(self, rate = 55):
@@ -226,6 +419,10 @@ class ShowVideoExecutor(SingleThreadedExecutorTemplate):
         super().__init__()
         self.add_node(ShowVideo(rate))
         print("*"*72 + "\nShowVideo  node is initialized.\n" + "*"*72)
+
+def main():
+    with MainExecutor(50) as executor:
+        executor.spin()
 
 def get_video():
     with GetVideoExecutor(55) as executor:
