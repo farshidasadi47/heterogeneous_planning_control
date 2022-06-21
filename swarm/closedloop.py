@@ -6,13 +6,15 @@
 ########## Libraries ###################################################
 from collections import deque
 from math import remainder
-import threading
 
 import numpy as np
 from scipy.spatial.transform import Rotation
 
 # from "foldername" import filename, this is for ROS compatibility.
-from swarm import model
+try:
+    from swarm import model
+except ModuleNotFoundError:
+    import model
 
 np.set_printoptions(precision=2, suppress=True)
 ########## classes and functions #######################################
@@ -33,6 +35,7 @@ class Controller():
         self.alpha_sweep = specs.alpha_sweep # Max alpha sweep.
         self._set_rotation_constants_and_functions()
         self.reset_state(pos, theta, 0, mode)
+        self.power = 100.0
 
     def _set_rotation_constants_and_functions(self):
         """
@@ -50,10 +53,10 @@ class Controller():
         # Set magnet vector
         self.magnet_vect = np.array([0.0,-1.0,0.0])
 
-    def reset_state(self, pos: np.ndarray = None, theta: float = None,
-                          alpha: float = None, mode: int = None):                        
+    def reset_state(self, pos: np.ndarray= None, theta= None,
+                          alpha= None, mode: int =None):                        
         # Process input.
-        pos = self.pos if pos is None else pos
+        pos = self.pos if pos is None else np.array(pos)
         theta = self.theta if theta is None else self.wrap(theta)
         alpha = self.alpha if alpha is None else alpha
         mode = self.mode if mode is None else int(mode)
@@ -94,11 +97,11 @@ class Controller():
         ----------
         Parameters
         ----------
-        ang: array = [theta, alpha]
+        ang: array = [theta, alpha] radians.
         ----------
         Returns
         ----------
-        magnet: array = [theta_m, alpha_m]
+        magnet: np.ndarray = [theta_m, alpha_m] degrees
         """
         # Calculate the magnet vetor in cartesian coordinate.
         magnet = self.rotx(self.magnet_vect, ang[1]) # Alpha rotation.
@@ -115,7 +118,7 @@ class Controller():
                                       np.linalg.norm(cartesian[:2])))
         # theta: arctan(y/x)
         theta = np.degrees(np.arctan2(cartesian[1], cartesian[0]))
-        return [theta, alpha]
+        return [theta, alpha] # Should be list.
     
     @staticmethod
     def frange(start, stop=None, step=None):
@@ -258,7 +261,7 @@ class Controller():
                                                +pivot_length[robot]*leg_vect)
         else:
             # Rotationg around center.
-            assert abs(self.alpha) <.01
+            assert abs(self.alpha) <.01, "Robots is lifted."
             # pos remains intact, call reset_state.
             self.reset_state(theta = theta)
         # Update theta
