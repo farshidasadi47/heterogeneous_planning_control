@@ -127,3 +127,113 @@ class SingleThreadedExecutorTemplate(rclpy.executors.SingleThreadedExecutor):
         if exc_type is KeyboardInterrupt:
             print("Interrupted by user.")
         return True
+
+class GetVideo(NodeTemplate):
+    """Main node for getting camera frame."""
+    def __init__(self, rate = 55, name="getvideo"):
+        super().__init__(name)
+        self.camera = localization.Localization()
+        _, self.frame, _ = self.camera.get_frame(True,True)
+        self.br = CvBridge()
+        self.current = 0
+        self.past = time.time()
+        # Add publishers.
+        self._add_publisher(Image, "/camera", reliable = False)
+        self._add_publisher(Float32MultiArray,"/state_fb", reliable = False)
+        # Add timer
+        self.timer = self.create_timer(1/rate, self._timer_callback)
+        self.timer_cam = self.create_timer(1/30, self._timer_cam_callback)
+        # Custruct publisher and subscription instance variables.
+        self._construct_pubsub_msgs()
+
+    def _timer_callback(self):
+        """Orders a state_fb publication."""
+        ret, self.frame, state_fb = self.camera.get_frame(True, True)
+        if ret:
+            self.pubs_msgs["/state_fb"].data = state_fb.tolist()
+            self.pubs_dict["/state_fb"].publish(self.pubs_msgs["/state_fb"])
+            self.current = time.time()
+            elapsed = round((self.current - self.past)*1000)
+            self.past = self.current
+            #
+            msg=f"{self.current%1e3:+08.3f}|{elapsed:03d}|{self.counter:06d}|"
+            none = "None"
+            for i, k in enumerate(self.camera._hsv_ranges):
+                v = state_fb[3*i:3*i+3]
+                if 999 in v:
+                    msg += f"'{k:1s}': {none:>21s},"
+                else:
+                    msg += (f"'{k:1s}': {v[0]:+06.1f},{v[1]:+06.1f},"
+                                    f"{np.rad2deg(v[-1]):+07.2f}|")
+            print(msg)
+        self.counter = (self.counter + 1)%1000000
+    
+    def _timer_cam_callback(self):
+        self.pubs_dict["/camera"].publish(self.br.cv2_to_imgmsg(self.frame))
+
+class ShowVideo(NodeTemplate):
+    """Main node for showing cmera frames live."""
+    def __init__(self, rate = 30, name="showvideo"):
+        super().__init__(name)
+        self.window = cv2.namedWindow('workspace',cv2.WINDOW_AUTOSIZE)
+        # Some global variable
+        self.br = CvBridge()
+        self.current = 0
+        self.past = time.time()
+        # Add subscribers.
+        self._add_subscriber(Float32MultiArray,"/state_fb",
+                                            self._state_fb_cb, reliable= False)
+        self._add_subscriber(Image,"/camera",self._camera_cb, reliable= False)
+        # Add timer.
+        self.timer = self.create_timer(1/rate, self._timer_callback)
+        # Custruct publisher and subscription instance variables.
+        self._construct_pubsub_msgs()
+    
+    def _state_fb_cb(self,msg):
+        self.subs_msgs['/state_fb'].data = msg.data
+
+    def _camera_cb(self, msg):
+        self.subs_msgs["/camera"] = msg
+        self.current = time.time()
+        elapsed = round((self.current - self.past)*1000)
+        self.past = self.current
+        msg=f"vid: {self.current%1e3:+08.3f}|{elapsed:03d}|{self.counter:06d}|"
+        self.counter = (self.counter + 1)%1000000
+        print(msg)
+
+    def get_subs_values(self):
+        """Return the current value of subscribers as an array."""
+        try:
+            frame = self.br.imgmsg_to_cv2(self.subs_msgs["/camera"])
+        except CvBridgeError:
+            frame = np.zeros((1,1),dtype=np.uint8)
+        return frame
+    
+    def _timer_callback(self):
+        img = self.get_subs_values()
+        cv2.imshow('workspace',img)
+        cv2.waitKey(1)
+
+class GetVideoExecutor(MultiThreadedExecutorTemplate):
+    """Main executor for getting camera frames and feedback."""
+    def __init__(self, rate = 55):
+        super().__init__()
+        self.add_node(GetVideo(rate))
+        print("*"*72 + "\nGetVideo node is initialized.\n" + "*"*72)
+
+class ShowVideoExecutor(SingleThreadedExecutorTemplate):
+    def __init__(self, rate = 30):
+        super().__init__()
+        self.add_node(ShowVideo(rate))
+        print("*"*72 + "\nShowVideo  node is initialized.\n" + "*"*72)
+
+def get_video():
+    with GetVideoExecutor(55) as executor:
+        executor.spin()
+
+def show_video():
+    with ShowVideoExecutor(30) as video:
+        video.spin()
+########## Test section ################################################
+if __name__ == "__main__":
+    get_video()

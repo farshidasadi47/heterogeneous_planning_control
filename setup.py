@@ -21,7 +21,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'rosopen = swarm.rosopen:main',
+            'open = swarm.rosopen:main',
+            'getvideo = swarm.rosclosed:get_video',
+            'showvideo = swarm.rosclosed:show_video'
         ],
     },
 )
