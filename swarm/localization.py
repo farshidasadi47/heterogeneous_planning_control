@@ -422,12 +422,12 @@ class Localization():
         pixel_state: numpy nd.array
             pixel_state = [x_pixel, y_pixel, angle]
         """
-        pixel_state = np.zeros(3,dtype=float)
-        pixel_state[:2] = rect[0] 
-        pixel_state[2] = np.deg2rad(rect[2])
+        pixel_state = []
+        pixel_state.extend(rect[0])
+        pixel_state.append(np.deg2rad(rect[2]))
         if rect[1][0] > rect[1][1]:
             # Since we want the angle of the normal to longer side.
-            pixel_state[2] -= np.pi/2
+            pixel_state[2] = pixel_state[2]- np.pi/2
         return pixel_state
 
     def _find_robot(self, hsv, color):
