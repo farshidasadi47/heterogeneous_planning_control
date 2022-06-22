@@ -330,6 +330,8 @@ class Controller():
             if last:
                 # Line up the robot.
                 yield from self.step_theta(phi + cte)
+        else:
+            yield from self.step_theta(self.theta)
 
     def mode_changing(self, input_cmd, last= False, line_up= True):
         """
@@ -353,6 +355,8 @@ class Controller():
         # Calculate position update step.
         pos_delta = (self.specs.tumbling_length
                     *np.array([np.cos(phi), np.sin(phi)]*self.specs.n_robot))
+        # Prevents unnecessary rotations in case of steps = 0.
+        theta_start = theta_start if steps > 0 else self.theta
         # Line up robots for starting with pivot B.
         yield from self.step_theta(theta_start)
         # Set tumbling parameter.
@@ -537,7 +541,7 @@ class Controller():
         angles: array, modified angles.
         """
         for i, ang in enumerate(angles):
-            a = [ang, ang + np.pi]
+            a = [ang, self.wrap(ang + np.pi)]
             idx = np.argmin([abs(self.wrap(a[0]-angle)),
                              abs(self.wrap(a[1]-angle))])
             angles[i] = a[idx]
