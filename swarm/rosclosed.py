@@ -234,6 +234,8 @@ class ControlNode(NodeTemplate):
         # Open loops with information from camera.
         self._add_action_server(RotateAbsolute,'/pivot_walking',
                                                 self._pivot_walking_server_cb)
+        self._add_action_server(RotateAbsolute, '/mode_change',
+                                                self._mode_change_server_fb)
     
     def _arduino_field_fb_cb(self, msg):
         """Call back for /arduino_field_fb."""
@@ -397,6 +399,92 @@ class ControlNode(NodeTemplate):
         self.rate.sleep()
         return result
 
+    def _mode_change_server_fb(self, goal_handle):
+        """
+        This service calls mode_changing function and performs one
+        mode change.
+        """
+        print("*"*72)
+        cnt = 0
+        field = [0.0]*3
+        regex = r'([+-]?\d+(, *| +)){1}([+-]?\d+\.?\d* *)'
+        self.rate.sleep()
+        # Ignore the call if we are in the middle of another process.
+        if self.cmd_mode == "idle":
+            self.cmd_mode = "busy"
+            try:
+                # Get current position
+                _, feedback = self.get_subs_values()
+                state_fb = self.control.process_robots(feedback)
+                xi, theta_i = state_fb
+                msg_i = f"xi: [" + ",".join(f"{i:+07.2f}" for i in xi) + "]"
+                msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
+                print(msg_i)
+                self.control.reset_state(pos=xi, theta = theta_i)
+                self.rate.sleep()
+                # Get the input.
+                print("Enter params: phi (degrees), mode.")
+                print("Enter \"q\" for quitting.")
+                in_str = input("Enter values: ").strip()
+                # Check if user requests quitting.
+                if re.match('q',in_str) is not None:
+                    raise ValueError("Exitted \"service server\".")
+                # Check if user input matches the template.
+                if re.fullmatch(regex,in_str) is None:
+                    raise ValueError("Invalid input. Exitted service request.")
+                # Parse user input and reset mode, theta.
+                params = list(map(float,re.findall(r'[+-]?\d+\.?\d*',in_str)))
+                str_msg = (f"[phi, mode] = ["
+                         + ",".join(f"{elem:+07.2f}" for elem in params) + "]")
+                print(str_msg)
+                self.publish_field(field)
+                self.rate.sleep()
+                # Change command mode and execute.
+                iterator= self.control.mode_changing([0.0,
+                                              np.deg2rad(params[0]),params[1]])
+                self.rate.sleep()
+                # Execute main controller and update pipeline.
+                for field in iterator:
+                    field.append(self.control.power)
+                    state = self.control.get_state()[:4]
+                    # Get the first robot found.
+                    field_fb, feedback = self.get_subs_values()
+                    #state_fb = self.control.process_robots(feedback)
+                    self.publish_field(field)
+                    self.print_stats(field, field_fb, state, state_fb,cnt)
+                    cnt += 1
+                    self.rate.sleep()
+                # Get current position
+                field_fb, feedback = self.get_subs_values()
+                state_fb = self.control.process_robots(feedback)
+                self.print_stats(field, field_fb, state, state_fb,cnt)
+                self.rate.sleep()
+                print(msg_i)
+                _ , feedback = self.get_subs_values()
+                xf, theta_f = self.control.process_robots(feedback)
+                msg = f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
+                msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
+                print(msg)
+                polar_dist = self.control.get_polar_cmd(xi,xf,average=False)
+                polar_dist[1] = np.rad2deg(polar_dist[1])
+                print(f"r:{polar_dist[0]:+07.2f},phi: {polar_dist[1]:+07.2f}")
+                # Set commands to zero.
+                self.publish_field([0.0]*3)
+                self.rate.sleep()
+            except Exception as exc:
+                print(type(exc).__name__,exc.args)
+                pass
+        else:
+            print("Not in idle mode. Current server call is ignored.")
+        print("*"*72)
+        # Neutral magnetic field.
+        goal_handle.succeed()
+        result = RotateAbsolute.Result()
+        self.publish_field([0.0]*3)
+        self.cmd_mode = "idle"
+        self.rate.sleep()
+        return result
+    
 class MainExecutor(MultiThreadedExecutorTemplate):
     """Main executor for arduino comunications."""
     def __init__(self, rate = 50):
