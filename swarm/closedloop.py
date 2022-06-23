@@ -642,6 +642,63 @@ class Controller():
             if steps < 2: break
             line_up = False
             cnt += 1
+    
+    def pivot_calibration_walk(self, input_cmd):
+        """feedforfard walking for calibraiton purpose."""
+        r, phi = input_cmd[0], input_cmd[1]
+        # Align the robot.
+        yield from self.pivot_walking(phi,self.theta_sweep,0)
+        yield from self.pivot_walking(phi,self.theta_sweep,0) # Delay
+        state_fb = yield None
+        xi, _ = state_fb
+        self.reset_state(pos = xi)
+        xs = self.get_state()[0] # Initial position.
+        yield from self.pivot_walking(phi,self.theta_sweep,0)
+        # Pivot walk until at least r is travelled.
+        cnt = 0
+        while True:
+            state_fb = yield None
+            xc, _ = state_fb
+            rc, ang = self.get_polar_cmd(xs, xc)
+            yield from self.pivot_walking(phi,self.theta_sweep,1,line_up=False)
+            if rc > r:
+                return 2*rc/cnt, self.wrap(ang - phi)
+            cnt += 1
+
+    def pivot_calibration(self, n_sect):
+        """Yields field for pivot walking calibration prcess."""
+        lengths = []
+        ang_errs = []
+        r = 70
+        d = 2*r
+        angles = np.linspace(0,np.pi, int(n_sect) + 1)[:-1]
+        for ang in angles:
+            theta_s = self.wrap(ang + np.pi)
+            theta_e = ang
+            xs = self.pol2cart([r, ang])*self.specs.n_robot
+            # Go to starting point.
+            yield from self.closed_pivot_cart(xs)
+            # Forward pass.
+            length,ang_err= yield from self.pivot_calibration_walk([d,theta_s])
+            lengths.append(length)
+            ang_errs.append(ang_err)
+            #Backward pass.
+            length,ang_err= yield from self.pivot_calibration_walk([d,theta_e])
+            lengths.append(length)
+            ang_errs.append(ang_err)
+        lengths = np.array(lengths).reshape(-1,2)
+        ang_errs = np.array(ang_errs).reshape(-1,2)
+        # Print
+        msg = "Calibration stats:\n"
+        msg+= "\n".join(
+            (f"ang: {np.rad2deg(ang):+07.2f}, "
+            +f"length: {piv[0]:+07.2f}, {piv[1]:+07.2f}, "
+            +f"ang_err: {np.rad2deg(ang_err[0]):+07.2f}, "
+            +f"{np.rad2deg(ang_err[1]):+07.2f}")
+            for ang, piv, ang_err in zip(angles,lengths, ang_errs))
+        msg += f"\nAverage pivot length:{np.mean(lengths):+07.2f}"
+        msg += f"\nAverage ang_err:{np.rad2deg(np.mean(ang_errs)):+07.2f}"
+        return msg
 
 ########## test section ################################################
 if __name__ == '__main__':
