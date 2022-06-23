@@ -360,6 +360,7 @@ class ControlNode(NodeTemplate):
                 print(msg_i)
                 self.rate.sleep()
                 # Change command mode and execute.
+                i_cmd[1] = np.deg2rad(i_cmd[1])
                 iterator=self.control.pivot_walking_walk(i_cmd,line_up=False)
                 self.rate.sleep()
                 # Execute main controllr.

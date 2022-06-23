@@ -387,8 +387,11 @@ class Controller():
         yield from map(self.body2magnet,
                        self.step_tumble(input_cmd[1], steps, last, line_up))
 
-    def rotation(self, input_cmd):
+    def rotation(self, input_cmd, minimal = False):
         """Rotates robots in place."""
+        if minimal:
+            _, _, cte = self.get_pivot(input_cmd[1], self.theta)
+            input_cmd[1] = self.wrap(input_cmd[1] + cte)
         yield from map(self.body2magnet,self.step_theta(input_cmd[1]))
 
     def step_pivot(self, phi, sweep, steps: int, last= False, line_up= True):
@@ -447,10 +450,10 @@ class Controller():
         """
         assert input_cmd[0] >=0, "n_steps cannot be negative."
         steps = int(input_cmd[0])
-        phi = np.deg2rad(input_cmd[1])
+        phi = input_cmd[1]
         self.reset_state(theta = phi)
         if not line_up: # Adjust for taking full step in first step.
-            phi = self.wrap(phi + np.pi/6)
+            phi = self.wrap(phi + self.theta_sweep)
             line_up = True
         yield from self.pivot_walking(phi,self.theta_sweep,steps,last,line_up)
 
