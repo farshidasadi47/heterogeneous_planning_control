@@ -828,9 +828,9 @@ class ControlNode(NodeTemplate):
 
 class MainExecutor(MultiThreadedExecutorTemplate):
     """Main executor for arduino comunications."""
-    def __init__(self, rate = 50):
+    def __init__(self, rate = 50, n_robot = 3):
         super().__init__()
-        specs = model.SwarmSpecs.robo3()
+        specs = model.SwarmSpecs.robo(n_robot)
         control = closedloop.Controller(specs,np.array([0,0,20,0,40,0]),0,1)
         # Add nodes.
         self.add_node(ControlNode(control, rate))
@@ -849,8 +849,21 @@ class ShowVideoExecutor(SingleThreadedExecutorTemplate):
         self.add_node(ShowVideo(rate))
         print("*"*72 + "\nShowVideo  node is initialized.\n" + "*"*72)
 
-def main():
-    with MainExecutor(50) as executor:
+def main(n_robot = 3):
+    print("*"*72)
+    regex = r'[3-5]'
+    while True:
+        # Read user input.
+        in_str = input("Enter number of robots from {3,4,5}: ").strip()
+        # Check if user input matches the template.
+        if re.fullmatch(regex,in_str) is None:
+            print("Invalid value enterred!!! Value Ignored.")
+            continue
+        # Parse user input.
+        n_robot = int(in_str)
+        print(f"Swarm planner is called for {n_robot:1d} robots.")
+        break
+    with MainExecutor(50,n_robot) as executor:
         executor.spin()
 
 def get_video():

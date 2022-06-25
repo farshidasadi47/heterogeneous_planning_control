@@ -118,6 +118,16 @@ class SwarmSpecs:
                                  [7,5,3,11,9],[5,3,11,9,7],[3,11,9,7,5]])
         return cls(pivot_length,10)
     
+    @classmethod
+    def robo3p(cls):
+        pivot_length = np.array([[7.51,6.27,4.47],[6.36,4.66,7.51]])
+        return cls(pivot_length,11.31)
+
+    @classmethod
+    def robo(cls, n_robot):
+        robots = {3: "robo3p"}
+        return getattr(cls, robots.get(n_robot, "robo3p"))()
+    
 class Swarm:
     """This class holds current state of swarm of milirobots."""
     
