@@ -38,7 +38,7 @@ class Planner():
         self.specs = specs
         self.cost_coeff = 10
         self.robot_pairs = self.specs.robot_pairs
-        self.d_min = self.specs.tumbling_length
+        self.d_min = self.specs.d_min
         self.steps = steps
         self.ubsx = self.specs.ubsx
         self.lbsx = self.specs.lbsx
