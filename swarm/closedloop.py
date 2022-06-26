@@ -491,40 +491,7 @@ class Controller():
             else: 
                 # This is pivot walking mode.
                 yield from self.feedforward_pivot(input_cmd,last)
-    
-    def compatibility_check(self, input_series):
-        """
-        Checks if an input_series is a compatible sequence.
-        @param: 2D array of commands as [distance, angle, mode] per row.
-        """
-        # Get states, to reset them after compatibility check.
-        states = self.get_state()
-        input_series = np.array(input_series)
-        num_sections = input_series.shape[0]
-        try: 
-            for section in range(num_sections):
-                input_cmd = input_series[section,:]
-                input_mode = int(input_cmd[2])
-                if input_mode < 0:
-                    # This is mode change request.
-                    for _ in self.mode_changing(input_cmd, False): pass
-                elif input_mode == 0:
-                    # This is tumbling.
-                    for _ in  self.tumbling(input_cmd, False): pass
-                elif input_mode == 999:
-                     # This is rotation in place.
-                    for _ in self.rotation(input_cmd): pass
-                else: 
-                    # This is pivot walking mode.
-                    if input_mode != self.mode:
-                        msg = f"Incompatibility at section: {section+1:02d}"
-                        raise ValueError(msg)
-                    # If no exception is occured, run the section.
-                    for _ in self.feedforward_pivot(input_cmd, False): pass
-        finally:
-            # Reset the states to its initials.
-            self.reset_state(*states[:-2])
-    
+
     # Closed loop related functions.
     def modify_angles(self,angles,angle):
         """
@@ -758,16 +725,72 @@ class Controller():
         msg += f"\nAverage ang_err:{np.rad2deg(np.mean(ang_errs)):+07.2f}"
         return msg
 
+    def get_cart_goal(self, pos, mode_start, input_cmd):
+        """
+        This implements input_cmd to the robots at pos and returns the
+        corresponding pos after applying each input_cmd.
+        This function can also be used to check compatibility of input.
+        ----------
+        Parameters
+        ----------
+        pos: array corrent pos of robots.
+        mode: int, starting mode.
+        input_cmd: 2D array as [r, phi, mode]
+           r:     Distance to travel, irrelevant if mode < 0.
+           phi:   Angle to travel
+           mode: int, the mode motion is performed.
+        ----------
+        Returns
+        ----------
+        poses: 2D array of pos after each input_cmd.
+        """
+        n_mode = self.specs.n_mode
+        mode_sequence = deque(range(1,self.specs.n_mode))
+        mode_sequence.rotate(-mode_start+1)
+        pos = np.array(pos)
+        input_cmd = np.array(input_cmd).reshape(-1,3)
+        poses = []
+        # Calculate poses
+        for idx, (r, phi, mode) in enumerate(input_cmd):
+            mode = int(mode)
+            if mode < 0:
+                # Mode change request.
+                rel_mode_index = mode_sequence.index(-mode)
+                r = self.specs.mode_rel_length[rel_mode_index]
+                B = self.specs.B[0,:,:]
+                mode_sequence.rotate(-rel_mode_index)
+            elif mode == 0:
+                # Tumbling request.
+                rotations = round(r/self.specs.tumbling_length)
+                r = rotations*self.specs.tumbling_length
+                B = self.specs.B[mode,:,:]
+                # Update mode if needed.
+                if rotations%2:
+                    mode_sequence.rotate(-(n_mode//2))
+            elif mode == 999:
+                # Rotation.
+                r = 0
+                B = self.specs.B[0,:,:]
+            else:
+                # Pivot walking
+                if mode != mode_sequence[0]:
+                    raise ValueError(f"Incompatible at section: {idx+1:02d}")
+                B = self.specs.B[mode,:,:]
+            u = [r*np.cos(phi), r*np.sin(phi)]
+            pos = pos + np.dot(B, u)
+            poses.append(pos)
+        return poses
+
 ########## test section ################################################
 if __name__ == '__main__':
     specs = model.SwarmSpecs.robo3()
     xi = np.array([0,0,20,0,40,0])
     xf = np.array([10,0,20,0,40,0])
-    control = Controller(specs,xi,0,1)
+    mode = 1
+    control = Controller(specs,xi,0,mode)
     #control.reset_state(theta= np.deg2rad(-30))
     phi = np.deg2rad(135)
     sweep = np.deg2rad(30)
-    mode = 2
     input_series = np.array([[10,0,1],
                              [0,0,1],
                              [12,0,-2],
@@ -783,7 +806,7 @@ if __name__ == '__main__':
     iterator = control.mode_changing([0,phi,mode], last= False, line_up=True)
     iterator = control.tumbling([20,phi],last=False, line_up=True)
     iterator = control.feedforward_pivot([10,phi,1], last= False)
-    control.compatibility_check(input_series)
+    print(*(i for i in control.get_state_cmd(xi,mode,input_series)), sep="\n")
     iterator = control.feedforward_line(input_series,has_last=True)
     iterator = control.closed_pivot_cart(xf, last = False, average = False)
     try:
