@@ -662,6 +662,7 @@ class Controller():
             +f"{np.rad2deg(ang_err[1]):+07.2f}")
             for ang, piv, ang_err in zip(angles,lengths, ang_errs))
         msg += f"\nAverage pivot length:{np.mean(lengths):+07.2f}"
+        msg+= f"\nCoeff of variation:{np.std(lengths)/np.mean(lengths):+07.2f}"
         msg += f"\nAverage ang_err:{np.rad2deg(np.mean(ang_errs)):+07.2f}"
         return msg
 
@@ -722,6 +723,7 @@ class Controller():
             +f"{np.rad2deg(ang_err[1]):+07.2f}")
             for ang, piv, ang_err in zip(angles,lengths, ang_errs))
         msg += f"\nAverage length per tumble:{np.mean(lengths):+07.2f}"
+        msg+= f"\nCoeff of variation:{np.std(lengths)/np.mean(lengths):+07.2f}"
         msg += f"\nAverage ang_err:{np.rad2deg(np.mean(ang_errs)):+07.2f}"
         return msg
 
@@ -779,7 +781,7 @@ class Controller():
             u = [r*np.cos(phi), r*np.sin(phi)]
             pos = pos + np.dot(B, u)
             poses.append(pos)
-        return poses
+        return np.array(poses)
 
 ########## test section ################################################
 if __name__ == '__main__':
@@ -799,18 +801,19 @@ if __name__ == '__main__':
                              [12,0,0],
                              [0,np.pi/2,999],
                              [0,np.pi/4,1]])
-    iterator = control.step_mode(mode, phi, last=False, line_up= True)
+    iterator = control.step_mode(2, phi, last=False, line_up= True)
     iterator = control.step_tumble(phi, 2, last= False,line_up= True)
     iterator = control.step_pivot(phi, sweep, 10,last= False,line_up= True)
     iterator = control.pivot_walking_walk([2,0], last= False,line_up= True)
     iterator = control.mode_changing([0,phi,mode], last= False, line_up=True)
     iterator = control.tumbling([20,phi],last=False, line_up=True)
     iterator = control.feedforward_pivot([10,phi,1], last= False)
-    print(*(i for i in control.get_state_cmd(xi,mode,input_series)), sep="\n")
+    print(*(i for i in control.get_cart_goal(xi,mode,input_series)), sep="\n")
     iterator = control.feedforward_line(input_series,has_last=True)
     iterator = control.closed_pivot_cart(xf, last = False, average = False)
     try:
-        for field in iterator:
+        while True:
+            field = next(iterator)
             if field is None:
                 field = iterator.send((xi,0))
             i = control.get_state()
@@ -821,5 +824,6 @@ if __name__ == '__main__':
                     +",".join(f"{elem:+07.2f}" for elem in field)
                     )
             print(str_msg)
-    except StopIteration:
+    except StopIteration as e:
+        print(e.value)
         pass
