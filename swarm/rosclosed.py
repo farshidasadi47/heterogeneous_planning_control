@@ -318,6 +318,7 @@ class ControlNode(NodeTemplate):
                 msg2 = (f"field[theta, alpha, %power] = ["
                     + ",".join(f"{elem:+07.2f}" for elem in field) + "]")
                 print(msg1 + msg2)
+                self.control.reset_state(theta=body[0], alpha=body[1])
             except:
                 print("Ooops! values ignored. Enter values like the template.")
             self.publish_field(field)
