@@ -782,6 +782,98 @@ class Controller():
             pos = pos + np.dot(B, u)
             poses.append(pos)
         return np.array(poses)
+    
+    def closed_line_single(self,input_cmd, xf,average=False,last=False):
+        """
+        Executes polar command in closed loop mode.
+        ----------
+        Parameters
+        ----------
+        input_cmd: 1D array of polar commands as [r, phi, mode]
+        xf: 1D array of cartesian goal.
+        average: Bool, default=False, see closed_pivot_cart doc.
+        last: Bool, default= False, lines up robots in the end.
+        ----------
+        Yields
+        ----------
+        field: magnetic field needed to perform the command.
+        """
+        #
+        _, _, mode = input_cmd
+        if mode < 0:
+            # Mode change request
+            field = yield from self.mode_changing(input_cmd, last)
+        elif mode == 0:
+            # This is tumbling.
+            field = yield from self.tumbling(input_cmd, last)
+        elif mode == 999:
+            # This is rotation in place.
+            field = yield from self.rotation(input_cmd)
+        else:
+            field = yield from self.closed_pivot_cart(xf, last, average)
+        return field
+
+    def closed_line(self, polar_cmd,average=False,has_last=False):
+        """
+        Executes series of polar command in closed loop mode.
+        The get_cart_goal also does compatibility check of the command.
+        ----------
+        Parameters
+        ----------
+        polar_cmd: 2D array of polar commands as [r, phi, mode]
+        average: Bool, default=False, see closed_pivot_cart doc.
+        has_last: Bool, default= False, lines up robots in the end.
+        ----------
+        Yields
+        ----------
+        field: magnetic field needed to perform the command.
+        """
+        polar_cmd = np.array(polar_cmd).reshape(-1,3)
+        goals = self.get_cart_goal(self.pos, self.mode, polar_cmd)
+        n_sections = len(polar_cmd)
+        ratios = np.zeros((n_sections, 3 + self.specs.n_robot))
+        #
+        msg = "="*72+"\n"
+        msg += "xi:"+",".join(f"{i:+07.2f}" for i in self.pos) + "\n"
+        for section, (input_cmd, xg) in enumerate(zip(polar_cmd,goals)):
+            last = False if (section < n_sections-1) else has_last
+            xi = self.pos
+            iterator = self.closed_line_single(input_cmd, xg, average, last)
+            for field in iterator:
+                if field is None:
+                    state_fb = yield field, input_cmd
+                    field = iterator.send(state_fb)
+                yield field, input_cmd
+            xf = self.pos
+            eg = xf - xg     # Realized general error.
+            msg_i = (f"input:{input_cmd[0]:+07.2f},"
+               +f"{np.rad2deg(input_cmd[1]):+07.2f},{int(input_cmd[2]):03d}\n")
+            msg_i += "xg:"+",".join(f"{i:+07.2f}" for i in xg) + "\n"
+            msg_i += "xf:"+",".join(f"{i:+07.2f}" for i in xf) + "\n"
+            msg_i += " e:"+",".join(f"{i:+07.2f}" for i in eg) + "\n"
+            msg += msg_i
+            d = np.linalg.norm((xf - xi).reshape(-1,2), axis = 1)
+            d_ratio = d/d[0] # Ratio of pivot_length w.r.t. leader.
+            ratios[section,:-3] = d_ratio
+            ratios[section,-3:] = input_cmd
+        avg_ratio = np.zeros_like(self.specs.beta)
+        std_ratio = np.zeros_like(self.specs.beta)
+        avg_ratio[0,:] = np.mean(ratios[polar_cmd[:,2]<1],axis=0)[:3]
+        std_ratio[0,:] = np.std(ratios[polar_cmd[:,2]<1],axis=0)[:3]
+        for i in range(1,self.specs.n_mode):
+            avg_ratio[i,:] = np.mean(ratios[polar_cmd[:,2]==i],axis=0)[:3]
+            std_ratio[i,:] = np.std(ratios[polar_cmd[:,2]==i],axis=0)[:3]
+        stat_ratio = np.hstack((avg_ratio, std_ratio/avg_ratio))
+        #ratios = ratios[polar_cmd[:,2].argsort()]
+        msg += "ratios:\n"
+        msg += "\n".join(",".join(f"{i:+07.2f}" for i in j) for j in ratios)
+        msg += "\nratio stats: \n"
+        msg +="\n".join(",".join(f"{i:+07.2f}" for i in j) for j in stat_ratio)
+        msg += "\nthm_ratios:\n"
+        msg += "\n".join(
+                   ",".join(f"{i:+07.2f}" for i in j) for j in self.specs.beta)
+        msg += "\n"+"="*72
+        return msg
 
 ########## test section ################################################
 if __name__ == '__main__':

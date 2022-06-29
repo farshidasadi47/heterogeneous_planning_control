@@ -245,6 +245,8 @@ class ControlNode(NodeTemplate):
                                              self._calibration_pivot_server_cb)
         self._add_action_server(RotateAbsolute,'calibration_tumble',
                                             self._calibration_tumble_server_cb)
+        self._add_action_server(RotateAbsolute, "/closed_line",
+                                                   self._closed_line_server_cb)
     
     def _arduino_field_fb_cb(self, msg):
         """Call back for /arduino_field_fb."""
@@ -813,6 +815,83 @@ class ControlNode(NodeTemplate):
                 self.publish_field([0.0]*3)
                 self.rate.sleep()
                 print(e.value)
+                pass
+            except Exception as exc:
+                print(type(exc).__name__,exc.args)
+                pass
+        else:
+            print("Not in idle mode. Current server call is ignored.")
+        # Neutral magnetic field.
+        goal_handle.succeed()
+        result = RotateAbsolute.Result()
+        self.publish_field([0.0]*3)
+        self.cmd_mode = "idle"
+        self.rate.sleep()
+        return result
+
+    def _closed_line_server_cb(self,goal_handle):
+        cnt = 0
+        print("*"*72)
+        polar_cmd = np.array([[70,np.pi/2,1],
+                             [70,-3*np.pi/4,1],
+                             [10,-np.pi/4,-2],
+                             [50,-np.pi/2,2],
+                             [50,np.pi/4,2],
+                             [50,np.pi/4,0],
+                             [10,np.pi/4,-1],
+                             ])
+        field = [0.0,0.0,0.0]
+        self.rate.sleep()
+        if self.cmd_mode == "idle":
+            self.cmd_mode == "busy"
+            try:
+                # Get current position
+                _, feedback = self.get_subs_values()
+                state_fb=self.control.process_robots(feedback,any_robot= False)
+                xi, theta_i = state_fb
+                msg_i = f"xi: [" + ",".join(f"{i:+07.2f}" for i in xi) + "]"
+                msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
+                print(msg_i)
+                input("Press any key to continue...")
+                # Reset state
+                self.control.reset_state(pos = xi, theta = theta_i)
+                self.publish_field(field)
+                state = self.control.get_state()[:4]
+                self.rate.sleep()
+                # Execute closed loop control.
+                iterator = self.control.closed_line(polar_cmd, average= False)
+                self.rate.sleep()
+                #for field in iterator:
+                while True:
+                    field, input_cmd = next(iterator)
+                    # Get current position
+                    field_fb, feedback = self.get_subs_values()
+                    if abs(state[2]) <0.1:
+                        state_fb = self.control.process_robots(feedback, False)
+                    if field is None:
+                        field, input_cmd = iterator.send(state_fb)
+                    field.append(self.control.power)
+                    state = self.control.get_state()[:4]
+                    self.print_stats(field, field_fb, state, state_fb,cnt)
+                    self.publish_field(field)
+                    cnt += 1
+                    self.rate.sleep()
+            except StopIteration as e:
+                # Get current position
+                field_fb, feedback = self.get_subs_values()
+                state_fb = self.control.process_robots(feedback)
+                self.print_stats(field, field_fb, state, state_fb,cnt)
+                self.rate.sleep()
+                _, feedback = self.get_subs_values()
+                xf, theta_f = self.control.process_robots(feedback)
+                msg = f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
+                msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
+                print(msg)
+                print(e.value)
+                self.publish_field([0.0]*3)
+                self.rate.sleep()
+                pass
+            except KeyboardInterrupt:
                 pass
             except Exception as exc:
                 print(type(exc).__name__,exc.args)
