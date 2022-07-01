@@ -122,11 +122,11 @@ class Controller():
     
     @staticmethod
     def cart2pol(cart):
-        return (np.linalg.norm(cart), np.arctan2(cart[1],cart[0]))
+        return [np.linalg.norm(cart), np.arctan2(cart[1],cart[0])]
 
     @staticmethod
     def pol2cart(pol):
-        return (pol[0]*np.cos(pol[1]), pol[0]*np.sin(pol[1]))
+        return [pol[0]*np.cos(pol[1]), pol[0]*np.sin(pol[1])]
     
     @staticmethod
     def frange(start, stop=None, step=None):
@@ -560,47 +560,25 @@ class Controller():
         # Fix angle to closest one.
         angles = self.modify_angles(angles,self.theta)
         return np.array(positions), angles[0]
-
-    def get_polar_cmd(self, xi, xf, average = False):
-        """
-        Converts [xf - xi] from cartesian to polar [r, theta]
-        ----------
-        Parameters
-        ----------
-        xi, xf: array of initial and final positions.
-        average: Boolean, default = True, averages over all robots.
-        ----------
-        Returns
-        ----------
-        polar: array [r, theta]
-        """
-        beta = self.specs.beta[self.mode]
-        xf, xi = np.array(xf,dtype=float), np.array(xi,dtype=float)
-        e = np.reshape(xf - xi, (-1, 2))
-        polar = np.zeros_like(e)
-        for i, cart in enumerate(e):
-            polar[i,:] = Controller.cart2pol(cart)
-            # Currect r to be based on leader robot.
-            polar[i,0] = polar[i,0]/beta[i]
-        if average:
-            polar = np.mean(polar,axis=0).tolist()
-        else:
-            polar = polar[0]
-        return polar
     
-    def closed_pivot_cart(self, xf, last = False, average = False):
+    def closed_pivot_cart(self, xg, last = False, average = False):
         """
         Generates and yields body angles for closed loop pivot walking.
         @param: Numpy array as [distance to walk, theta, mode]
         """
         line_up = True
+        B = self.specs.B[self.mode]
         cnt = 0
+        xg = np.array(xg,dtype=float)
+        xf = xg
         while True:
             state_fb = yield None
             xi, _ = state_fb
             self.reset_state(pos = xi)
             # Calculate equivalent polar command.
-            input_cmd = self.get_polar_cmd(xi, xf, average)
+            if average:
+                xf = xi + np.dot(np.dot(B,np.linalg.pinv(B)),xg - xi)
+            input_cmd = self.cart2pol(xf[:2] - xi[:2])
             # Determine walking parameters.
             steps, sweep = self.get_pivot_params(input_cmd[0],input_cmd[1])
             yield from self.pivot_walking(input_cmd[1],sweep,1,False,line_up)
@@ -624,7 +602,7 @@ class Controller():
         while True:
             state_fb = yield None
             xc, _ = state_fb
-            rc, ang = self.get_polar_cmd(xs, xc)
+            rc, ang = self.cart2pol(xc[:2] - xs[:2])
             yield from self.pivot_walking(phi,self.theta_sweep,1,line_up=False)
             if rc > r:
                 return 2*rc/cnt, self.wrap(ang - phi)
@@ -683,7 +661,7 @@ class Controller():
         while True:
             state_fb = yield None
             xc, _ = state_fb
-            rc, ang = self.get_polar_cmd(xs, xc)
+            rc, ang = self.cart2pol(xc[:2] - xs[:2])
             yield from self.tumbling([one,phi], line_up=False)
             if rc > r:
                 return rc/cnt, self.wrap(ang - phi)
@@ -866,12 +844,12 @@ class Controller():
         stat_ratio = np.hstack((avg_ratio, std_ratio/avg_ratio))
         #ratios = ratios[polar_cmd[:,2].argsort()]
         msg += "ratios:\n"
-        msg += "\n".join(",".join(f"{i:+07.2f}" for i in j) for j in ratios)
+        msg += "\n".join(",".join(f"{i:+08.3f}" for i in j) for j in ratios)
         msg += "\nratio stats: \n"
-        msg +="\n".join(",".join(f"{i:+07.2f}" for i in j) for j in stat_ratio)
+        msg +="\n".join(",".join(f"{i:+08.3f}" for i in j) for j in stat_ratio)
         msg += "\nthm_ratios:\n"
         msg += "\n".join(
-                   ",".join(f"{i:+07.2f}" for i in j) for j in self.specs.beta)
+                   ",".join(f"{i:+08.3f}" for i in j) for j in self.specs.beta)
         msg += "\n"+"="*72
         return msg
 

@@ -392,7 +392,7 @@ class ControlNode(NodeTemplate):
                 msg = f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
                 msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
                 print(msg)
-                polar_dist = self.control.get_polar_cmd(xi,xf,average=False)
+                polar_dist = self.control.cart2pol(xf[:2] - xi[:2])
                 polar_dist[1] = np.rad2deg(polar_dist[1])
                 print(f"r:{polar_dist[0]:+07.2f},phi: {polar_dist[1]:+07.2f}")
                 # Set commands to zero.
@@ -478,7 +478,7 @@ class ControlNode(NodeTemplate):
                 msg = f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
                 msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
                 print(msg)
-                polar_dist = self.control.get_polar_cmd(xi,xf,average=False)
+                polar_dist = self.control.cart2pol(xf[:2] - xi[:2])
                 polar_dist[1] = np.rad2deg(polar_dist[1])
                 print(f"r:{polar_dist[0]:+07.2f},phi: {polar_dist[1]:+07.2f}")
                 # Set commands to zero.
@@ -566,7 +566,7 @@ class ControlNode(NodeTemplate):
                 msg = f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
                 msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
                 print(msg)
-                polar_dist = self.control.get_polar_cmd(xi,xf,average=False)
+                polar_dist = self.control.cart2pol(xf[:2] - xi[:2])
                 polar_dist[1] = np.rad2deg(polar_dist[1])
                 print(f"r:{polar_dist[0]:+07.2f},phi: {polar_dist[1]:+07.2f}")
                 # Set commands to zero.
@@ -650,7 +650,7 @@ class ControlNode(NodeTemplate):
                 print(msg_i)
                 print(msg_f)
                 print(msg)
-                polar_dist = self.control.get_polar_cmd(xi,xf)
+                polar_dist = self.control.cart2pol(xf[:2] - xi[:2])
                 print(f"r:{polar_dist[0]:+07.2f},phi: {polar_dist[1]:+07.2f}")
                 self.publish_field([0.0]*3)
                 self.rate.sleep()
