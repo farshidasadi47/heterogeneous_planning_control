@@ -62,6 +62,8 @@ class Localization():
             self._p2mm = 0.48970705 #self._find_scale()
             self._get_n_set_space()
             print("Space set.")
+            print("Space limits:")
+            print(self._space_limits_mm)
     
     def __enter__(self):
         """To be able to use the class in with statement."""
@@ -78,6 +80,9 @@ class Localization():
             return True
 
     def _set_camera_settings(self):
+        self.cap.set(cv2.CAP_PROP_BRIGHTNESS,128)
+        self.cap.set(cv2.CAP_PROP_CONTRAST,128)
+        self.cap.set(cv2.CAP_PROP_SATURATION,128)
         self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.cap.set(cv2.CAP_PROP_FOCUS, 260)
@@ -98,21 +103,21 @@ class Localization():
             # For raw format.
             # Black or 'k'
             hsv_ranges['k'] = {'lb': [np.array([  0,  0,  0],dtype=np.uint8)],
-                               'ub': [np.array([179,255, 50],dtype=np.uint8)]}
+                               'ub': [np.array([179,255, 70],dtype=np.uint8)]}
             # Red or 'r'
-            hsv_ranges['r'] = {'lb': [np.array([  0,120, 40],dtype=np.uint8),
-                                      np.array([160,120, 40],dtype=np.uint8)],
+            hsv_ranges['r'] = {'lb': [np.array([  0,100, 80],dtype=np.uint8),
+                                      np.array([175,100, 80],dtype=np.uint8)],
                                'ub': [np.array([ 20,255,255],dtype=np.uint8),
                                       np.array([179,255,255],dtype=np.uint8)]}
-            # Blue or 'b'
-            hsv_ranges['b'] = {'lb': [np.array([110, 30, 35],dtype=np.uint8)],
-                               'ub': [np.array([130,255,255],dtype=np.uint8)]}
+            # Blue or 'b0
+            hsv_ranges['b'] = {'lb': [np.array([ 90,140, 60],dtype=np.uint8)],
+                               'ub': [np.array([115,255,255],dtype=np.uint8)]}
             # Green or 'g'
-            hsv_ranges['g'] = {'lb': [np.array([ 70, 50,  0],dtype=np.uint8)],
-                               'ub': [np.array([ 95,255,160],dtype=np.uint8)]}
-            # White or 'w'
-            hsv_ranges['w'] = {'lb': [np.array([ 90, 20, 90],dtype=np.uint8)],
-                               'ub': [np.array([120,130,255],dtype=np.uint8)]}
+            hsv_ranges['g'] = {'lb': [np.array([ 30, 70, 80],dtype=np.uint8)],
+                               'ub': [np.array([ 55,255,255],dtype=np.uint8)]}
+            # White or 'm'
+            hsv_ranges['m'] = {'lb': [np.array([155, 80, 80],dtype=np.uint8)],
+                               'ub': [np.array([175,255,255],dtype=np.uint8)]}
         #
         self._hsv_ranges = hsv_ranges
 
@@ -448,7 +453,7 @@ class Localization():
         areas = np.array([cv2.contourArea(cnt) for cnt in contours])
         #areas = np.ma.masked_less(areas, .25*real_robo_area)
         # Filter contours with areas outside of expected range.
-        areas=np.ma.masked_outside(areas,.4*real_robo_area,2*real_robo_area)
+        areas=np.ma.masked_outside(areas,.2*real_robo_area,2*real_robo_area)
         if areas.count() == 0:
             return None
         # Find the nearest area to size of our physical robots
