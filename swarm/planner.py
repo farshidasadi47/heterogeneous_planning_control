@@ -48,7 +48,6 @@ class Planner():
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
         self.solver_opt = self._solvers()
-        self.UX0 = None
         self.boundary = boundary
         self.solver_name = solver_name
         # Build mode sequence
@@ -492,7 +491,7 @@ class Planner():
             flag = False
         return flag
 
-    def solve(self, xi, xf, receding = False):
+    def solve(self, xi, xf, receding = 0):
         """
         Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
@@ -515,17 +514,10 @@ class Planner():
         solver = self.solver
         self.xi = xi
         self.xf = xf
-        if receding is False or self.UX0 is None:
-            # If open loop requested,.
-            # Or if it is first call of receding horizon.
-            # Use zero initial guess if open loop 
-            U0 = ca.DM.zeros(self.U.shape)
-            X0 = ca.DM(np.matlib.repmat(xi,self.X.shape[1],1).T)
-            UX0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
-        else:
-            UX0 = self.UX0
+        U0 = ca.DM.zeros(self.U.shape)
+        X0 = ca.DM(np.matlib.repmat(xi,self.X.shape[1],1).T)
+        UX0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
         p = np.hstack((xi, xf))
-
         sol = solver(x0 = UX0, lbx = lbx, ubx = ubx,
                      lbg = lbg, ubg = ubg, p = p)
         UX_raw = sol['x'].full().squeeze()
@@ -536,18 +528,15 @@ class Planner():
         BC = np.vstack((xi,xf)).T
         U_raw, X_raw, UZ, U, X = self._post_process_u(sol)
         if receding:
-            # Adjust initial guess.
-            UX0 = np.roll(UX_raw,-(2*self.specs.n_robot + 2))
-            UX0[-(2*self.specs.n_robot + 2):] = 0.0
-            self.UX0 = UX0
-            # Step mode sequences.
-            self.mode_sequence.rotate(-1)
-            self.next_mode_sequence.rotate(-1)
+            # Update mode sequences.
+            self.mode_sequence.rotate(-receding)
+            self.next_mode_sequence.rotate(-receding)
             # Rebuild the optimization problem.
             self._get_optimization(self.solver_name, self.boundary)
         return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
 
 def receding_example():
+    threshold = 3.0
     a, ap = [0,0], [0,20]
     b, bp = [20,0], [20,20]
     c, cp = [40,0], [40,20]
@@ -562,34 +551,41 @@ def receding_example():
     pivot_length = np.array([[10,9,8],[9,8,10]])
     mode_sequence= [1,2,0]
     specs=model.SwarmSpecs(pivot_length,10)
+    #specs = model.SwarmSpecs.robo(3)
     swarm = model.Swarm(xi, 0, 1, specs)
     planner = Planner(specs, mode_sequence = mode_sequence, steps = outer,
                             solver_name='knitro', boundary=boundary)
-    repetitions = outer*swarm.specs.n_mode
+    receding = 3
+    repetitions = np.ceil(outer*swarm.specs.n_mode/receding).astype(int)
     for i in range(repetitions):
-        sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf,True)
+        sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf,receding)
         print(isfeasible)
-        swarm.simplot(U[:,:2],1000,boundary=boundary,last_section=last_section)
+        swarm.simplot(U[:,:2*receding],1000, boundary=boundary,
+                                             last_section=last_section)
         if i < repetitions - 1:
             noise = np.random.uniform(-2,2,2*swarm.specs.n_robot)
-            xi = swarm.position + noise
+            xi = swarm.position + 1*noise
             swarm.position = xi
             print(noise)
-    noise = np.random.uniform(-2,2,2*swarm.specs.n_robot)
-    xi = swarm.position + noise
-    swarm.position = xi
-    print(noise)
-    U = np.zeros((3,2))
-    print((xf[:2] - xi[:2]))
-    U[:2,:] = planner._accurate_rotation(xf[:2] - xi[:2])
-    # Convert to polar
-    for i in range(U.shape[1]):
-        U[:2,i] = planner._cartesian_to_polar(U[:2,i])
-        if U[2,i] == 0:
-            # If this is rotation round it for numerical purposes.
-            U[0,i] = int(U[0,i]*1000)/1000
-    swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
-    print(swarm.position)
+        if np.linalg.norm(xf-np.tile(xf[:2],specs.n_robot)
+                        - xi+np.tile(xi[:2],specs.n_robot), np.inf) < threshold:
+            break
+    if np.linalg.norm(xf[:2] - xi[:2], np.inf) > threshold:
+        noise = np.random.uniform(-2,2,2*swarm.specs.n_robot)
+        xi = swarm.position + 0*noise
+        swarm.position = xi
+        print(noise)
+        U = np.zeros((3,2))
+        print((xf[:2] - xi[:2]))
+        U[:2,:] = planner._accurate_rotation(xf[:2] - xi[:2])
+        # Convert to polar
+        for i in range(U.shape[1]):
+            U[:2,i] = planner._cartesian_to_polar(U[:2,i])
+            if U[2,i] == 0:
+                # If this is rotation round it for numerical purposes.
+                U[0,i] = int(U[0,i]*1000)/1000
+        swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
+        print(swarm.position)
     
 ########## test section ################################################
 if __name__ == '__main__':
