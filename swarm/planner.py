@@ -93,7 +93,7 @@ class Planner():
         U = ca.SX.sym('u',2,steps*n_mode) # U_step_cmdmode
         # Xs are positions after corresponding input is applied.
         X = ca.SX.sym('x',2*n_robot,steps*n_mode) # X_step_cmdmode_robot
-        P = ca.SX.sym('p',2*n_robot,2) # Start and end point.
+        BC = ca.SX.sym('bc',2*n_robot,2) # Start and end point.
         counter = 0
         # Build X and U.
         for step in range(steps):
@@ -113,11 +113,11 @@ class Planner():
                 counter += 1
         # Building P
         for robot in range(n_robot):
-            P[2*robot,0] = ca.SX.sym('xi_{:02d}'.format(robot))
-            P[2*robot + 1,0] = ca.SX.sym('yi_{:02d}'.format(robot))
-            P[2*robot,1] = ca.SX.sym('xf_{:02d}'.format(robot))
-            P[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
-        return X, U, P
+            BC[2*robot,0] = ca.SX.sym('xi_{:02d}'.format(robot))
+            BC[2*robot + 1,0] = ca.SX.sym('yi_{:02d}'.format(robot))
+            BC[2*robot,1] = ca.SX.sym('xf_{:02d}'.format(robot))
+            BC[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
+        return X, U, BC
 
     def _get_constraint_inter_robot(self,x,u,mode):
         """
@@ -174,16 +174,18 @@ class Planner():
         """This function builds constraints of optimization."""
         mode_sequence = self.mode_sequence
         n_mode = self.specs.n_mode
+        bc_tol = self.specs.bc_tol
         steps = self.steps
         X = self.X
         U = self.U
-        P = self.P
+        BC = self.BC
         g_shooting = []
+        g_terminal = []
         g_inter_robot = []
         g_distance = []
         g_coil = []
         counter = 0
-        state = P[:,0]
+        state = BC[:,0]
         for _ in range(steps):
             for mode in range(0,n_mode):
                 # Maps to mode sequence
@@ -204,17 +206,20 @@ class Planner():
                 state = state_next
                 counter += 1
         # Add shooting constraint of terminal position.
-        g_shooting += [P[:,1] - state]
+        g_terminal += [BC[:,1] - state]
         # Configure bounds of g
         n_g_shooting = ca.vertcat(*g_shooting).shape[0]
+        n_g_terminal = ca.vertcat(*g_terminal).shape[0]
         n_g_inter_robot = ca.vertcat(*g_inter_robot).shape[0]
         n_g_distance = ca.vertcat(*g_distance).shape[0]
         n_g_coil = ca.vertcat(*g_coil).shape[0]
         #
-        g = ca.vertcat(*(g_shooting + g_inter_robot))
+        g = ca.vertcat(*(g_shooting + g_terminal + g_inter_robot))
         lbg = np.hstack((np.zeros(n_g_shooting),
+                         -bc_tol*np.ones(n_g_terminal),
                          np.zeros(n_g_inter_robot) ))
         ubg = np.hstack((np.zeros(n_g_shooting),
+                         bc_tol*np.ones(n_g_terminal),
                          np.inf*np.ones(n_g_inter_robot) ))
         if boundary:
             g = ca.vertcat(g,*g_coil)
@@ -227,7 +232,7 @@ class Planner():
         bounds."""
         U = self.U
         X = self.X
-        P  = self.P
+        BC  = self.BC
         steps = self.steps
         n_robot = self.specs.n_robot
         n_mode = self.specs.n_mode
@@ -253,7 +258,7 @@ class Planner():
         lbx = np.array((lbu + lbxx)*steps*n_mode)
         ubx = np.array((ubu + ubxx)*steps*n_mode)
         # concatenating optimization parameter
-        p = ca.reshape(P, -1, 1)
+        p = ca.reshape(BC, -1, 1)
         return optim_var, lbx, ubx, p
 
     def _get_objective(self):
@@ -279,7 +284,7 @@ class Planner():
     def _get_optimization(self, solver_name = 'ipopt', boundary = False):
         """Sets up and returns a CASADI optimization object."""
         # Construct optimization symbolic vars in CASADI.
-        self.X, self.U, self.P = self._construct_vars()
+        self.X, self.U, self.BC = self._construct_vars()
         # Construct all constraints.
         g, lbg, ubg = self._get_constraints(boundary)
         self.g, self.lbg, self.ubg = g, lbg, ubg
@@ -528,7 +533,7 @@ class Planner():
         isfeasible = self._isfeasible(UX_raw,g_raw)
         #sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
         # recovering the solution in appropriate format
-        P = np.vstack((xi,xf)).T
+        BC = np.vstack((xi,xf)).T
         U_raw, X_raw, UZ, U, X = self._post_process_u(sol)
         if receding:
             # Adjust initial guess.
@@ -540,7 +545,7 @@ class Planner():
             self.next_mode_sequence.rotate(-1)
             # Rebuild the optimization problem.
             self._get_optimization(self.solver_name, self.boundary)
-        return sol, U_raw, X_raw, P, UZ, U, X, isfeasible
+        return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
 
 def receding_example():
     a, ap = [0,0], [0,20]

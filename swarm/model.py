@@ -101,6 +101,7 @@ class SwarmSpecs:
         self.theta_sweep = theta_sweep
         self.alpha_sweep = alpha_sweep
         self.tolerance = 2.0
+        self.bc_tol = 2.0
 
     @classmethod
     def robo3(cls):
