@@ -538,6 +538,35 @@ class Planner():
             # Rebuild the optimization problem.
             self._get_optimization(self.solver_name, self.boundary)
         return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
+    
+    @classmethod
+    def plan(cls,xg,outer_steps,mode_sequence,specs,boundary):
+        """
+        Wrapper for planning class simplifying creation and calling
+        process.
+        ----------
+        Parameters
+        ----------
+        xg: array of final position [x_i, y_i, ...]
+        outer_steps: minimum value of outer steps to be used.
+        mode_sequence: list, sequence to be used.
+        specs: instance of model.SwarmSpecs containing swarm info.
+        ----------
+        Yields
+        ----------
+        polar_cmd: 2D array of polar input  [[r, phi, mode], ... ]
+        """
+        # Build planner
+        planner = cls(specs, mode_sequence= mode_sequence, steps= outer_steps,
+                                solver_name='knitro', boundary=boundary)
+        # Get new initial condition.
+        xi = yield None
+        _, _, _, _, _, U, _, isfeasible= planner.solve(xi,xg)
+        print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
+        if not isfeasible:
+            raise RuntimeError
+        yield U.T
+        return planner
 
 def receding_example():
     threshold = 3.0
@@ -621,14 +650,19 @@ if __name__ == '__main__':
     specs=model.SwarmSpecs(pivot_length,10)
     specs = model.SwarmSpecs.robo(3)
     swarm = model.Swarm(xi, 0, 1, specs)
-    planner = Planner(specs, mode_sequence , steps = outer,
-                            solver_name='knitro', boundary=boundary)
+    #planner = Planner(specs, mode_sequence , steps = outer,
+    #                        solver_name='knitro', boundary=boundary)
     #g, lbg, ubg = planner._get_constraints()
     #optim_var, lbx, ubx, p = planner._get_optim_vars(boundary)
     #obj = planner._get_objective()
     #solver = planner._get_optimization(solver_name='knitro', boundary=boundary)
-    sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf)
-    print(isfeasible)
+    #sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf)
+    #print(isfeasible)
+    planner = Planner.plan(xf,outer,mode_sequence,specs,boundary)
+    U = next(planner)
+    if U is None:
+        U = planner.send(xi)
+        U = U.T
     swarm.reset_state(xi,0,1)
     #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
     swarm.reset_state(xi,0,1)
