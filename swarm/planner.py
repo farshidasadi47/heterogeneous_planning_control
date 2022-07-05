@@ -334,6 +334,10 @@ class Planner():
         solvers['knitro']['opts']['knitro.bar_switchrule'] = 3
         # How many fine iteration to do after interior point method.
         solvers['knitro']['opts']['knitro.bar_maxcrossit'] = 30
+        # Feasibility tolerance
+        solvers['knitro']['opts']['knitro.feastol'] = 1000
+        # This will be enforced.
+        solvers['knitro']['opts']['knitro.feastolabs'] = 1
         return solvers
 
     @staticmethod
@@ -479,7 +483,7 @@ class Planner():
         """
         flag = True
         flag_value = 0
-        flag_tol = 1e-3 # This is 1 micron :).
+        flag_tol = self.solver_opt['knitro']['opts']['knitro.feastolabs']
         # Check upper and lower bounds of solution.
         flag_value = min(flag_value, min(UX - self.lbx))
         flag_value = min(flag_value, min(self.ubx - UX))
@@ -556,9 +560,10 @@ def receding_example():
     planner = Planner(specs, mode_sequence = mode_sequence, steps = outer,
                             solver_name='knitro', boundary=boundary)
     receding = 3
-    repetitions = np.ceil(outer*swarm.specs.n_mode/receding).astype(int)
+    repetitions = 10#np.ceil(outer*swarm.specs.n_mode/receding).astype(int)
     for i in range(repetitions):
         sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf,receding)
+        print(i)
         print(isfeasible)
         swarm.simplot(U[:,:2*receding],1000, boundary=boundary,
                                              last_section=last_section)
@@ -604,18 +609,19 @@ if __name__ == '__main__':
     #xf = np.array([0,0]+[0,50]+[25,50]+ [20,30])
     xf = np.array([0,30]+[0,50]+[25,50])
     #xf = np.array(dp+cp+bp+ap)
-    outer = 2
-    boundary = False
+    outer = 3
+    boundary = True
     last_section = False
 
     pivot_length = np.array([[10,9,8],[9,8,10]])
     #pivot_length = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9],[7,10,9,8]])
     #pivot_length = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
 
-    mode_sequence= [0,1,2]
+    mode_sequence= [1,2,0]
     specs=model.SwarmSpecs(pivot_length,10)
+    specs = model.SwarmSpecs.robo(3)
     swarm = model.Swarm(xi, 0, 1, specs)
-    planner = Planner(specs, mode_sequence = None, steps = outer,
+    planner = Planner(specs, mode_sequence , steps = outer,
                             solver_name='knitro', boundary=boundary)
     #g, lbg, ubg = planner._get_constraints()
     #optim_var, lbx, ubx, p = planner._get_optim_vars(boundary)

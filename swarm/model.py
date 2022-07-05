@@ -75,8 +75,8 @@ class SwarmSpecs:
                    *np.sqrt(2-2*np.cos(self.mode_rel_ang[i])))/2
             self.mode_rel_length.append(dist)
         # Space boundaries
-        self.ubx = 120
-        self.uby = 95
+        self.ubx = 115
+        self.uby = 90
         self.lbx = -self.ubx
         self.lby = -self.uby
         self.rcoil = 120
@@ -84,11 +84,11 @@ class SwarmSpecs:
         self.robot_pairs = list(combinations(range(self.n_robot),2))
         self.d_min = self.tumbling_length*1.5
         # Adjusted space boundaries for planning.
-        self.ubsx = self.ubx-self.tumbling_length*1.75
+        self.ubsx = self.ubx-self.tumbling_length*1.25
         self.lbsx = -self.ubsx
-        self.ubsy = self.uby - self.tumbling_length*1.75
+        self.ubsy = self.uby - self.tumbling_length*0.75
         self.lbsy = -self.ubsy
-        self.rscoil = self.rcoil - self.tumbling_length
+        self.rscoil = self.rcoil #- self.tumbling_length
         # Plotting and vision markers.
         define_colors(self)
         self._colors = list(self._colors.keys())
@@ -100,8 +100,8 @@ class SwarmSpecs:
         self.tumble_inc = tumble_inc
         self.theta_sweep = theta_sweep
         self.alpha_sweep = alpha_sweep
-        self.tolerance = 2.0
-        self.bc_tol = 2.0
+        self.x_tol = 3.0
+        self.bc_tol = 0*2.0
 
     @classmethod
     def robo3(cls):
@@ -121,8 +121,8 @@ class SwarmSpecs:
     
     @classmethod
     def robo3p(cls):
-        pivot_length = np.array([[7.51,6.27,4.47],[6.36,4.66,7.51]])
-        return cls(pivot_length,11.31)
+        pivot_length = np.array([[7.62,5.98,4.50],[6.20,4.68,8.40]])
+        return cls(pivot_length,11.40)
 
     @classmethod
     def robo(cls, n_robot):
@@ -293,7 +293,8 @@ class Swarm:
             # Draw circle bounding the robots
             circle = plt.Circle([Position[2*robot,0],
                                  Position[2*robot+1,0]],
-                                 radius=tumbling_length/2,
+                                 #radius=tumbling_length/2,
+                                 radius=self.specs.d_min/2,
                                  linestyle='--', linewidth=0.5,
                                  edgecolor='k', facecolor = "None")
             ax.add_patch(rect)
@@ -350,7 +351,8 @@ class Swarm:
             # Draw circle bounding the robots
             circle = plt.Circle([Position[2*robot,end_index],
                                  Position[2*robot+1,end_index]],
-                                 radius=tumbling_length/2,
+                                 #radius=tumbling_length/2,
+                                 radius=self.specs.d_min/2,
                                  edgecolor='k', facecolor = "None")
             ax.add_patch(rect)
             ax.add_patch(circle)
