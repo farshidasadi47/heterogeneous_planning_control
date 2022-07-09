@@ -394,16 +394,18 @@ class Localization():
             offset = min((x,y, left, down, offset))
             # Calculate ROIs
             roi_frame = (x-offset, y-offset, w+2*offset, h+2*offset)
-            roi_space = (offset + 6, offset + 6, w - 12, h - 12)
+            roi_space = (offset, offset, w, h)
             center = (int(w/2+offset), int(h/2+offset))
             # Make mask for space.
             mask_space = np.zeros((roi_frame[3], roi_frame[2]), dtype=np.uint8)
             mask_space[roi_space[1]:roi_space[1]+roi_space[3],
                        roi_space[0]:roi_space[0]+roi_space[2]] = 255
+            roi_space = (offset + 8, offset + 8, w - 16, h - 20)
             #
             self._roi_frame = roi_frame # Used for cropping frames.
             self._roi_space = roi_space
-            self._space_limits_mm = ((w-1)*self._p2mm/2, (h-1)*self._p2mm/2)
+            self._space_limits_mm = ((roi_space[2]-1)*self._p2mm/2,
+                                     (roi_space[3]-1)*self._p2mm/2)
             self._center = center
             self._mask_space = mask_space
         except IOError:
@@ -453,7 +455,7 @@ class Localization():
         areas = np.array([cv2.contourArea(cnt) for cnt in contours])
         #areas = np.ma.masked_less(areas, .25*real_robo_area)
         # Filter contours with areas outside of expected range.
-        areas=np.ma.masked_outside(areas,.2*real_robo_area,2*real_robo_area)
+        areas=np.ma.masked_outside(areas,.15*real_robo_area,2*real_robo_area)
         if areas.count() == 0:
             return None
         # Find the nearest area to size of our physical robots
