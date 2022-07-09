@@ -449,12 +449,11 @@ class Swarm:
         plt.show()
         return anim
 
-########## test section ################################################
-if __name__ == '__main__':
-    swarm_specs = SwarmSpecs(np.array([[10,8,6,4],[8,6,4,10],[6,4,10,8],[4,10,8,6]]), 10)
-    swarm = Swarm(np.array([0,0,10,0,20,0,30,0]), 0, 1, swarm_specs)
+def main():
+    #swarm_specs = SwarmSpecs(np.array([[10,8,6,4],[8,6,4,10],[6,4,10,8],[4,10,8,6]]), 10)
+    #swarm = Swarm(np.array([0,0,10,0,20,0,30,0]), 0, 1, swarm_specs)
     #input_series = np.array([[100,np.pi/4,1]]).T
-    input_series = np.array([[50,np.pi/2,1],
+    """ input_series = np.array([[50,np.pi/2,1],
                                 [100,0,1],
                                 [10,-np.pi/2,-2],
                                 [20,np.pi,2],
@@ -463,7 +462,18 @@ if __name__ == '__main__':
                                 [10*9,np.pi/2,0],
                                 [20,np.pi,1],
                                 [20,np.pi,-4],
-                                ]).T
+                                ]).T """
+    specs = SwarmSpecs.robo3()
+    xi = np.array([-20,0,0,0,20,0])
+    mode = 1
+    swarm = Swarm(xi, 0, mode, specs)
+    input_series = np.array([[70,np.pi/2,1],
+                             [70,-3*np.pi/4,1],
+                             [10,-np.pi/4,-2],
+                             [50,-np.pi/2,2],
+                             [50,np.pi/4,2],
+                             [50,np.pi/4,0],
+                             ]).T
     #swarm.simulate(input_series)
     #print(swarm.specs.pivot_length)
     #print(swarm.specs.beta)
@@ -471,12 +481,15 @@ if __name__ == '__main__':
     #print(swarm.mode)
     #print(swarm.specs.beta)
     length = 10000
-    #swarm.simplot(input_series,length, boundary=False, last_section=False)
+    swarm.simplot(input_series,length, boundary=False, last_section=False)
     #print(swarm._simulate_result[0][:,swarm._simulate_result[4]].T)
-    anim = swarm.simanimation(input_series,length,boundary=False, last_section=True, save = False)
+    #anim = swarm.simanimation(input_series,length,boundary=False, last_section=True, save = False)
     #sim = swarm._simulate_result # (Position, Angle, Mode,Input, mode_change_index)
     #print(sim[0].T)
     #print(sim[1])
     #print(sim[2])
     #print(sim[3].shape)
     #print(sim[4])
+########## test section ################################################
+if __name__ == '__main__':
+    main()

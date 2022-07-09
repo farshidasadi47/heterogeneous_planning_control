@@ -11,7 +11,10 @@ import numpy as np
 import numpy.matlib
 import casadi as ca
 
-import model
+try:
+    from swarm import model
+except ModuleNotFoundError:
+    import model
 
 np.set_printoptions(precision=2, suppress=True)
 ########## classes and functions #######################################
@@ -274,7 +277,7 @@ class Planner():
                 i = step*n_mode + mode
                 if i >0:
                     u = U[:,i]
-                    obj += ca.sum1(u*u)
+                    obj += step*ca.norm_inf(u)#step*ca.sum1(u*u)#
         """ for i in range(U.shape[1]):
             u = U[:,i]
             obj += ca.sum1(u*u) """
@@ -540,7 +543,7 @@ class Planner():
         return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
     
     @classmethod
-    def plan(cls,xg,outer_steps,mode_sequence,specs,boundary):
+    def plan(cls,xg,outer_steps,mode_sequence,specs,boundary=True,show= True):
         """
         Wrapper for planning class simplifying creation and calling
         process.
@@ -620,24 +623,8 @@ def receding_example():
                 U[0,i] = int(U[0,i]*1000)/1000
         swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
         print(swarm.position)
-    
-########## test section ################################################
-if __name__ == '__main__':
-    a, ap = [0,0], [0,20]
-    b, bp = [20,0], [20,20]
-    c, cp = [40,0], [40,20]
-    d, dp = [60,0], [60,20]
-    e = [75,0]
-    xi = np.array(a+b+c)
-    transfer = np.array([0,0]*(len(xi)//2))
-    xi = xi + transfer
-    A = np.array([-15,0]+[-15,30]+[0,45]+[15,30]+ [15,0])
-    F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
-    M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
-    xf = F
-    #xf = np.array([0,0]+[0,50]+[25,50]+ [20,30])
-    xf = np.array([0,30]+[0,50]+[25,50])
-    #xf = np.array(dp+cp+bp+ap)
+
+def main():
     outer = 3
     boundary = True
     last_section = False
@@ -645,10 +632,19 @@ if __name__ == '__main__':
     pivot_length = np.array([[10,9,8],[9,8,10]])
     #pivot_length = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9],[7,10,9,8]])
     #pivot_length = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
-
     mode_sequence= [1,2,0]
     specs=model.SwarmSpecs(pivot_length,10)
     specs = model.SwarmSpecs.robo(3)
+    xi = specs.get_letter('1',0)[0]
+    #xf = specs.get_letter('C',360)[0]
+    s1 = np.array([-30,  0,   0,  0, +30,  0],dtype=float)
+    s2 = np.array([+30,+30,   0,  0,   0,+30],dtype=float)
+    s3 = np.array([-30,  0, -30,-30,   0,  0],dtype=float)
+    s4 = np.array([  0,  0,   0,-30, -30,-30],dtype=float)
+    s5 = np.array([+30,-30,   0,  0,  30,  0],dtype=float)
+    s6 = np.array([  0,  0, +30,  0, -30,  0],dtype=float)
+    xi = s4*4/3
+    xf = s5*4/3
     swarm = model.Swarm(xi, 0, 1, specs)
     #planner = Planner(specs, mode_sequence , steps = outer,
     #                        solver_name='knitro', boundary=boundary)
@@ -658,7 +654,7 @@ if __name__ == '__main__':
     #solver = planner._get_optimization(solver_name='knitro', boundary=boundary)
     #sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf)
     #print(isfeasible)
-    planner = Planner.plan(xf,outer,mode_sequence,specs,boundary)
+    planner = Planner.plan(xf,outer,mode_sequence,specs,boundary, False)
     U = next(planner)
     if U is None:
         U = planner.send(xi)
@@ -667,3 +663,6 @@ if __name__ == '__main__':
     #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
     swarm.reset_state(xi,0,1)
     swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
+########## test section ################################################
+if __name__ == '__main__':
+    main()
