@@ -12,9 +12,9 @@ from scipy.spatial.transform import Rotation
 
 # from "foldername" import filename, this is for ROS compatibility.
 try:
-    from swarm import model
+    from swarm import model, planner
 except ModuleNotFoundError:
-    import model
+    import model, planner
 
 np.set_printoptions(precision=2, suppress=True)
 ########## classes and functions #######################################
@@ -806,7 +806,17 @@ class Controller():
         ----------
         field: magnetic field needed to perform the command.
         """
+        tumbling_length = self.specs.tumbling_length
         polar_cmd = np.array(polar_cmd).reshape(-1,3)
+        # Remove negligible moves
+        polar_cmd = polar_cmd[np.argwhere(polar_cmd[:,0]> 1).squeeze()]
+        # Remove unnecessary mode changes.
+        mode_change_ind = np.argwhere(polar_cmd[:,2]<0).squeeze()
+        index_to_del = np.argwhere(np.diff(mode_change_ind)<2).squeeze()
+        index_to_del = np.hstack((index_to_del,index_to_del +1 ))
+        index_to_del = mode_change_ind[index_to_del]
+        polar_cmd = np.delete(polar_cmd, index_to_del, axis= 0)
+        print(polar_cmd)
         goals = self.get_cart_goal(self.pos, self.mode, polar_cmd)
         n_sections = len(polar_cmd)
         ratios = np.zeros((n_sections, 3 + self.specs.n_robot))
@@ -814,6 +824,12 @@ class Controller():
         msg = "="*72+"\n"
         msg += "xi:"+",".join(f"{i:+07.2f}" for i in self.pos) + "\n"
         for section, (input_cmd, xg) in enumerate(zip(polar_cmd,goals)):
+            #
+            msg_1 = f"Section {section+1 } of {n_sections}.\n"
+            msg_1 += (f"input:{input_cmd[0]:+07.2f},"
+               +f"{np.rad2deg(input_cmd[1]):+07.2f},{int(input_cmd[2]):03d}\n")
+            msg_1 += "xg:"+",".join(f"{i:+07.2f}" for i in xg) + "\n"
+            print(msg_1,end="")
             last = False if (section < n_sections-1) else has_last
             xi = self.pos
             iterator = self.closed_line_single(input_cmd, xg, average, last)
@@ -824,16 +840,16 @@ class Controller():
                 yield field, input_cmd
             xf = self.pos
             eg = xf - xg     # Realized general error.
-            msg_i = (f"input:{input_cmd[0]:+07.2f},"
-               +f"{np.rad2deg(input_cmd[1]):+07.2f},{int(input_cmd[2]):03d}\n")
-            msg_i += "xg:"+",".join(f"{i:+07.2f}" for i in xg) + "\n"
-            msg_i += "xf:"+",".join(f"{i:+07.2f}" for i in xf) + "\n"
-            msg_i += " e:"+",".join(f"{i:+07.2f}" for i in eg) + "\n"
-            msg += msg_i
             d = np.linalg.norm((xf - xi).reshape(-1,2), axis = 1)
             d_ratio = d/d[0] # Ratio of pivot_length w.r.t. leader.
             ratios[section,:-3] = d_ratio
             ratios[section,-3:] = input_cmd
+            msg_2 = "xf:"+",".join(f"{i:+07.2f}" for i in xf) + "\n"
+            msg_2 += " e:"+",".join(f"{i:+07.2f}" for i in eg) + "\n"
+            msg_2 += "ratio:" + ",".join(f"{i:+07.2f}" for i in d_ratio) + "\n"
+            msg_2 += "*"*72 + "\n"
+            print(msg_2)
+            msg += msg_1 + msg_2
         avg_ratio = np.zeros_like(self.specs.beta)
         std_ratio = np.zeros_like(self.specs.beta)
         avg_ratio[0,:] = np.mean(ratios[polar_cmd[:,2]<1],axis=0)[:3]
@@ -851,6 +867,35 @@ class Controller():
         msg += "\n".join(
                    ",".join(f"{i:+08.3f}" for i in j) for j in self.specs.beta)
         msg += "\n"+"="*72
+        return msg
+    
+    def plan_line(self, XG, outer_steps):
+        """
+        Plans swarm motion for a given goal and executes it.
+        ----------
+        Parameters
+        ----------
+        XG: array of final position [x_i, y_i, ...]
+        outer_steps: minimum value of outer steps to be used.
+        ----------
+        Yields
+        ----------
+        field: magnetic field needed to perform the command.
+        input_cmd: array of current input.
+        xg: array of current step goal.
+        ----------
+        Returns
+        ----------
+        msg: string for showing statistics of the motion.
+        """
+        # Set up the planner.
+        mode_sequence = self.mode_sequence + deque([0])
+        plan = planner.Planner.plan(XG,outer_steps,mode_sequence,self.specs)
+        for polar_cmd in plan:
+            if polar_cmd is None:
+                polar_cmd = plan.send(self.pos)
+            iterator = self.closed_line(polar_cmd,average=True)
+            msg = yield from iterator
         return msg
 
 ########## test section ################################################
