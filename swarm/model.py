@@ -79,16 +79,16 @@ class SwarmSpecs:
         self.uby = 90
         self.lbx = -self.ubx
         self.lby = -self.uby
-        self.rcoil = 120
+        self.rcoil = 90
         # Some parameters related to planning
         self.robot_pairs = list(combinations(range(self.n_robot),2))
-        self.d_min = self.tumbling_length*1.5
+        self.d_min = 20#self.tumbling_length*1.5
         # Adjusted space boundaries for planning.
-        self.ubsx = self.ubx-self.tumbling_length*1.25
+        self.ubsx = self.ubx-self.tumbling_length*1.5
         self.lbsx = -self.ubsx
-        self.ubsy = self.uby - self.tumbling_length*0.75
+        self.ubsy = self.uby - self.tumbling_length*1.1
         self.lbsy = -self.ubsy
-        self.rscoil = self.rcoil #- self.tumbling_length
+        self.rscoil = self.rcoil - self.tumbling_length
         # Plotting and vision markers.
         define_colors(self)
         self._colors = list(self._colors.keys())
@@ -121,7 +121,7 @@ class SwarmSpecs:
     
     @classmethod
     def robo3p(cls):
-        pivot_length = np.array([[7.62,5.98,4.50],[6.20,4.68,8.40]])
+        pivot_length = np.array([[7.78,5.85,4.49],[6.37,4.39,7.46]])
         return cls(pivot_length,11.40)
 
     @classmethod
