@@ -102,6 +102,49 @@ class SwarmSpecs:
         self.alpha_sweep = alpha_sweep
         self.x_tol = 3.0
         self.bc_tol = 0*2.0
+        # Drawing latters
+        self._set_letters()
+
+    def _set_letters(self):
+        chars = dict()
+        shape = dict()
+        steps = dict()
+        shift = dict()
+        chars['1']= [-60,  0, -30,  0,   0,  0,  30,  0,  60,  0]
+        shape['1']= [0,1, 1,2, 2,3, 3,4]
+        steps['1']= 3
+        chars['A']= [-30,-40, -15,  0,   0, 40,  15,  0,  30,-40]
+        shape['A']= [0,1, 1,2, 1,3, 2,3, 3,4]
+        steps['A']= 3
+        chars['B']= [-30, 40, -30, -40,  20, 20,   0,  0,  30,-20]
+        shape['B']= [0,1, 0,3, 1,4, 2,3, 2,4]
+        steps['B']= 3
+        chars['C']= [-30,  0,   0, 40,   0,-40,  30, 20,  30,-20]
+        shape['C']= [0,1, 0,2, 1,3, 2,4]
+        steps['C']= 3
+        chars['D']= [-30, 40, -30,  0, -30,-40,  30, 20,  30,-20]
+        shape['D']= [0,1, 0,3, 1,2, 2,4, 3,4]
+        steps['D']= 3
+        chars['F']= [-30, 40, -30,  0, -30,-40,  30, 40,  10, 10]
+        shape['F']= [0,1, 0,4, 1,2, 1,3]
+        steps['F']= 3
+        shift[3]= np.array([30,0]*self.n_robot, dtype=float)
+        shift[5]= np.array([0,0]*self.n_robot, dtype=float)
+        self.chars= {k: {"poses": np.array(chars[k],dtype=float),
+                         "shape": np.array(shape[k],dtype=int),
+                         "steps":steps[k]} for k in chars}
+        self.shift= shift
+
+    def get_letter(self, char, ang = 0):
+        ang = np.deg2rad(ang)
+        poses, shape, steps = self.chars.get(char, self.chars['1']).values()
+        poses = poses[:2*self.n_robot] + self.shift[self.n_robot]
+        # rotation
+        rot = np.array([[np.cos(ang),-np.sin(ang)],[np.sin(ang),np.cos(ang)]])
+        poses = np.dot(rot,poses.reshape(-1,2).T).T.flatten()
+        shape = shape.reshape(-1,2)
+        shape = shape[(shape<self.n_robot).all(axis=1),:].flatten()
+        return poses, shape, steps
 
     @classmethod
     def robo3(cls):
