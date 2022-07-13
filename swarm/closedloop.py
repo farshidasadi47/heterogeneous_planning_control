@@ -835,9 +835,9 @@ class Controller():
             iterator = self.closed_line_single(input_cmd, xg, average, last)
             for field in iterator:
                 if field is None:
-                    state_fb = yield field, input_cmd
+                    state_fb = yield None
                     field = iterator.send(state_fb)
-                yield field, input_cmd
+                yield field, input_cmd, xi, xg
             xf = self.pos
             eg = xf - xg     # Realized general error.
             d = np.linalg.norm((xf - xi).reshape(-1,2), axis = 1)

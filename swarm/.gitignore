@@ -3,6 +3,7 @@ test*.*
 test/
 result_sim/
 calibration_img/
+results/
 
 .vscode/
 ########## python .gitignore ###########################################

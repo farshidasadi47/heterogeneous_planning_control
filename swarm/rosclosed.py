@@ -10,10 +10,12 @@ import sys
 import os
 import time
 import re
+import csv
 from itertools import groupby
 
 import numpy as np
 import cv2
+import skvideo.io
 from cv_bridge import CvBridge, CvBridgeError
 
 import rclpy
@@ -31,6 +33,9 @@ try:
     from swarm import closedloop, model, localization
 except ModuleNotFoundError:
     import closedloop, model, localization
+
+# Change this to your projects path.
+ros_dir = os.path.join(r"/home","fasadi","ws","src","swarm","swarm")
 ########## Definiitons #################################################
 class NodeTemplate(Node):
     """Parent class for all nodes used in the project."""
@@ -180,41 +185,105 @@ class ShowVideo(NodeTemplate):
         self.window = cv2.namedWindow('workspace',cv2.WINDOW_AUTOSIZE)
         # Some global variable
         self.br = CvBridge()
+        self.dir = self._update_recording_path()
+        self.csv_file = None
+        self.csv_writer = None
+        self.video_writer = None
+        self.recording = False
         self.current = 0
+        self.rate = rate
         self.past = time.time()
         # Add subscribers.
         self._add_subscriber(Float32MultiArray,"/state_fb",
                                             self._state_fb_cb, reliable= False)
         self._add_subscriber(Image,"/camera",self._camera_cb, reliable= False)
+        self._add_subscriber(Float32MultiArray,"/logs",
+                                            self._logs_cb, reliable= False)
         # Add timer.
         self.timer = self.create_timer(1/rate, self._timer_callback)
         # Custruct publisher and subscription instance variables.
         self._construct_pubsub_msgs()
+        self.subs_msgs["/logs"].data = [0.0]
     
     def _state_fb_cb(self,msg):
         self.subs_msgs['/state_fb'].data = msg.data
 
     def _camera_cb(self, msg):
         self.subs_msgs["/camera"] = msg
-        self.current = time.time()
-        elapsed = round((self.current - self.past)*1000)
-        self.past = self.current
-        msg=f"vid: {self.current%1e3:+08.3f}|{elapsed:03d}|{self.counter:06d}|"
-        self.counter = (self.counter + 1)%1000000
-        print(msg)
+    
+    def _logs_cb(self, msg):
+        self.subs_msgs["/logs"].data = msg.data
 
     def get_subs_values(self):
         """Return the current value of subscribers as an array."""
         try:
             frame = self.br.imgmsg_to_cv2(self.subs_msgs["/camera"])
         except CvBridgeError:
-            frame = np.zeros((1,1),dtype=np.uint8)
-        return frame
+            frame = np.zeros((100,100),dtype=np.uint8)
+        logs = self.subs_msgs["/logs"].data
+        return frame, logs
+    
+    def _update_recording_path(self):
+        parent_dir = os.path.join(ros_dir,"results")
+        index = 1
+        result_dir = os.path.join(parent_dir,f"{index}")
+        while os.path.exists(result_dir):
+            if len(os.listdir(result_dir)) < 1:
+                break
+            index += 1
+            result_dir = os.path.join(parent_dir,f"{index}")
+        return result_dir
     
     def _timer_callback(self):
-        img = self.get_subs_values()
+        img, logs = self.get_subs_values()
+        self._record_video_n_data(img, logs)
         cv2.imshow('workspace',img)
         cv2.waitKey(1)
+        # Timing and stats.
+        self.current = time.time()
+        elapsed = round((self.current - self.past)*1000)
+        self.past = self.current
+        msg=f"vid: {self.current%1e3:+08.3f}|{elapsed:03d}|{self.counter:06d}|"
+        msg += ",".join(f"{i:+07.2f}" for i in logs[:1])
+        self.counter = (self.counter + 1)%1000000
+        print(msg)
+    
+    def _record_video_n_data(self, img, logs):
+        if logs[0]:
+            # Recording requested, set writers if they are not set.
+            if not self.recording:
+                self.recording = True
+                self._set_writers(img.shape[:2])
+        else:
+            # Stop ongoing recording and release resources.
+            if self.recording:
+                self.recording = False
+                self.csv_file.close()
+                self.csv_file = None
+                self.csv_writer = None
+                self.video_writer.close()
+                self.video_writer = None
+                self.dir = self._update_recording_path()
+        #
+        if self.recording:
+            self._write_logs_and_video(img,logs)
+    
+    def _write_logs_and_video(self,img,logs):
+        self.csv_writer.writerow(logs)
+        self.video_writer.writeFrame(img[:,:,::-1])
+        
+    def _set_writers(self,frame_size):
+        self.counter= 1
+        os.makedirs(self.dir, exist_ok= True)
+        self.csv_file= open(os.path.join(self.dir,"logs.csv"),'w')
+        self.csv_writer= csv.writer(self.csv_file)
+        self.csv_writer.writerow(["counter", "INPUT_CMD", "theta", "alpha",
+                                  "mode","X", "XI", "XG", "SHAPE"])
+        video_path= os.path.join(self.dir,"logs.mp4")
+        self.video_writer = skvideo.io.FFmpegWriter(video_path,
+            inputdict={'-r': f'{self.rate}'},
+            outputdict={'-vcodec': 'libx264', '-crf': '9',
+                        '-tune': 'film','-r': f'{self.rate}'}) 
 
 class ControlNode(NodeTemplate):
     """Contains all control related service servers."""
@@ -225,6 +294,7 @@ class ControlNode(NodeTemplate):
         self.rate = self.create_rate(rate)
         # Add publishers and subscribers.
         self._add_publisher(Point32,"/arduino_field_cmd")
+        self._add_publisher(Float32MultiArray,"/logs", reliable = False)
         self._add_subscriber(Point32,"/arduino_field_fb",
                                                     self._arduino_field_fb_cb)
         self._add_subscriber(Float32MultiArray,"/state_fb",
@@ -272,6 +342,23 @@ class ControlNode(NodeTemplate):
         self.pubs_dict["/arduino_field_cmd"].publish(
                                     self.pubs_msgs["/arduino_field_cmd"])
     
+    def publish_logs(self, *, record=None, polar_cmd=None, state = None,
+                              initial=None, goal=None, shape=None):
+        n_robot = self.control.specs.n_robot
+        record = record if record is not None else 0
+        polar_cmd = polar_cmd if polar_cmd is not None else [999]*3
+        state = state if state is not None else ([999]*2*n_robot, 999,999,999)
+        initial = initial if initial is not None else [999]*2*n_robot
+        goal = goal if goal is not None else [999]*2*n_robot
+        shape = shape if shape is not None else [999]*2*n_robot
+        # message = [record, {r, phi, mode}, theta, alpha, {x_i,y_i, ,,,},
+        #  {xg_i,yg_i,...}, {idx1_i, idx2_i, ...}]
+        msg= [record,*polar_cmd,state[1],state[2], state[3],
+                                               *state[0],*initial,*goal,*shape]
+        msg =list(map(float, msg))
+        self.pubs_msgs["/logs"].data = msg
+        self.pubs_dict["/logs"].publish(self.pubs_msgs["/logs"])
+
     def get_subs_values(self):
         """Return the current value of subscribers as an array."""
         field_fb= [self.subs_msgs["/arduino_field_fb"].x,
@@ -834,7 +921,7 @@ class ControlNode(NodeTemplate):
         return result
 
     def _closed_line_server_cb(self,goal_handle):
-        cnt = 0
+        cnt = 1
         print("*"*72)
         polar_cmd = np.array([[70,np.pi/2,1],
                              [70,-3*np.pi/4,1],
@@ -856,7 +943,8 @@ class ControlNode(NodeTemplate):
                 msg_i = f"xi: [" + ",".join(f"{i:+07.2f}" for i in xi) + "]"
                 msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
                 print(msg_i)
-                input("Press any key to continue...")
+                user_input = input("Enter \"y\" if you want to save data.\n")
+                save = 1 if re.match("y|Y",user_input) else 0
                 # Reset state
                 self.control.reset_state(pos = xi, theta = theta_i)
                 self.publish_field(field)
@@ -867,16 +955,19 @@ class ControlNode(NodeTemplate):
                 self.rate.sleep()
                 #for field in iterator:
                 while True:
-                    field, input_cmd = next(iterator)
+                    from_control = next(iterator)
                     # Get current position
                     field_fb, feedback = self.get_subs_values()
                     if abs(state[2]) <0.1:
                         state_fb = self.control.process_robots(feedback, False)
-                    if field is None:
-                        field, input_cmd = iterator.send(state_fb)
+                    if from_control is None:
+                        from_control = iterator.send(state_fb)
+                    field, input_cmd, xi, xg = from_control
                     field.append(self.control.power)
                     state = self.control.get_state()[:4]
                     self.print_stats(field, field_fb, state, state_fb,cnt)
+                    self.publish_logs(record = cnt*save, polar_cmd=input_cmd,
+                                      state = state, initial=xi, goal=xg)
                     self.publish_field(field)
                     cnt += 1
                     self.rate.sleep()
@@ -886,12 +977,14 @@ class ControlNode(NodeTemplate):
                 state_fb = self.control.process_robots(feedback)
                 self.print_stats(field, field_fb, state, state_fb,cnt)
                 self.rate.sleep()
+                time.sleep(2.0)
                 _, feedback = self.get_subs_values()
                 xf, theta_f = self.control.process_robots(feedback)
                 msg = f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
                 msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
                 print(msg)
                 print(e.value)
+                self.publish_logs(record = 0)
                 self.publish_field([0.0]*3)
                 self.rate.sleep()
                 pass
@@ -905,13 +998,14 @@ class ControlNode(NodeTemplate):
         # Neutral magnetic field.
         goal_handle.succeed()
         result = RotateAbsolute.Result()
+        self.publish_logs(record = 0)
         self.publish_field([0.0]*3)
         self.cmd_mode = "idle"
         self.rate.sleep()
         return result
     
     def _closed_plan_server_cb(self,goal_handle):
-        cnt = 0
+        cnt = 1
         os.system('clear')
         print("*"*72)
         n_robot = self.control.specs.n_robot
@@ -953,7 +1047,8 @@ class ControlNode(NodeTemplate):
                 msg_i = f"xi: [" + ",".join(f"{i:+07.2f}" for i in xi) + "]"
                 msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
                 print(msg_i)
-                input("Press any key to continue...\n")
+                user_input = input("Enter \"y\" if you want to save data.\n")
+                save = 1 if re.match("y|Y",user_input) else 0
                 # Reset state
                 self.control.reset_state(pos = xi, theta = theta_i)
                 self.publish_field(field)
@@ -965,16 +1060,19 @@ class ControlNode(NodeTemplate):
                 self.rate.sleep()
                 #for field in iterator:
                 while True:
-                    field, input_cmd = next(iterator)
+                    from_control = next(iterator)
                     # Get current position
                     field_fb, feedback = self.get_subs_values()
                     if abs(state[2]) <0.1:
                         state_fb = self.control.process_robots(feedback, False)
-                    if field is None:
-                        field, input_cmd = iterator.send(state_fb)
+                    if from_control is None:
+                        from_control = iterator.send(state_fb)
+                    field, input_cmd, xi, xg = from_control
                     field.append(self.control.power)
                     state = self.control.get_state()[:4]
                     #self.print_stats(field, field_fb, state, state_fb,cnt)
+                    self.publish_logs(record = cnt*save, polar_cmd=input_cmd,
+                                      state = state, initial=xi, goal=xg)
                     self.publish_field(field)
                     cnt += 1
                     self.rate.sleep()
@@ -984,6 +1082,7 @@ class ControlNode(NodeTemplate):
                 state_fb = self.control.process_robots(feedback)
                 self.print_stats(field, field_fb, state, state_fb,cnt)
                 self.rate.sleep()
+                time.sleep(2.0)
                 _, feedback = self.get_subs_values()
                 xf, theta_f = self.control.process_robots(feedback)
                 msg = f"xg: [" + ",".join(f"{i:+07.2f}" for i in xg) + "]\n"
@@ -991,6 +1090,7 @@ class ControlNode(NodeTemplate):
                 msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
                 print(msg)
                 print(e.value)
+                self.publish_logs(record = 0)
                 self.publish_field([0.0]*3)
                 self.rate.sleep()
                 pass
@@ -1004,6 +1104,7 @@ class ControlNode(NodeTemplate):
         # Neutral magnetic field.
         goal_handle.succeed()
         result = RotateAbsolute.Result()
+        self.publish_logs(record = 0)
         self.publish_field([0.0]*3)
         self.cmd_mode = "idle"
         print("*"*72)
@@ -1055,7 +1156,7 @@ def get_video():
         executor.spin()
 
 def show_video():
-    with ShowVideoExecutor(30) as video:
+    with ShowVideoExecutor(20) as video:
         video.spin()
 ########## Test section ################################################
 if __name__ == "__main__":
