@@ -182,10 +182,20 @@ class ShowVideo(NodeTemplate):
     """Main node for showing cmera frames live."""
     def __init__(self, rate = 30, name="showvideo"):
         super().__init__(name)
+        def nothing(x):
+            pass
         self.window = cv2.namedWindow('workspace',cv2.WINDOW_AUTOSIZE)
+        cv2.createTrackbar('Header', 'workspace', 0, 1, nothing)
+        cv2.createTrackbar('Path annotation', 'workspace', 0, 1, nothing)
+        cv2.setTrackbarPos('Header', 'workspace', 0)
+        cv2.setTrackbarPos('Path annotation', 'workspace', 0)
         # Some global variable
         self.br = CvBridge()
         self.dir = self._update_recording_path()
+        self.header = False
+        self.annotation = False
+        self._p2mm = 0.48970705 # Copy from localization module.
+        self._center = None
         self.csv_file = None
         self.csv_writer = None
         self.video_writer = None
@@ -193,6 +203,8 @@ class ShowVideo(NodeTemplate):
         self.current = 0
         self.rate = rate
         self.past = time.time()
+        model.define_colors(self)
+        self._colors = list(self._colors.values())
         # Add subscribers.
         self._add_subscriber(Float32MultiArray,"/state_fb",
                                             self._state_fb_cb, reliable= False)
@@ -219,9 +231,18 @@ class ShowVideo(NodeTemplate):
         try:
             frame = self.br.imgmsg_to_cv2(self.subs_msgs["/camera"])
         except CvBridgeError:
-            frame = np.zeros((100,100),dtype=np.uint8)
+            frame = np.zeros((100,100,3),dtype=np.uint8)
         logs = self.subs_msgs["/logs"].data
+        h, w = frame.shape[:2]
+        self._center = (int(w/2), int(h/2))
         return frame, logs
+    
+    def _cartesian2pixel(self,point):
+        """Does opposite of _pixel2cartesian."""
+        pixel = np.zeros(2,dtype=int)
+        pixel[0] = int(point[0]/self._p2mm) + self._center[0]
+        pixel[1] = self._center[1] - int(point[1]/self._p2mm)
+        return pixel
     
     def _update_recording_path(self):
         parent_dir = os.path.join(ros_dir,"results")
@@ -236,9 +257,14 @@ class ShowVideo(NodeTemplate):
     
     def _timer_callback(self):
         img, logs = self.get_subs_values()
+        self._add_logs_to_frame(img,logs)
+        img = self._add_header(img,logs)
         self._record_video_n_data(img, logs)
         cv2.imshow('workspace',img)
         cv2.waitKey(1)
+        if logs[0] == 0:
+            self.header= cv2.getTrackbarPos('Header', 'workspace')
+        self.annotation= cv2.getTrackbarPos('Path annotation', 'workspace')
         # Timing and stats.
         self.current = time.time()
         elapsed = round((self.current - self.past)*1000)
@@ -249,7 +275,7 @@ class ShowVideo(NodeTemplate):
         print(msg)
     
     def _record_video_n_data(self, img, logs):
-        if logs[0]:
+        if logs[0] > 0:
             # Recording requested, set writers if they are not set.
             if not self.recording:
                 self.recording = True
@@ -284,6 +310,49 @@ class ShowVideo(NodeTemplate):
             inputdict={'-r': f'{self.rate}'},
             outputdict={'-vcodec': 'libx264', '-crf': '9',
                         '-tune': 'film','-r': f'{self.rate}'}) 
+
+    def _add_logs_to_frame(self,img, logs):
+        if logs[0] and self.annotation and logs[3] > -1:
+            logs = np.array(logs)
+            input_cmd = logs[1:4]
+            theta = logs[4]
+            alpha = logs[5]
+            mode = logs[6]
+            x, xi, xg, shape = logs[7:].reshape(4,-1)
+            x, xi, xg = x.reshape(-1,2), xi.reshape(-1,2), xg.reshape(-1,2)
+            # Draw shape or expected path.
+            if np.any(shape != 999):
+                shape = shape[shape != 999].reshape(-1,2)
+                for (i1, i2) in shape:
+                    pts= []
+                    pts.append(self._cartesian2pixel(x[i1]))
+                    pts.append(self._cartesian2pixel(x[i2]))
+                    cv2.line(img, pts[0], pts[1], (96,96,96),2,cv2.LINE_AA)
+            else:
+                if np.all(xi != 999) and np.all(xg != 999):
+                    for idx, (pt1, pt2) in enumerate(zip(xi,xg)):
+                        p1 = self._cartesian2pixel(pt1)
+                        p2 = self._cartesian2pixel(pt2)
+                        cv2.arrowedLine(img,p1,p2,self._colors[idx],
+                        1, cv2.LINE_AA, tipLength=0.05)
+    
+    def _add_header(self,img,logs):
+        if self.header:
+            w = img.shape[1]
+            attic = np.ones((40,w,3),dtype = np.uint8)*192
+            img = np.concatenate((attic, img), axis = 0)
+            if logs[0] and self.annotation:
+                mode = int(logs[3])
+                if mode < 0:
+                    text = f"Changing to mode {-mode:1d}"
+                elif mode < 1:
+
+                    text = "Tumbling, mode 0"
+                else:
+                    text = f"Pivot walking in mode {mode:1d}"
+                img = cv2.putText(img, text, [10,28],cv2.FONT_HERSHEY_COMPLEX,
+                                            1,(  0,255,  0),1, cv2.LINE_AA)
+        return img
 
 class ControlNode(NodeTemplate):
     """Contains all control related service servers."""
@@ -944,7 +1013,7 @@ class ControlNode(NodeTemplate):
                 msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
                 print(msg_i)
                 user_input = input("Enter \"y\" if you want to save data.\n")
-                save = 1 if re.match("y|Y",user_input) else 0
+                save = 1 if re.match("y|Y",user_input) else -1
                 # Reset state
                 self.control.reset_state(pos = xi, theta = theta_i)
                 self.publish_field(field)
@@ -1048,7 +1117,7 @@ class ControlNode(NodeTemplate):
                 msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
                 print(msg_i)
                 user_input = input("Enter \"y\" if you want to save data.\n")
-                save = 1 if re.match("y|Y",user_input) else 0
+                save = 1 if re.match("y|Y",user_input) else -1
                 # Reset state
                 self.control.reset_state(pos = xi, theta = theta_i)
                 self.publish_field(field)
