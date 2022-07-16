@@ -191,7 +191,7 @@ class ShowVideo(NodeTemplate):
         cv2.setTrackbarPos('Path annotation', 'workspace', 0)
         # Some global variable
         self.br = CvBridge()
-        self.dir = self._update_recording_path()
+        self.dir = None
         self.header = False
         self.annotation = False
         self._p2mm = 0.48970705 # Copy from localization module.
@@ -272,24 +272,24 @@ class ShowVideo(NodeTemplate):
         msg=f"vid: {self.current%1e3:+08.3f}|{elapsed:03d}|{self.counter:06d}|"
         msg += ",".join(f"{i:+07.2f}" for i in logs[:1])
         self.counter = (self.counter + 1)%1000000
-        print(msg)
+        print(msg, self.recording)
     
     def _record_video_n_data(self, img, logs):
-        if logs[0] > 0:
+        if logs[0] > 0.5:
             # Recording requested, set writers if they are not set.
             if not self.recording:
                 self.recording = True
+                self.dir = self._update_recording_path()
                 self._set_writers(img.shape[:2])
         else:
             # Stop ongoing recording and release resources.
             if self.recording:
                 self.recording = False
+                self.csv_writer = None
                 self.csv_file.close()
                 self.csv_file = None
-                self.csv_writer = None
                 self.video_writer.close()
                 self.video_writer = None
-                self.dir = self._update_recording_path()
         #
         if self.recording:
             self._write_logs_and_video(img,logs)
@@ -322,12 +322,11 @@ class ShowVideo(NodeTemplate):
             x, xi, xg = x.reshape(-1,2), xi.reshape(-1,2), xg.reshape(-1,2)
             # Draw shape or expected path.
             if np.any(shape != 999):
-                shape = shape[shape != 999].reshape(-1,2)
+                shape = shape[shape != 999].reshape(-1,2).astype(int)
                 for (i1, i2) in shape:
-                    pts= []
-                    pts.append(self._cartesian2pixel(x[i1]))
-                    pts.append(self._cartesian2pixel(x[i2]))
-                    cv2.line(img, pts[0], pts[1], (96,96,96),2,cv2.LINE_AA)
+                    p1 = self._cartesian2pixel(xg[i1])
+                    p2 = self._cartesian2pixel(xg[i2])
+                    cv2.line(img, p1, p2, (0,255,255),2,cv2.LINE_AA)
             else:
                 if np.all(xi != 999) and np.all(xg != 999):
                     for idx, (pt1, pt2) in enumerate(zip(xi,xg)):
@@ -350,8 +349,9 @@ class ShowVideo(NodeTemplate):
                     text = "Tumbling, mode 0"
                 else:
                     text = f"Pivot walking in mode {mode:1d}"
-                img = cv2.putText(img, text, [10,28],cv2.FONT_HERSHEY_COMPLEX,
-                                            1,(  0,255,  0),1, cv2.LINE_AA)
+                if mode < 999:
+                    img = cv2.putText(img, text, [10,28],
+                      cv2.FONT_HERSHEY_COMPLEX, 1,(  0,255,  0),1, cv2.LINE_AA)
         return img
 
 class ControlNode(NodeTemplate):
@@ -1108,7 +1108,6 @@ class ControlNode(NodeTemplate):
                 else:
                     print("Invalid input. Ignored \"action request\".")
                     raise ValueError
-                goal = goals[0]
                 # Get current position
                 _, feedback = self.get_subs_values()
                 state_fb=self.control.process_robots(feedback,any_robot= False)
@@ -1124,49 +1123,68 @@ class ControlNode(NodeTemplate):
                 state = self.control.get_state()[:4]
                 self.rate.sleep()
                 # Execute closed loop control.
-                xg, shape, steps = goal
-                iterator = self.control.plan_line(xg, steps)
-                self.rate.sleep()
-                #for field in iterator:
-                while True:
-                    from_control = next(iterator)
-                    # Get current position
-                    field_fb, feedback = self.get_subs_values()
-                    if abs(state[2]) <0.1:
-                        state_fb = self.control.process_robots(feedback, False)
-                    if from_control is None:
-                        from_control = iterator.send(state_fb)
-                    field, input_cmd, xi, xg = from_control
-                    field.append(self.control.power)
-                    state = self.control.get_state()[:4]
-                    #self.print_stats(field, field_fb, state, state_fb,cnt)
-                    self.publish_logs(record = cnt*save, polar_cmd=input_cmd,
-                                      state = state, initial=xi, goal=xg)
-                    self.publish_field(field)
-                    cnt += 1
+                n_goal = len(goals)
+                for idx, goal in enumerate(goals):
+                    print("*"*72)
+                    print(f"Running plan {idx+1:02d} of {n_goal:02d}.")
+                    xg, shape, steps = goal
+                    print(shape)
+                    print(f"xg: [" + ",".join(f"{i:+07.2f}" for i in xg) +"]")
+                    iterator = self.control.plan_line(xg, steps)
                     self.rate.sleep()
-            except StopIteration as e:
-                # Get current position
-                field_fb, feedback = self.get_subs_values()
-                state_fb = self.control.process_robots(feedback)
-                self.print_stats(field, field_fb, state, state_fb,cnt)
-                self.rate.sleep()
-                time.sleep(2.0)
-                _, feedback = self.get_subs_values()
-                xf, theta_f = self.control.process_robots(feedback)
-                msg = f"xg: [" + ",".join(f"{i:+07.2f}" for i in xg) + "]\n"
-                msg += f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
-                msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
-                print(msg)
-                print(e.value)
+                    try:
+                        while True:
+                            from_control = next(iterator)
+                            # Get current position
+                            field_fb, feedback = self.get_subs_values()
+                            if abs(state[2]) <0.1:
+                                state_fb = self.control.process_robots(
+                                                               feedback, False)
+                            if from_control is None:
+                                from_control = iterator.send(state_fb)
+                            field, input_cmd, xi, xg = from_control
+                            field.append(self.control.power)
+                            state = self.control.get_state()[:4]
+                            #self.print_stats(field, field_fb, state, state_fb,cnt)
+                            self.publish_logs(record= cnt*save,
+                                              polar_cmd= input_cmd,
+                                              state= state,
+                                              initial= xi, goal= xg)
+                            self.publish_field(field)
+                            cnt += 1
+                            self.rate.sleep()
+                    except StopIteration as e:
+                        # Get current position
+                        field_fb, feedback = self.get_subs_values()
+                        state_fb = self.control.process_robots(feedback)
+                        self.publish_logs(record= cnt*save, state= state,
+                                          initial= xi, goal= xg,shape= shape)
+                        self.rate.sleep()
+                        _, feedback = self.get_subs_values()
+                        xf,theta_f = self.control.process_robots(feedback)
+                        msg= f"xg: ["+",".join(f"{i:+07.2f}" for i in xg) 
+                        msg+= "]\n"
+                        msg+= f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf)
+                        msg+= "]"
+                        msg+= f", theta_f: {np.rad2deg(theta_f):+07.2f}"
+                        print(e.value)
+                        print(msg)
+                        time.sleep(2.0)
+                        pass
+                    except RuntimeError as exc:
+                        print(type(exc).__name__,exc.args)
+                        pass
+                # Set everything to neutral.
                 self.publish_logs(record = 0)
                 self.publish_field([0.0]*3)
                 self.rate.sleep()
-                pass
             except KeyboardInterrupt:
                 pass
             except Exception as exc:
                 print(type(exc).__name__,exc.args)
+                self.publish_logs(record = 0)
+                self.publish_field([0.0]*3)
+                self.rate.sleep()
                 pass
         else:
             print("Not in idle mode. Current server call is ignored.")
