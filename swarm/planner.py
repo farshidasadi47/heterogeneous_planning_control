@@ -93,6 +93,7 @@ class Planner():
         n_robot = self.specs.n_robot
         mode_sequence = self.mode_sequence
         U = ca.SX.sym('u',2,steps*n_mode) # U_step_cmdmode
+        U0 = ca.SX.sym('u',2,steps*n_mode) # U_step_cmdmode
         # Xs are positions after corresponding input is applied.
         X = ca.SX.sym('x',2*n_robot,steps*n_mode) # X_step_cmdmode_robot
         BC = ca.SX.sym('bc',2*n_robot,2) # Start and end point.
@@ -107,6 +108,8 @@ class Planner():
                 # Construct current input.
                 U[0,counter] = ca.SX.sym('ux_'+varstr)
                 U[1,counter] = ca.SX.sym('uy_'+varstr)
+                U0[0,counter] = ca.SX.sym('u0x_'+varstr)
+                U0[1,counter] = ca.SX.sym('u0y_'+varstr)
                 # Construct positions after applying current input.
                 for robot in range(n_robot):
                     rob_str = f'_{robot:02d}'
@@ -119,7 +122,7 @@ class Planner():
             BC[2*robot + 1,0] = ca.SX.sym('yi_{:02d}'.format(robot))
             BC[2*robot,1] = ca.SX.sym('xf_{:02d}'.format(robot))
             BC[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
-        return X, U, BC
+        return X, U, U0, BC
 
     def _get_constraint_inter_robot(self,x,u,mode):
         """
@@ -233,6 +236,7 @@ class Planner():
         """This function returns optimization flatten variable and its
         bounds."""
         U = self.U
+        U0 = self.U0
         X = self.X
         BC  = self.BC
         steps = self.steps
@@ -260,7 +264,7 @@ class Planner():
         lbx = np.array((lbu + lbxx)*steps*n_mode)
         ubx = np.array((ubu + ubxx)*steps*n_mode)
         # concatenating optimization parameter
-        p = ca.reshape(BC, -1, 1)
+        p = ca.vertcat(ca.reshape(BC,-1,1),ca.reshape(U0,-1,1))
         return optim_var, lbx, ubx, p
 
     def _get_objective(self):
@@ -270,7 +274,7 @@ class Planner():
         """
         steps = self.steps
         n_mode = self.specs.n_mode
-        U = self.U
+        U = self.U - self.U0
         obj = 0
         for step in range(0,steps):
             for mode in range(n_mode):
@@ -286,7 +290,7 @@ class Planner():
     def _get_optimization(self, solver_name = 'ipopt', boundary = False):
         """Sets up and returns a CASADI optimization object."""
         # Construct optimization symbolic vars in CASADI.
-        self.X, self.U, self.BC = self._construct_vars()
+        self.X, self.U, self.U0, self.BC = self._construct_vars()
         # Construct all constraints.
         g, lbg, ubg = self._get_constraints(boundary)
         self.g, self.lbg, self.ubg = g, lbg, ubg
@@ -498,7 +502,7 @@ class Planner():
             flag = False
         return flag
 
-    def solve(self, xi, xf, receding = 0):
+    def solve(self, xi, xf, U0= None, receding = 0):
         """
         Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
@@ -521,10 +525,13 @@ class Planner():
         solver = self.solver
         self.xi = xi
         self.xf = xf
-        U0 = ca.DM.zeros(self.U.shape)
+        if U0 is None:
+            U0 = ca.DM.zeros(self.U.shape)
+        else:
+            U0 = ca.DM(U0)
         X0 = ca.DM(np.matlib.repmat(xi,self.X.shape[1],1).T)
         UX0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
-        p = np.hstack((xi, xf))
+        p = ca.vertcat(xi, xf, ca.reshape(U0,-1,1))
         sol = solver(x0 = UX0, lbx = lbx, ubx = ubx,
                      lbg = lbg, ubg = ubg, p = p)
         UX_raw = sol['x'].full().squeeze()
@@ -543,7 +550,8 @@ class Planner():
         return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
     
     @classmethod
-    def plan(cls,xg,outer_steps,mode_sequence,specs,boundary=True,show= True):
+    def plan(cls,xg,outer_steps,mode_sequence,specs,
+                                       resolve= True,boundary=True):
         """
         Wrapper for planning class simplifying creation and calling
         process.
@@ -564,10 +572,18 @@ class Planner():
                                 solver_name='knitro', boundary=boundary)
         # Get new initial condition.
         xi = yield None
-        _, _, _, _, _, U, _, isfeasible= planner.solve(xi,xg)
+        _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg)
         print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
         if not isfeasible:
             raise RuntimeError
+        if resolve:
+            r_raw = np.linalg.norm(U_raw,axis=0)
+            print(r_raw)
+            print(U_raw)
+            U_raw = U_raw.T
+            U_raw[np.argwhere(r_raw
+                           <specs.tumbling_length).squeeze()] = np.zeros(2)
+            _, _, _, _, _, U, _, isfeasible= planner.solve(xi,xg,U_raw.T)
         yield U.T
         return planner
 
@@ -654,10 +670,12 @@ def main():
     #solver = planner._get_optimization(solver_name='knitro', boundary=boundary)
     #sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf)
     #print(isfeasible)
-    planner = Planner.plan(xf,outer,mode_sequence,specs,boundary, False)
+    resolve = True
+    planner = Planner.plan(xf,outer,mode_sequence,specs,resolve,boundary)
     U = next(planner)
     if U is None:
         U = planner.send(xi)
+        print(U)
         U = U.T
     swarm.reset_state(xi,0,1)
     #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
