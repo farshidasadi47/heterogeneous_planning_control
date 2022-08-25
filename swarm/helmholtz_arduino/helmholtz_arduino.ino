@@ -19,6 +19,7 @@
 /********* Globals ****************************************************/
 #define LED_PIN 13
 float field[3]{0};
+Coils coil;
 // Timer period on nanoseconds
 const unsigned int timer_period = RCL_MS_TO_NS(10);  // 100.0 Hz
 // ROS2 messages
@@ -49,7 +50,7 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, HIGH);
     // Initialize coils.
-    DualVNH5019_Init();
+    coil.initialize();
     delay(100);
     // Initialize micro-ROS allocator.
     allocator = rcl_get_default_allocator();
@@ -107,7 +108,7 @@ void main_loop(){
     field_pub.y = field_sub.y;
     field_pub.z = field_sub.z;
     // Update coil voltages.
-    set_magnetic_field(field_sub.x, field_sub.y, field_sub.z);
+    coil.set_magnetic_field(field_sub.x, field_sub.y, field_sub.z);
     // Publish the latest latency check variable.
     RCSOFTCHECK(rcl_publish(&field_publisher, &field_pub, NULL));
 }
