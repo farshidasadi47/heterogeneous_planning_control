@@ -863,7 +863,7 @@ class ControlNode(NodeTemplate):
                 self.publish_field(field)
                 self.rate.sleep()
                 # Execute closed loop control.
-                iterator = self.control.pivot_calibration(params[1])
+                iterator = self.control.pivot_calibration(*params)
                 self.rate.sleep()
                 #for field in iterator:
                 while True:
@@ -944,7 +944,7 @@ class ControlNode(NodeTemplate):
                 state = self.control.get_state()[:4]
                 self.rate.sleep()
                 # Execute closed loop control.
-                iterator = self.control.tumble_calibration(params[1])
+                iterator = self.control.tumble_calibration(*params)
                 self.rate.sleep()
                 #for field in iterator:
                 while True:

@@ -608,11 +608,10 @@ class Controller():
                 return 2*rc/cnt, self.wrap(ang - phi)
             cnt += 1
 
-    def pivot_calibration(self, n_sect):
+    def pivot_calibration(self, r, n_sect):
         """Yields field for pivot walking calibration prcess."""
         lengths = []
         ang_errs = []
-        r = 70
         d = 2*r
         angles = np.linspace(0,np.pi, int(n_sect) + 1)[:-1]
         for ang in angles:
@@ -667,11 +666,10 @@ class Controller():
                 return rc/cnt, self.wrap(ang - phi)
             cnt += 1
     
-    def tumble_calibration(self, n_sect):
+    def tumble_calibration(self, r, n_sect):
         """Yields field for pivot walking calibration prcess."""
         lengths = []
         ang_errs = []
-        r = 65
         d = 2*r
         angles = np.linspace(0,np.pi, int(n_sect) + 1)[:-1]
         for ang in angles:
