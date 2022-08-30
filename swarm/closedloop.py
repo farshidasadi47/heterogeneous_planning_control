@@ -24,7 +24,7 @@ class Controller():
     millirobots. For more info on the algorithms refer to the paper.
     """
     def __init__(self, specs: model.SwarmSpecs,
-                       pos: np.ndarray, theta: float, mode: int):
+                 pos= None, theta= None, mode= None):
         self.specs = specs
         self.theta_inc = specs.theta_inc
         self.alpha_inc = specs.alpha_inc
@@ -34,8 +34,17 @@ class Controller():
         self.theta_sweep = specs.theta_sweep # Max theta sweep.
         self.alpha_sweep = specs.alpha_sweep # Max alpha sweep.
         self._set_rotation_constants_and_functions()
+        pos= self._pos_init() if pos is None else np.array(pos)
+        theta= 0.0 if theta is None else theta
+        mode= 1 if mode is None else mode
         self.reset_state(pos, theta, 0, mode)
         self.power = 100.0
+    
+    def _pos_init(self):
+        pos= np.array(range(self.specs.n_robot),dtype= float)
+        pos= (pos - pos.size//2)
+        pos= np.vstack((pos*20.0,pos*0.0)).T.flatten()
+        return pos
 
     def _set_rotation_constants_and_functions(self):
         """
@@ -899,10 +908,10 @@ class Controller():
 ########## test section ################################################
 if __name__ == '__main__':
     specs = model.SwarmSpecs.robo3()
-    xi = np.array([0,0,20,0,40,0])
-    xf = np.array([10,0,20,0,40,0])
     mode = 1
-    control = Controller(specs,xi,0,mode)
+    control = Controller(specs,pos= None,theta= 0,mode= mode)
+    xi= control.get_state()[0]
+    xf= xi+ 10.0
     #control.reset_state(theta= np.deg2rad(-30))
     phi = np.deg2rad(135)
     sweep = np.deg2rad(30)

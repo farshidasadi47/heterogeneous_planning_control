@@ -1203,7 +1203,7 @@ class MainExecutor(MultiThreadedExecutorTemplate):
     def __init__(self, rate = 50, n_robot = 3):
         super().__init__()
         specs = model.SwarmSpecs.robo(n_robot)
-        control = closedloop.Controller(specs,np.array([0,0,20,0,40,0]),0,1)
+        control = closedloop.Controller(specs)
         # Add nodes.
         self.add_node(ControlNode(control, rate))
         print("*"*72 + "\nMain executor is initialized.\n" + "*"*72)
