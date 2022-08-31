@@ -307,7 +307,7 @@ class Controller():
         str_msg = "Mode change can only be started from alpha = 0."
         assert abs(self.alpha) <.01, str_msg
         # Determine pivot to avoid unnecessary rotation.
-        dir_pivot, dir_ang, cte = self.get_pivot(phi, self.theta)
+        dir_pivot, _, _ = self.get_pivot(phi, self.theta)
         # Get index of desired mode from the current sequence to
         # determine parameters for tumbling process.
         # Mode index to get tumbling angles and distance.
@@ -315,8 +315,8 @@ class Controller():
             des_mode_index = self.mode_sequence.index(des_mode)
             rel_ang = self.specs.mode_rel_ang[des_mode_index]
             if line_up:
-                theta_start = phi + cte - dir_ang*dir_pivot*rel_ang/2
-                theta_end = phi + cte + dir_ang*dir_pivot*rel_ang/2
+                theta_start = phi - dir_pivot*rel_ang/2
+                theta_end = phi + dir_pivot*rel_ang/2
             else:
                 theta_start = self.theta
                 phi = theta_start + rel_ang/2
@@ -338,7 +338,7 @@ class Controller():
             yield from self.step_alpha(0.0, self.tumble_inc)
             if last:
                 # Line up the robot.
-                yield from self.step_theta(phi + cte)
+                yield from self.step_theta(phi)
         else:
             yield from self.step_theta(self.theta)
 
@@ -907,9 +907,9 @@ class Controller():
 
 ########## test section ################################################
 if __name__ == '__main__':
-    specs = model.SwarmSpecs.robo3()
+    specs = model.SwarmSpecs.robo5()
     mode = 1
-    control = Controller(specs,pos= None,theta= 0,mode= mode)
+    control = Controller(specs,pos= None,theta= 0,mode= 1)
     xi= control.get_state()[0]
     xf= xi+ 10.0
     #control.reset_state(theta= np.deg2rad(-30))
@@ -922,8 +922,8 @@ if __name__ == '__main__':
                              [10,0,2],
                              [12,0,0],
                              [0,np.pi/2,999],
-                             [0,np.pi/4,1]])
-    iterator = control.step_mode(2, phi, last=False, line_up= True)
+                             [0,np.pi/4,4]])
+    iterator = control.step_mode(2, phi, last= False, line_up= True)
     iterator = control.step_tumble(phi, 2, last= False,line_up= True)
     iterator = control.step_pivot(phi, sweep, 10,last= False,line_up= True)
     iterator = control.pivot_walking_walk([2,0], last= False,line_up= True)
