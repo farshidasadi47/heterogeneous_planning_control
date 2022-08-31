@@ -439,12 +439,12 @@ class ControlNode(NodeTemplate):
     def print_stats(self, field, field_fb, state, state_fb, cnt):
         msg = (
              f"{time.time()%1e3:+8.3f}|{cnt:05d}|"
-            +"".join(f"{elem:+07.2f}" for elem in field[:2]) + "|"
-            +"".join(f"{elem:+07.2f}" for elem in field_fb[:2]) + "|"
-            +"".join(f"{elem:+07.2f}" for elem in state_fb[0]) + "|"
-            + f"{np.rad2deg(state_fb[1]):+07.2f}" + '|'
-            +"".join(f"{elem:+07.2f}" for elem in state[0]) + "|"
-            +f"{np.rad2deg(state[1]):+07.2f},{np.rad2deg(state[2]):+07.2f}| "
+            +"".join(f"{elem:+06.1f}" for elem in field[:2]) + "|"
+            +"".join(f"{elem:+06.1f}" for elem in field_fb[:2]) + "|"
+            +"".join(f"{elem:+06.1f}" for elem in state_fb[0]) + "|"
+            + f"{np.rad2deg(state_fb[1]):+06.1f}" + '|'
+            +"".join(f"{elem:+6.1f}" for elem in state[0]) + "|"
+            +f"{np.rad2deg(state[1]):+06.1f},{np.rad2deg(state[2]):+06.1f}| "
             +f"{state[3]:01d}"
             )
         print(msg)
