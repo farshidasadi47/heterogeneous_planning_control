@@ -1001,6 +1001,7 @@ class ControlNode(NodeTemplate):
                              [10,np.pi/4,-1],
                              ])
         field = [0.0,0.0,0.0]
+        mode_s= polar_cmd[polar_cmd[:,2]>0,2][0]
         self.rate.sleep()
         if self.cmd_mode == "idle":
             self.cmd_mode == "busy"
@@ -1012,10 +1013,13 @@ class ControlNode(NodeTemplate):
                 msg_i = f"xi: [" + ",".join(f"{i:+07.2f}" for i in xi) + "]"
                 msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
                 print(msg_i)
+                user_input = input("Enter phi offset in degrees:\n")
+                if re.match("[+-]?\d+(.\d+)?",user_input):
+                    polar_cmd[:,1]+= np.deg2rad(float(user_input))
                 user_input = input("Enter \"y\" if you want to save data.\n")
                 save = 1 if re.match("y|Y",user_input) else -1
                 # Reset state
-                self.control.reset_state(pos = xi, theta = theta_i)
+                self.control.reset_state(pos= xi, theta= theta_i, mode= mode_s)
                 self.publish_field(field)
                 state = self.control.get_state()[:4]
                 self.rate.sleep()
@@ -1081,8 +1085,9 @@ class ControlNode(NodeTemplate):
         x_dim = n_robot*2 - 1
         regex_num = r"[+-]?\d+\.?\d*((, *| +)[+-]?\d+\.?\d*){%d} *" % x_dim
         regex_ltr = r"\w((, *| +)\w)* *"
+        regex_ltr = r"([\w\d)((, *| +)(\w\d))* *" # A0, 11, ...
         chars = "".join(char for char in self.control.specs.chars)
-        regex_ltr = r"[%s]((, *| +)[%s])* *" %(chars, chars)
+        regex_ltr = r"[%s]\d((, *| +)[%s]\d)* *" %(chars, chars)
         field = [0.0,0.0,0.0]
         self.rate.sleep()
         if self.cmd_mode == "idle":
@@ -1090,8 +1095,9 @@ class ControlNode(NodeTemplate):
             try:
                 print("Enter final positions by coordinate or letter:")
                 print(f"Enter goal for {n_robot} robots as x_i, y_i, ... OR")
-                print(f"Enter list of prespecified letters from")
+                print(f"Enter list of prespecified letters with roll from")
                 print(",".join(i for i in self.control.specs.chars)+ " OR")
+                print("Example: A0, B1")
                 print("Enter \"q\" for quitting.")
                 # Read user input.
                 in_str = input("Enter values: ").strip()
@@ -1104,7 +1110,9 @@ class ControlNode(NodeTemplate):
                     goals = [(np.array(params),None, 3)]
                 elif re.fullmatch(regex_ltr, in_str):
                     params = [c for c,_ in groupby(re.split(r", *| +",in_str))]
-                    goals = [self.control.specs.get_letter(c) for c in params]
+                    goals= [
+                        self.control.specs.get_letter(c[0], roll= int(c[1]))
+                        for c in params]
                 else:
                     print("Invalid input. Ignored \"action request\".")
                     raise ValueError

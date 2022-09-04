@@ -106,69 +106,149 @@ class SwarmSpecs:
         self._set_letters()
 
     def _set_letters(self):
-        chars = dict()
-        shape = dict()
-        steps = dict()
-        shift = dict()
-        chars['1']= [-60,  0, -30,  0,   0,  0,  30,  0,  60,  0]
-        shape['1']= [0,1, 1,2, 2,3, 3,4, 999,999]
-        steps['1']= 3
-        chars['a']= [-30,  0,   0,  0,  30,  0]
-        shape['a']= [0,1, 1,2, 999,999]
-        steps['a']= 3
-        chars['b']= [+30,+30,   0,  0,   0,+30]
-        shape['b']= [0,2, 1,2, 999,999]
-        steps['b']= 3
-        chars['c']= [-30,  0, -30, 30,   0,  0]
-        shape['c']= [0,1, 0,2, 999,999]
-        steps['c']= 3
-        chars['d']= [  0,  0,   0,-30, -30,-30]
-        shape['d']= [0,1, 1,2, 999,999]
-        steps['d']= 3
-        chars['e']= [+30,-30,   0,  0,  30,  0]
-        shape['e']= [0,2, 1,2, 999,999]
-        steps['e']= 3
-        chars['f']= [  0,  0, +30,  0, -30,  0]
-        shape['f']= [0,1, 0,2, 999,999]
-        steps['f']= 3
-        chars['A']= [-30,-40, -15,  0,   0, 40,  15,  0,  30,-40]
-        shape['A']= [0,1, 1,2, 1,3, 2,3, 3,4]
-        steps['A']= 3
-        chars['B']= [-30, 40, -30, -40,  20, 20,   0,  0,  30,-20]
-        shape['B']= [0,1, 0,3, 1,4, 2,3, 2,4]
-        steps['B']= 3
-        chars['C']= [-30,  0,   0, 40,   0,-40,  30, 20,  30,-20]
-        shape['C']= [0,1, 0,2, 1,3, 2,4, 999,999]
-        steps['C']= 3
-        chars['D']= [-30, 40, -30,  0, -30,-40,  30, 20,  30,-20]
-        shape['D']= [0,1, 0,3, 1,2, 2,4, 3,4, 999,999]
-        steps['D']= 3
-        chars['F']= [-30, 40, -30,  0, -30,-40,  30, 40,  10, 10]
-        shape['F']= [0,1, 0,4, 1,2, 1,3, 999,999]
-        steps['F']= 3
-        shift[3]= np.array([30,0]*self.n_robot, dtype=float)
-        shift[5]= np.array([0,0]*self.n_robot, dtype=float)
-        self.chars= {k: {"poses": np.array(chars[k],dtype=float),
-                         "shape": np.array(shape[k],dtype=int),
-                         "steps":steps[k]} for k in chars}
-        self.shift= shift
+        chars3= dict()
+        chars3['*']= {'poses': [-40,  0,   0,  0,  40,  0],
+                      'shape': [0,1, 1,2, 999,999],
+                      'steps': 3}
+        chars3['b']= {'poses': [+40,+40,   0,  0,   0,+40],
+                      'shape': [0,2, 1,2, 999,999],
+                      'steps': 3}
+        chars3['c']= {'poses': [-40,  0, -40, 40,   0,  0],
+                      'shape': [0,1, 0,2, 999,999],
+                      'steps': 3}
+        chars3['d']= {'poses': [  0,  0,   0,-40, -40,-40],
+                      'shape': [0,1, 1,2, 999,999],
+                      'steps': 3}
+        chars3['e']= {'poses': [+40,-40,   0,  0,  40,  0],
+                      'shape': [0,2, 1,2, 999,999],
+                      'steps': 3}
+        chars3['f']= {'poses': [  0,  0, +40,  0, -40,  0],
+                      'shape': [0,1, 0,2, 999,999],
+                      'steps': 3}
+        #
+        chars4= dict()
+        chars4['*']= {'poses': [-60,  0, -20,  0,  20,  0,  60,  0],
+                      'shape': [0,1, 1,2, 2,3, 999,999],
+                      'steps': 3}
+        chars4['1']= {'poses': [  0, 60,   0, 20,   0,-20,   0,-60],
+                      'shape': [0,1, 1,2, 2,3, 999,999],
+                      'steps': 3}
+        chars4['7']= {'poses': [-30, 40, -30,-40,   0,  0,  30, 40],
+                      'shape': [0,3, 1,2, 2,3, 999,999],
+                      'steps': 3}
+        chars4['D']= {'poses': [-30, 40, -30,-40,  30, 20,  30,-20],
+                      'shape': [0,1, 0,2, 1,3, 2,3],
+                      'steps': 3}
+        chars4['I']= {'poses': [  0, 60,   0, 20,   0,-20,   0,-60],
+                      'shape': [0,1, 1,2, 2,3, 999,999],
+                      'steps': 3}
+        chars4['J']= {'poses': [-30,-20,   0,-40,  30, 40,  30,-20],
+                      'shape': [0,1, 1,3, 2,3, 999,999],
+                      'steps': 3}
+        chars4['L']= {'poses': [-30, 40, -30,  0, -30,-40,  30,-40],
+                      'shape': [0,1, 1,2, 2,3, 999,999],
+                      'steps': 3}
+        chars4['N']= {'poses': [-30, 40, -30,-40,  30, 40,  30,-40],
+                      'shape': [0,1, 0,3, 2,3, 999,999],
+                      'steps': 3}
+        chars4['T']= {'poses': [-40, 40,   0, 40,   0,-40,  40, 40],
+                      'shape': [0,1, 1,2, 1,3, 999,999]}
+        chars4['V']= {'poses': [-30, 40, -15,  0,   0,-40,  30, 40],
+                      'shape': [0,1, 1,2, 2,3, 999,999],
+                      'steps': 3}
+        chars4['Y']= {'poses': [-30, 40,   0,  0,   0,-40,  30, 40],
+                      'shape': [0,1, 1,2, 1,3, 999,999],
+                      'steps': 3}
+        chars4['Z']= {'poses': [-20, 40, -30,-40,  30, 40,  30,-40],
+                      'shape': [0,2, 1,2, 1,3, 999,999],
+                      'steps': 3}
+        #
+        chars5= dict()
+        chars5['*']= {'poses': [-80,  0, -40,  0,   0,  0,  40,  0,  80,  0],
+                      'shape': [0,1, 1,2, 2,3, 3,4, 4,5],
+                      'steps': 3}
+        chars5['A']= {'poses': [-30,-40, -15,  0,   0, 40,  15,  0,  30,-40],
+                      'shape': [0,1, 1,2, 1,3, 2,3, 3,4],
+                      'steps': 3}
+        chars5['B']= {'poses': [-30, 40, -30, -40,  0,  0,  30, 20,  30,-20],
+                      'shape': [0,1, 0,3, 1,4, 2,3, 2,4],
+                      'steps': 3}
+        chars5['C']= {'poses': [-30, 20,   0, 40,   0,-40,  30, 20,  30,-20],
+                      'shape': [0,1, 0,2, 1,3, 2,4, 999,999],
+                      'steps': 3}
+        chars5['D']= {'poses': [-30, 40, -30,-40,  10, 40,  10,-40,  30,  0],
+                      'shape': [0,1, 0,2, 1,3, 2,4, 3,4],
+                      'steps': 3}
+        chars5['F']= {'poses': [-30, 40, -30,  0, -30,-40,  10,  0,  30, 40],
+                      'shape': [0,1, 0,4, 1,2, 1,3, 999,999],
+                      'steps': 3}
+        chars5['I']= {'poses': [  0, 70,   0, 35,   0,  0,   0,-35,   0,-70],
+                      'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
+                      'steps': 3}
+        chars5['J']= {'poses': [-30,-20,   0,-40,  30, 50,  30, 15,  30,-20],
+                      'shape': [0,1, 1,4, 2,3, 3,4, 999,999],
+                      'steps': 3}
+        chars5['K']= {'poses': [-30, 40, -30,  0, -30,-40,  10, 40,  30,-40],
+                      'shape': [0,1, 1,2, 1,3, 1,4, 999,999],
+                      'steps': 3}
+        chars5['L']= {'poses': [-35, 40, -35,  0, -35,-40,   0,-40,  35,-40],
+                      'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
+                      'steps': 3}
+        chars5['M']= {'poses': [-20, 40, -30,-40,   0,  0,  30, 40,  20,-40],
+                      'shape': [0,1, 0,2, 2,3, 3,4, 999,999],
+                      'steps': 3}
+        chars5['N']= {'poses': [-30, 40, -30,-40,   0,  0,  30, 40,  30,-40],
+                      'shape': [0,1, 0,2, 2,4, 3,4, 999,999],
+                      'steps': 3}
+        chars5['O']= {'poses': [-30, 20, -30,-40,   0, 40,  30, 40, 30,-40],
+                      'shape': [0,1, 0,2, 1,4, 2,3, 3,4],
+                      'steps': 3}
+        chars5['P']= {'poses': [-30, 40, -30,  0, -30,-40,  30, 40,  30,  0],
+                      'shape': [0,1, 0,3, 1,2, 1,4, 3,4],
+                      'steps': 3}
+        chars5['R']= {'poses': [-30, 40, -30,  0, -30,-40,  30, 20,  30,-40],
+                      'shape': [0,1, 0,3, 1,2, 1,3, 1,4],
+                      'steps': 3}
+        chars5['S']= {'poses': [-30, 20, -30,-40,   0, 40,  30, 20,  30,-40],
+                      'shape': [0,2, 0,4, 1,4, 2,3, 999,999],
+                      'steps': 3}
+        chars5['T']= {'poses': [-40, 40,   0, 40,  40, 40,   0,  0, -40,  0],
+                      'shape': [0,1, 1,2, 1,4, 2,3, 999,999],
+                      'steps': 3}
+        chars5['U']= {'poses': [-30, 40, -30,-20,   0,-40,  30, 40,  30,-20],
+                      'shape': [0,1, 1,2, 2,4, 3,4, 999,999],
+                      'steps': 3}
+        chars5['V']= {'poses': [-30, 40, -15,  0,   0,-40,  15,  0,  30, 40],
+                      'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
+                      'steps': 3}
+        chars5['W']= {'poses': [-30, 40, -20,-40,   0,  0,  20, 40,  30,-40],
+                      'shape': [0,1, 1,2, 2,4, 3,4, 999,999],
+                      'steps': 3}
+        chars5['X']= {'poses': [-30, 40, -30,-40,   0,  0,  30, 40,  30,-40],
+                      'shape': [0,2, 1,2, 2,3, 2,4, 999,999],
+                      'steps': 3}
+        chars5['Z']= {'poses': [-30, 40, -30,-40, -10,  0,  20, 40,  30,-40],
+                      'shape': [0,3, 1,2, 1,4, 2,3, 999,999],
+                      'steps': 3}
+        #
+        chars= {3: chars3, 4:chars4, 5: chars5}
+        self.chars= chars.get(self.n_robot, 3)
+        for char_dic in self.chars.values():
+            char_dic['poses']= np.array(char_dic['poses'],dtype= float)
 
-    def get_letter(self, char, ang = 0):
-        scale = 4.0/3.0
+    def get_letter(self, char, ang = 0, roll= 0):
+        chars= self.chars
+        scale = 1.0
+        roll= roll%self.n_robot
         ang = np.deg2rad(ang)
-        poses, shape, steps = self.chars.get(char, self.chars['a']).values()
-        if len(poses) != 2*self.n_robot:
-            char = "a"
-            poses, shape, steps = self.chars.get(char, self.chars['a']).values()
-        #poses = scale*(poses[:2*self.n_robot] + self.shift[self.n_robot])
+        poses, shape, steps = chars.get(char, chars['*']).values()
         poses = scale*poses[:2*self.n_robot]
-        # rotation
+        # Rolling robots position in the pattern
+        poses= np.roll(poses, 2*roll)
+        shape= [(elem+roll)%self.n_robot for elem in shape]
+        # Rotation
         rot = np.array([[np.cos(ang),-np.sin(ang)],[np.sin(ang),np.cos(ang)]])
         poses = np.dot(rot,poses.reshape(-1,2).T).T.flatten()
-        shape = shape.reshape(-1,2)
-        shape = shape[(shape<self.n_robot).all(axis=1),:].flatten()
-        n_shape_empty = 2*self.n_robot - len(shape)
-        shape = np.append(shape, n_shape_empty*[999])
         return poses, shape, steps
 
     @classmethod
