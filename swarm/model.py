@@ -264,17 +264,43 @@ class SwarmSpecs:
     @classmethod
     def robo5(cls):
         pivot_length = np.array([[11,9,7,5,3],[9,7,5,3,11],
-                                 [7,5,3,11,9],[5,3,11,9,7],[3,11,9,7,5]])
+                                 [7,5,3,11,9],[5,3,11,9,7]])
         return cls(pivot_length,10)
     
     @classmethod
     def robo3p(cls):
         pivot_length = np.array([[7.78,5.85,4.49],[6.37,4.39,7.46]])
+        #pivot_length = np.array([[8,5,5.0],[5,8,5.0]])
         return cls(pivot_length,11.40)
+    
+    @classmethod
+    def robo4p(cls):
+        pivot_length = np.array([[7.15,4.66,4.73,4.64],
+                                 [4.63,4.64,4.68,6.98],
+                                 [4.70,4.66,6.92,4.64],
+                                 [4.63,7.01,4.69,4.62]])
+        return cls(pivot_length,13.63)
+
+    @classmethod
+    def robo5p(cls):
+        pivot_length = np.array([[6.36,4.76,4.67,4.69,6.31],
+                                 [4.66,4.73,4.72,6.71,6.31],
+                                 [4.59,4.68,6.49,6.70,4.70],
+                                 [4.70,6.71,6.56,4.81,4.80]])
+        return cls(pivot_length,14.16)
+        """ pivot_length= np.array([[7.17,4.84,4.72,4.80,6.99],
+                                [4.80,4.74,4.72,7.07,7.00],
+                                [4.72,4.76,7.17,7.03,4.71],
+                                [4.77,7.03,7.27,4.75,4.72]]) """
+        """ pivot_length= np.array([[7.17,4.80,4.82,4.84,7.00],
+                                [4.80,4.72,4.83,7.16,7.10],
+                                [4.72,4.72,7.15,7.08,4.68],
+                                [4.77,7.22,7.22,4.77,4.65]])
+        return cls(pivot_length, 13.78) """
 
     @classmethod
     def robo(cls, n_robot):
-        robots = {3: "robo3p"}
+        robots = {3: "robo3p", 4: "robo4p", 5: "robo5p"}
         return getattr(cls, robots.get(n_robot, "robo3p"))()
     
 class Swarm:
@@ -597,21 +623,8 @@ class Swarm:
         plt.show()
         return anim
 
-def main():
-    #swarm_specs = SwarmSpecs(np.array([[10,8,6,4],[8,6,4,10],[6,4,10,8],[4,10,8,6]]), 10)
-    #swarm = Swarm(np.array([0,0,10,0,20,0,30,0]), 0, 1, swarm_specs)
-    #input_series = np.array([[100,np.pi/4,1]]).T
-    """ input_series = np.array([[50,np.pi/2,1],
-                                [100,0,1],
-                                [10,-np.pi/2,-2],
-                                [20,np.pi,2],
-                                [10,np.pi,-3],
-                                [25,np.pi/2,3],
-                                [10*9,np.pi/2,0],
-                                [20,np.pi,1],
-                                [20,np.pi,-4],
-                                ]).T """
-    specs = SwarmSpecs.robo3()
+def main3p():
+    specs = SwarmSpecs.robo3p()
     xi = np.array([-20,0,0,0,20,0])
     mode = 1
     swarm = Swarm(xi, 0, mode, specs)
@@ -621,6 +634,7 @@ def main():
                              [50,-np.pi/2,2],
                              [50,np.pi/4,2],
                              [50,np.pi/4,0],
+                             [10,np.pi/4,-1],
                              ]).T
     #swarm.simulate(input_series)
     #print(swarm.specs.pivot_length)
@@ -638,6 +652,44 @@ def main():
     #print(sim[2])
     #print(sim[3].shape)
     #print(sim[4])
+
+def main4p():
+    specs = SwarmSpecs.robo4p()
+    xi = np.array([-60,0,-20,0,20,0,60,0],dtype= float)
+    mode = 1
+    swarm = Swarm(xi, 0, mode, specs)
+    input_series = np.array([[4*14,-np.pi/2,0],
+                             [100,np.pi/2,1],
+                             [10,0,-2],
+                             [4*14,-np.pi/2,0],
+                             [50,np.pi*2/4,2],
+                             [10,np.pi,-3],
+                             [50,-np.pi/2,3],
+                             [10,0,-4],
+                             [50,np.pi/2,4],
+                            ]).T
+    length = 10000
+    swarm.simplot(input_series,length, boundary=False, last_section=False)
+    #anim = swarm.simanimation(input_series,length,boundary=False, last_section=True, save = False)
+
+def main5p():
+    specs = SwarmSpecs.robo5p()
+    xi = np.array([-60,0,-30,0,0,0,30,0,60,0],dtype= float)
+    mode = 1
+    swarm = Swarm(xi, 0, mode, specs)
+    input_series = np.array([[4*14,-np.pi/2,0],
+                             [100,np.pi/2,1],
+                             [10,0,-2],
+                             [6*14,-np.pi/2,0],
+                             [50,np.pi*3/4,2],
+                             [10,0,-3],
+                             [50,0,3],
+                             [10,np.pi/2,-4],
+                             [50,np.pi*4/4,4],
+                            ]).T
+    length = 10000
+    swarm.simplot(input_series,length, boundary=False, last_section=False)
+    #anim = swarm.simanimation(input_series,length,boundary=False, last_section=True, save = False)
 ########## test section ################################################
 if __name__ == '__main__':
-    main()
+    main4p()

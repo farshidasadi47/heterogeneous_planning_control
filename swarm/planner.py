@@ -640,7 +640,7 @@ def receding_example():
         swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
         print(swarm.position)
 
-def main():
+def main3():
     outer = 3
     boundary = True
     last_section = False
@@ -683,4 +683,4 @@ def main():
     swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
 ########## test section ################################################
 if __name__ == '__main__':
-    main()
+    main3()
