@@ -860,12 +860,19 @@ class Controller():
             msg += msg_1 + msg_2
         avg_ratio = np.zeros_like(self.specs.beta)
         std_ratio = np.zeros_like(self.specs.beta)
-        avg_ratio[0,:] = np.mean(ratios[polar_cmd[:,2]<1],axis=0)[:n_robot]
-        std_ratio[0,:] = np.std(ratios[polar_cmd[:,2]<1],axis=0)[:n_robot]
+        if np.where(polar_cmd[:,2]<1)[0].size > 0:
+            avg_ratio[0,:] = np.mean(ratios[polar_cmd[:,2]<1],axis=0)[:n_robot]
+            std_ratio[0,:] = np.std(ratios[polar_cmd[:,2]<1],axis=0)[:n_robot]
         for i in range(1,self.specs.n_mode):
-            avg_ratio[i,:]= np.mean(ratios[polar_cmd[:,2]==i],axis=0)[:n_robot]
-            std_ratio[i,:]= np.std(ratios[polar_cmd[:,2]==i],axis=0)[:n_robot]
-        stat_ratio = np.hstack((avg_ratio, std_ratio/avg_ratio))
+            if np.where(polar_cmd[:,2]==i)[0].size > 0:
+                avg_ratio[i,:]= np.mean(ratios[polar_cmd[:,2]==i],
+                                                              axis=0)[:n_robot]
+                std_ratio[i,:]= np.std(ratios[polar_cmd[:,2]==i],
+                                                              axis=0)[:n_robot]
+        cv_ratio= np.zeros_like(avg_ratio)
+        for cv, avg, std in zip(cv_ratio, avg_ratio, std_ratio):
+            cv= std/avg if np.all(avg!=0) else cv
+        stat_ratio = np.hstack((avg_ratio, cv_ratio))
         #ratios = ratios[polar_cmd[:,2].argsort()]
         msg += "ratios:\n"
         msg += "\n".join(",".join(f"{i:+09.4f}" for i in j) for j in ratios)
@@ -899,11 +906,13 @@ class Controller():
         # Set up the planner.
         mode_sequence = self.mode_sequence + deque([0])
         plan = planner.Planner.plan(XG,outer_steps,mode_sequence,self.specs)
+        msg= ""
         for polar_cmd in plan:
             if polar_cmd is None:
                 polar_cmd = plan.send(self.pos)
             iterator = self.closed_line(polar_cmd,average=True)
-            msg = yield from iterator
+            msg_i = yield from iterator
+            msg += msg_i
         return msg
 
 ########## test section ################################################
