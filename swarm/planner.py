@@ -69,12 +69,17 @@ class Planner():
             mode_sequence = list(range(1,n_mode)) + [0]
         self.mode_sequence = deque(mode_sequence)
         # Calculate next mode sequence.
-        index_tumbling = self.mode_sequence.index(0)
-        next_mode_sequence = self.mode_sequence.copy()
-        next_mode_sequence.remove(0)
-        next_mode_sequence.rotate(-1)
-        next_mode_sequence.insert(index_tumbling,0)
-        self.next_mode_sequence = next_mode_sequence
+        next_modes= deque([mode for mode in mode_sequence if mode])
+        next_modes.rotate(-1)
+        next_mode_sequence = []
+        cnt= 0
+        for mode in self.mode_sequence:
+            if mode:
+                next_mode_sequence.append(next_modes[cnt])
+                cnt+= 1
+            else:
+                next_mode_sequence.append(0)
+        self.next_mode_sequence = deque(next_mode_sequence)
     
     def _f(self,state,control,mode):
         """Defines swarm transition for CASADI."""
@@ -397,7 +402,7 @@ class Planner():
         # Adjust mode_change parameters.
         dir_mode = 1 if mode_start%2 else -1
         mode_change = np.array([self.specs.mode_rel_length[1], 0.0])*dir_mode
-        mode_change_remainder  = ((n_mode_seq_nz-1)%2)*mode_change
+        mode_change_remainder  = ((n_mode_seq_nz)%2)*mode_change
         # Recovering input with transitions
         counter = 0
         for step in range(steps):
