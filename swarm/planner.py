@@ -394,6 +394,7 @@ class Planner():
         n_robot = self.specs.n_robot
         xi = self.xi
         U_raw = ca.reshape(sol['x'],2+2*n_robot,-1)[:2,:].full()
+        U_raw= np.vstack((U_raw,mode_seq*steps))
         X_raw = ca.horzcat(xi,ca.reshape(sol['x'],2+2*n_robot,-1)[2:,:]).full()
         UZ = np.zeros((3,2*n_mode_seq*steps))
         X = np.zeros((2*n_robot, 2*n_mode_seq*steps + 1))
@@ -410,12 +411,12 @@ class Planner():
                 if mode == 0:
                     # This tumbling.
                     U_tumbled = self._accurate_rotation(
-                        U_raw[:,step*n_mode_seq + idx] - mode_change_remainder)
+                       U_raw[:2,step*n_mode_seq + idx] - mode_change_remainder)
                     UZ[:2,counter:counter+2] = U_tumbled
                     UZ[2,counter:counter+2] = mode
                 else:
                     # This is pivot_walking and needs mode change.
-                    UZ[:2,counter] = U_raw[:,step*n_mode_seq + idx]
+                    UZ[:2,counter] = U_raw[:2,step*n_mode_seq + idx]
                     UZ[2,counter] = mode
                     # Calculate next mode and perform it.
                     next_mode = self.next_mode_sequence[idx]
@@ -542,8 +543,8 @@ class Planner():
         else:
             U0 = ca.DM(U0)
         X0 = ca.DM(np.matlib.repmat(xi,self.X.shape[1],1).T)
-        UX0 = ca.vertcat(ca.reshape(U0,-1,1), ca.reshape(X0,-1,1))
-        p = ca.vertcat(xi, xf, ca.reshape(U0,-1,1))
+        UX0 = ca.vertcat(ca.reshape(U0[:2,:],-1,1), ca.reshape(X0,-1,1))
+        p = ca.vertcat(xi, xf, ca.reshape(U0[:2,:],-1,1))
         sol = solver(x0 = UX0, lbx = lbx, ubx = ubx,
                      lbg = lbg, ubg = ubg, p = p)
         UX_raw = sol['x'].full().squeeze()
@@ -614,12 +615,12 @@ class Planner():
                 print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
                 if isfeasible:
                     if resolve:
-                        r_raw = np.linalg.norm(U_raw,axis=0)
+                        r_raw = np.linalg.norm(U_raw[:2,:],axis=0)
                         print(r_raw)
                         print(U_raw)
                         U_raw = U_raw.T
                         U_raw[np.argwhere(
-                          r_raw<specs.tumbling_length).squeeze()] = np.zeros(2)
+                          r_raw<specs.tumbling_length).squeeze(),:2] = np.zeros(2)
                         U_raw= U_raw.T
                         _, U_raw, _, _, _, U, _, isfeasible= planner.solve(
                                                             xi,xg,U_raw,
