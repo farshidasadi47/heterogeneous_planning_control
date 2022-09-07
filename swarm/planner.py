@@ -441,47 +441,59 @@ class Planner():
         """This function solved the unconstrained case from
         controllability analysis and adjusts it for the problem setting,
         to be used as initial guess."""
-        mode_sequence = self.mode_sequence
-        n_mode = self.swarm.specs.n_mode
-        n_robot = self.swarm.specs.n_robot
-        n_outer = self.n_outer
+        n_mode = self.specs.n_mode
+        n_robot = self.specs.n_robot
         B = np.zeros((2*n_robot,2*n_mode))
         for mode in range(n_mode):
-            mapped_mode = mode_sequence[mode]
-            B[:,2*mapped_mode:2*mapped_mode +2] = self.swarm.specs.B[mode,:,:]
-        u_unc = np.dot(np.linalg.inv(B),xf - xi)
-        u_unc = np.reshape(u_unc,(2,-1)).T
-        u = np.zeros_like(u_unc)
-        u[:,-1] = u_unc[:,0]/n_outer
-        u[:,:-1] = u_unc[:,1:]/n_outer
-        
-        U = np.empty((2,0),float)
-        for i in range(n_mode-1):
-            U = np.hstack( (U, np.tile(u[:,i][np.newaxis].T,(1,1)) ) )
-        U = np.hstack( (U, u[:,-1][np.newaxis].T ) )
-        U_sol = U
-        for i in range(n_outer - 1):
-            U_sol = np.hstack( (U_sol,U) )
-        #
-        X_sol = np.zeros((2*n_robot, U_sol.shape[1]))
-        X_sol[:,0] = xi
-        counter = 0
-        for i_outer in range(n_outer):
-            for mode in range(1,n_mode):
-                mapped_mode = mode_sequence[mode]
-                X_sol[:,counter + 1] = (X_sol[:,counter]
-                    + np.dot(self.swarm.specs.B[mapped_mode,:,:],
-                    U_sol[:,counter]))
-                counter += 1
-            if i_outer < n_outer - 1:
-                mode = 0
-                X_sol[:,counter + 1] = (X_sol[:,counter]
-                     + np.dot(self.swarm.specs.B[mode,:,:],
-                       U_sol[:,counter]))
-            counter += 1
-        sol = {}
-        sol['x']  = np.hstack((U_sol.T.flatten(), X_sol.T.flatten()))
-        return sol
+            B[:,2*mode:2*mode +2] = self.specs.B[mode,:,:]
+        UU_raw = np.dot(np.linalg.inv(B),xf - xi)
+        UU_raw = np.reshape(UU_raw,(-1,2)).T
+        UU_raw= np.roll(np.vstack((UU_raw, range(n_mode))),-1,axis= 1)
+        XU_raw= np.zeros((2*n_robot,n_mode+1))
+        XU_raw[:,0]= xi
+        XU= np.zeros((2*n_robot,2*n_mode+1))
+        XU[:,0]= xi
+        mode_seq= UU_raw[2,:].astype(int)
+        next_mode_seq= np.append(np.roll(mode_seq[mode_seq !=0], -1),0)
+        UUZ= np.zeros((3,2*n_mode),dtype= float)
+        # Adjust mode_change parameters.
+        dir_mode = 1 
+        mode_change = np.array([self.specs.mode_rel_length[1], 0.0])*dir_mode
+        mode_change_remainder  = ((n_mode-1)%2)*mode_change
+        counter= 0
+        for idx, mode in enumerate(mode_seq):
+            if mode == 0:
+                # This tumbling.
+                U_tumbled = self._accurate_rotation(
+                                UU_raw[:2, idx] - mode_change_remainder)
+                UUZ[:2,counter:counter+2] = U_tumbled
+                UUZ[2,counter:counter+2] = mode
+            else:
+                # This is pivot_walking and needs mode change.
+                UUZ[:2,counter] = UU_raw[:2,idx]
+                UUZ[2,counter] = mode
+                # Calculate next mode and perform it.
+                next_mode = next_mode_seq[idx]
+                UUZ[:2,counter+1] = mode_change
+                UUZ[2,counter+1] = -next_mode
+                mode_change *= -1
+            # Calculate positions.
+            XU_raw[:,idx+1]= self._f(XU_raw[:,idx], UU_raw[:2,idx],
+                                                    UU_raw[2,idx])
+            XU[:,counter+1] = self._f(XU[:,counter], UUZ[:2,counter],
+                                                     UUZ[2,counter])
+            XU[:,counter+2] = self._f(XU[:,counter+1], UUZ[:2,counter+1],
+                                                       UUZ[2,counter+1])
+            counter += 2
+        # Add polar versions
+        UU= np.zeros_like(UUZ)
+        UU[2,:] = UUZ[2,:]
+        for i in range(UUZ.shape[1]):
+            UU[:2,i] = self._cartesian_to_polar(UUZ[:2,i])
+            if UU[2,i] == 0:
+                # If this is rotation round it for numerical purposes.
+                UU[0,i] = int(UU[0,i]*1000)/1000
+        return UU_raw, XU_raw, UUZ,  UU, XU
     
     def _isfeasible(self,UX,g):
         """
