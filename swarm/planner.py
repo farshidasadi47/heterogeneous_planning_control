@@ -697,8 +697,6 @@ def main3():
     last_section = False
 
     pivot_length = np.array([[10,9,8],[9,8,10]])
-    #pivot_length = np.array([[10,9,8,7],[9,8,7,10],[8,7,10,9],[7,10,9,8]])
-    #pivot_length = np.array([[10,9,8,7,6],[9,8,7,6,10],[8,7,6,10,9],[7,6,10,9,8]])
     mode_sequence= [1,2,0]
     specs=model.SwarmSpecs(pivot_length,10)
     specs = model.SwarmSpecs.robo(3)
@@ -726,7 +724,79 @@ def main3():
     U = next(planner)
     if U is None:
         U = planner.send(xi)
-        print(U)
+        U = U.T
+    swarm.reset_state(xi,0,1)
+    #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
+    swarm.reset_state(xi,0,1)
+    swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
+
+def main5p():
+    outer = 1
+    boundary = True#False#
+    last_section = False
+    mode_sequence= [1,2,3,4,0]*3
+    specs = model.SwarmSpecs.robo(5)
+    specs.bc_tol= 0
+    specs.d_min= 8
+    xi = specs.get_letter('*', ang= 0, roll= 0)[0]*3/4.0
+    xf= specs.get_letter('T', ang= 0, roll= 0)[0]
+    print(xf)
+    swarm = model.Swarm(xi, 0, 1, specs)
+    resolve = False
+    planner = Planner.plan(xf,outer,mode_sequence,specs,resolve,boundary)
+    U = next(planner)
+    if U is None:
+        U = planner.send(xi)
+        U = U.T
+    swarm.reset_state(xi,0,1)
+    #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
+    swarm.reset_state(xi,0,1)
+    swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
+
+def main5o():
+    outer = 3
+    boundary = True
+    last_section = False
+    mode_sequence= [1,2,3,4,0]
+    a= 9.0
+    b= 5.0
+    pivot_length = np.array([[b, a, a, b, b],
+                             [a, a, b, b, b],
+                             [a, b, b, b, a],
+                             [b, b, b, a, a]])
+    """pivot_length= np.array([[5.00, 9.00, 5.00, 5.00, 9.00],
+                            [9.00, 5.00, 5.00, 9.00, 5.00],
+                            [5.00, 5.00, 9.00, 5.00, 9.00],
+                            [5.00, 9.00, 5.00, 9.00, 5.00]])"""
+    specs = model.SwarmSpecs(pivot_length,13.63)
+    #specs= model.SwarmSpecs.robo5p()
+    #specs.ubx = 150
+    #specs.uby = 115
+    #specs.lbx = -specs.ubx
+    #specs.lby = -specs.uby
+    specs.d_min= 20
+    #specs.rcoil = 90*1
+    #specs.ubsx = specs.ubx - specs.tumbling_length*1.5
+    #specs.lbsx = -specs.ubsx
+    #specs.ubsy = specs.uby - specs.tumbling_length*1.1
+    #specs.lbsy = -specs.ubsy
+    #specs.rscoil = specs.rcoil - specs.tumbling_length
+    scale= 3.0/4.0
+    xi = specs.get_letter('*', ang= 0, roll= 0)[0]*scale
+    xf= specs.get_letter('F', ang= 0, roll= 0)[0]*3.0/4.0
+    A = np.array([-15,0]+[-15,30]+[0,60]+[15,30]+ [15,0])
+    A= np.array([-40,-40, -40,  0,   0, 40,  40,  0,  40,-40],dtype= float)
+    F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
+    M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
+    #xf= A
+    print(xi)
+    print(xf)
+    swarm = model.Swarm(xi, 0, 1, specs)
+    resolve = False
+    planner = Planner.plan(xf,outer,mode_sequence,specs,resolve,boundary)
+    U = next(planner)
+    if U is None:
+        U = planner.send(xi)
         U = U.T
     swarm.reset_state(xi,0,1)
     #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
@@ -734,4 +804,8 @@ def main3():
     swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
 ########## test section ################################################
 if __name__ == '__main__':
-    main3()
+    try:
+        main5o()
+        pass
+    except RuntimeError:
+        pass
