@@ -5,7 +5,7 @@
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
 from itertools import combinations
-from collections import deque
+from collections import deque, Counter
 
 import numpy as np
 import numpy.matlib
@@ -105,6 +105,7 @@ class Planner():
         n_mode_seq = len(mode_seq)
         U = ca.SX.sym('u',2,steps*n_mode_seq) # U_step_cmdmode
         U0 = ca.SX.sym('u',2,steps*n_mode_seq) # U_step_cmdmode
+        UU= ca.SX.sym('u',2,self.specs.n_mode)
         BC = ca.SX.sym('bc',2*n_robot,2) # Start and end point.
         counter = 0
         # Build X and U.
@@ -119,13 +120,17 @@ class Planner():
                 U0[0,counter] = ca.SX.sym('u0x_'+varstr)
                 U0[1,counter] = ca.SX.sym('u0y_'+varstr)
                 counter += 1
+        # Building UU
+        for i in range(self.specs.n_mode):
+            UU[0,i]= ca.SX.sym(f'uux_{i:01d}')
+            UU[1,i]= ca.SX.sym(f'uuy_{i:01d}')
         # Building P
         for robot in range(n_robot):
             BC[2*robot,0] = ca.SX.sym('xi_{:02d}'.format(robot))
             BC[2*robot + 1,0] = ca.SX.sym('yi_{:02d}'.format(robot))
             BC[2*robot,1] = ca.SX.sym('xf_{:02d}'.format(robot))
             BC[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
-        return U, U0, BC
+        return U, U0, UU, BC
 
     def _get_constraint_inter_robot(self,x,u,mode):
         """
@@ -178,6 +183,17 @@ class Planner():
             g += [radii**2 - x[2*robot]**2 - x[2*robot+1]**2]
         return g
     
+    def _get_contraint_cont(self, U, UU):
+        n_mode= self.specs.n_mode
+        mode_seq= np.array(self.mode_sequence*self.steps,dtype= int)
+        g= []
+        #
+        for mode in range(n_mode):
+            indexes= np.where(mode_seq==mode)[0]
+            if indexes.size:
+                g+= [ca.sum2(U[:,indexes]) - UU[:,mode]]
+        return g
+
     def _get_constraints(self, boundary = False):
         """This function builds constraints of optimization."""
         n_robot = self.specs.n_robot
@@ -188,12 +204,14 @@ class Planner():
         lbsx, ubsx= self.lbsx, self.ubsx
         lbsy, ubsy= self.lbsy, self.ubsy
         U = self.U
+        UU= self.UU
         BC = self.BC
         g_shooting = []
         g_terminal = []
         g_inter_robot = []
         g_distance = []
         g_coil = []
+        g_cont = []
         counter = 0
         state = BC[:,0]
         for _ in range(steps):
@@ -213,21 +231,27 @@ class Planner():
                 counter += 1
         # Add shooting constraint of terminal position.
         g_terminal += [BC[:,1] - state]
+        # Control constraint from contralability analysis.
+        g_cont+= self._get_contraint_cont(U,UU)
         # Configure bounds of g
         n_g_shooting = ca.vertcat(*g_shooting).shape[0]
         n_g_terminal = ca.vertcat(*g_terminal).shape[0]
         n_g_inter_robot = ca.vertcat(*g_inter_robot).shape[0]
         n_g_distance = ca.vertcat(*g_distance).shape[0]
         n_g_coil = ca.vertcat(*g_coil).shape[0]
+        n_g_cont = ca.vertcat(*g_cont).shape[0]
         #
         g = ca.vertcat(*(g_terminal 
                        + g_inter_robot 
+                       #+ g_cont
                        ))
         lbg = np.hstack((-bc_tol*np.ones(n_g_terminal),
                          np.zeros(n_g_inter_robot),
+                        # np.zeros(n_g_cont),
                           ))
         ubg = np.hstack((bc_tol*np.ones(n_g_terminal),
                          np.inf*np.ones(n_g_inter_robot),
+                        # np.zeros(n_g_cont),
                           ))
         if boundary:
             g = ca.vertcat(g,*g_coil)
@@ -243,6 +267,7 @@ class Planner():
         bounds."""
         U = self.U
         U0 = self.U0
+        UU= self.UU
         BC  = self.BC
         steps = self.steps
         n_mode_seq = len(self.mode_sequence)
@@ -262,7 +287,8 @@ class Planner():
         lbx = np.array((lbu)*steps*n_mode_seq)
         ubx = np.array((ubu)*steps*n_mode_seq)
         # concatenating optimization parameter
-        p = ca.vertcat(ca.reshape(BC,-1,1),ca.reshape(U0,-1,1))
+        p = ca.vertcat(ca.reshape(BC,-1,1),
+                       ca.reshape(U0,-1,1),ca.reshape(UU,-1,1))
         return optim_var, lbx, ubx, p
 
     def _get_objective(self):
@@ -288,7 +314,7 @@ class Planner():
     def _get_optimization(self, solver_name = 'ipopt', boundary = False):
         """Sets up and returns a CASADI optimization object."""
         # Construct optimization symbolic vars in CASADI.
-        self.U, self.U0, self.BC = self._construct_vars()
+        self.U, self.U0, self.UU, self.BC = self._construct_vars()
         # Construct all constraints.
         g, lbg, ubg = self._get_constraints(boundary)
         self.g, self.lbg, self.ubg = g, lbg, ubg
@@ -515,6 +541,21 @@ class Planner():
         if abs(flag_value)> flag_tol:
             flag = False
         return flag
+    
+    def _isfeasible_from_unconstrained(self, UU_raw):
+        UU_raw= np.roll(UU_raw,1, axis=1)
+        width = self.ubsx - self.lbsx
+        height = self.ubsy - self.lbsy
+        counts= Counter(self.mode_sequence*self.steps)
+        flag= True
+        for i, count in counts.items():
+            print(f'{i=}, {count=}')
+            if (   (abs(UU_raw[0,i]) > width/count)
+                or (abs(UU_raw[1,i]) > height/count)):
+                flag= False
+                print("Increase the steps.")
+                break
+        return flag
 
     def solve(self, xi, xf, U0= None, receding = 0):
         """
@@ -544,7 +585,11 @@ class Planner():
         else:
             U0 = ca.DM(U0)
         UX0 = ca.reshape(U0[:2,:],-1,1)
-        p = ca.vertcat(xi, xf, ca.reshape(U0[:2,:],-1,1))
+        # Solve unconstrained
+        UU_raw, XU_raw, UUZ,  UU, XU= self.solve_unconstrained(xi, xf)
+        self._isfeasible_from_unconstrained(UU_raw)
+        UUP= np.roll(UU_raw,1, axis=1)[:2,:].T.flatten()
+        p = ca.vertcat(xi, xf, ca.reshape(U0[:2,:],-1,1), UUP)
         sol = solver(x0 = UX0, lbx = lbx, ubx = ubx,
                      lbg = lbg, ubg = ubg, p = p)
         UX_raw = sol['x'].full().squeeze()
