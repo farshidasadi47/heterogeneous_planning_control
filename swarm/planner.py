@@ -89,6 +89,12 @@ class Planner():
         next_state = state + ca.mtimes(B[int(mode),:,:],control)
         return next_state.full().squeeze()
     
+    def _fcasadi(self,state,control,mode):
+        """Defines swarm transition for CASADI."""
+        B = self.specs.B
+        next_state = state + ca.mtimes(B[int(mode),:,:],control)
+        return next_state
+    
     def _construct_vars(self):
         """
         Constructing optimization variables.
@@ -99,8 +105,6 @@ class Planner():
         n_mode_seq = len(mode_seq)
         U = ca.SX.sym('u',2,steps*n_mode_seq) # U_step_cmdmode
         U0 = ca.SX.sym('u',2,steps*n_mode_seq) # U_step_cmdmode
-        # Xs are positions after corresponding input is applied.
-        X = ca.SX.sym('x',2*n_robot,steps*n_mode_seq) # X_step_cmdmode_robot
         BC = ca.SX.sym('bc',2*n_robot,2) # Start and end point.
         counter = 0
         # Build X and U.
@@ -114,11 +118,6 @@ class Planner():
                 U[1,counter] = ca.SX.sym('uy_'+varstr)
                 U0[0,counter] = ca.SX.sym('u0x_'+varstr)
                 U0[1,counter] = ca.SX.sym('u0y_'+varstr)
-                # Construct positions after applying current input.
-                for robot in range(n_robot):
-                    rob_str = f'_{robot:01d}'
-                    X[2*robot,counter] = ca.SX.sym('x_'+varstr+rob_str)
-                    X[2*robot + 1,counter] = ca.SX.sym('y_'+varstr+rob_str)
                 counter += 1
         # Building P
         for robot in range(n_robot):
@@ -126,7 +125,7 @@ class Planner():
             BC[2*robot + 1,0] = ca.SX.sym('yi_{:02d}'.format(robot))
             BC[2*robot,1] = ca.SX.sym('xf_{:02d}'.format(robot))
             BC[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
-        return X, U, U0, BC
+        return U, U0, BC
 
     def _get_constraint_inter_robot(self,x,u,mode):
         """
@@ -181,10 +180,13 @@ class Planner():
     
     def _get_constraints(self, boundary = False):
         """This function builds constraints of optimization."""
+        n_robot = self.specs.n_robot
         mode_seq = self.mode_sequence
+        n_mode_seq = len(mode_seq)
         bc_tol = self.specs.bc_tol
         steps = self.steps
-        X = self.X
+        lbsx, ubsx= self.lbsx, self.ubsx
+        lbsy, ubsy= self.lbsy, self.ubsy
         U = self.U
         BC = self.BC
         g_shooting = []
@@ -197,18 +199,16 @@ class Planner():
         for _ in range(steps):
             for mode in mode_seq:
                 control = U[:,counter]
-                state_next = X[:,counter]
-                g_shooting += self._get_constraint_shooting(state_next,
-                                                            state,
-                                                            control,
-                                                            mode)
+                state_next = self._fcasadi(state, control, mode)
+                if counter:
+                    g_shooting += [state]
+                    g_coil += self._get_constraint_coil(state)
                 if mode != 0:
                     # Tumbling, no need to the constraints.
                     g_inter_robot += self._get_constraint_inter_robot(state,
                                                                       control,
                                                                       mode)
                     g_distance += self._get_constraint_distance(state_next)
-                g_coil += self._get_constraint_coil(state_next)
                 state = state_next
                 counter += 1
         # Add shooting constraint of terminal position.
@@ -220,17 +220,22 @@ class Planner():
         n_g_distance = ca.vertcat(*g_distance).shape[0]
         n_g_coil = ca.vertcat(*g_coil).shape[0]
         #
-        g = ca.vertcat(*(g_shooting + g_terminal + g_inter_robot))
-        lbg = np.hstack((np.zeros(n_g_shooting),
-                         -bc_tol*np.ones(n_g_terminal),
-                         np.zeros(n_g_inter_robot) ))
-        ubg = np.hstack((np.zeros(n_g_shooting),
-                         bc_tol*np.ones(n_g_terminal),
-                         np.inf*np.ones(n_g_inter_robot) ))
+        g = ca.vertcat(*(g_terminal 
+                       + g_inter_robot 
+                       ))
+        lbg = np.hstack((-bc_tol*np.ones(n_g_terminal),
+                         np.zeros(n_g_inter_robot),
+                          ))
+        ubg = np.hstack((bc_tol*np.ones(n_g_terminal),
+                         np.inf*np.ones(n_g_inter_robot),
+                          ))
         if boundary:
             g = ca.vertcat(g,*g_coil)
             lbg = np.hstack((lbg,np.zeros(n_g_coil)))
             ubg = np.hstack((ubg,np.inf*np.ones(n_g_coil)))
+            g= ca.vertcat(g,*g_shooting)
+            lbg = np.hstack((lbg,[lbsx,lbsy]*n_robot*(steps*n_mode_seq-1)))
+            ubg = np.hstack((ubg,[ubsx,ubsy]*n_robot*(steps*n_mode_seq-1)))
         return g, lbg, ubg
 
     def _get_optim_vars(self,boundary = False):
@@ -238,32 +243,24 @@ class Planner():
         bounds."""
         U = self.U
         U0 = self.U0
-        X = self.X
         BC  = self.BC
         steps = self.steps
-        n_robot = self.specs.n_robot
         n_mode_seq = len(self.mode_sequence)
         width = self.ubsx - self.lbsx
         height = self.ubsy - self.lbsy
-        optim_var = ca.reshape(ca.vertcat(U,X),-1,1)
+        optim_var = ca.reshape(U,-1,1)
         # Configure bounds.
         if boundary is True:
             # Bounds of U
             lbu = [-width, -height]
             ubu = [ width,  height]
-            # Bounds on X
-            lbxx = [self.lbsx,self.lbsy]*n_robot
-            ubxx = [self.ubsx,self.ubsy]*n_robot
         else:
             # Bounds of U
             lbu = [-np.inf, -np.inf]
             ubu = [ np.inf,  np.inf]
-            # Bounds on X
-            lbxx = [-np.inf, -np.inf]*n_robot
-            ubxx = [ np.inf,  np.inf]*n_robot
         # concatenating X and U bounds
-        lbx = np.array((lbu + lbxx)*steps*n_mode_seq)
-        ubx = np.array((ubu + ubxx)*steps*n_mode_seq)
+        lbx = np.array((lbu)*steps*n_mode_seq)
+        ubx = np.array((ubu)*steps*n_mode_seq)
         # concatenating optimization parameter
         p = ca.vertcat(ca.reshape(BC,-1,1),ca.reshape(U0,-1,1))
         return optim_var, lbx, ubx, p
@@ -282,7 +279,7 @@ class Planner():
                 i = step*n_mode_seq + mode
                 if i >0:
                     u = U[:,i]
-                    obj += step*ca.norm_inf(u)#step*ca.sum1(u*u)#
+                    obj += step**2*ca.sum1(u*u)#step*ca.norm_inf(u)#
         """ for i in range(U.shape[1]):
             u = U[:,i]
             obj += ca.sum1(u*u) """
@@ -291,7 +288,7 @@ class Planner():
     def _get_optimization(self, solver_name = 'ipopt', boundary = False):
         """Sets up and returns a CASADI optimization object."""
         # Construct optimization symbolic vars in CASADI.
-        self.X, self.U, self.U0, self.BC = self._construct_vars()
+        self.U, self.U0, self.BC = self._construct_vars()
         # Construct all constraints.
         g, lbg, ubg = self._get_constraints(boundary)
         self.g, self.lbg, self.ubg = g, lbg, ubg
@@ -345,7 +342,7 @@ class Planner():
         # Feasibility tolerance
         solvers['knitro']['opts']['knitro.feastol'] = 1000
         # This will be enforced.
-        solvers['knitro']['opts']['knitro.feastolabs'] = 1
+        solvers['knitro']['opts']['knitro.feastolabs'] = .1
         return solvers
 
     @staticmethod
@@ -393,9 +390,10 @@ class Planner():
         steps = self.steps
         n_robot = self.specs.n_robot
         xi = self.xi
-        U_raw = ca.reshape(sol['x'],2+2*n_robot,-1)[:2,:].full()
+        U_raw = ca.reshape(sol['x'],2,-1)[:2,:].full()
         U_raw= np.vstack((U_raw,mode_seq*steps))
-        X_raw = ca.horzcat(xi,ca.reshape(sol['x'],2+2*n_robot,-1)[2:,:]).full()
+        X_raw = np.zeros((2*n_robot, 2*n_mode_seq*steps + 1))
+        X_raw[:,0]= xi
         UZ = np.zeros((3,2*n_mode_seq*steps))
         X = np.zeros((2*n_robot, 2*n_mode_seq*steps + 1))
         X[:,0] = xi
@@ -424,6 +422,9 @@ class Planner():
                     UZ[2,counter+1] = -next_mode
                     mode_change *= -1
                 # Calculate positions.
+                X_raw[:,step*n_mode_seq + idx+1]= self._f(
+                                    X_raw[:,step*n_mode_seq + idx],
+                                    U_raw[:2,step*n_mode_seq + idx], mode)
                 X[:,counter+1] = self._f(X[:,counter], UZ[:2,counter],
                                                                  UZ[2,counter])
                 X[:,counter+2] = self._f(X[:,counter+1], UZ[:2,counter+1],
@@ -542,8 +543,7 @@ class Planner():
             U0 = ca.DM.zeros(self.U.shape)
         else:
             U0 = ca.DM(U0)
-        X0 = ca.DM(np.matlib.repmat(xi,self.X.shape[1],1).T)
-        UX0 = ca.vertcat(ca.reshape(U0[:2,:],-1,1), ca.reshape(X0,-1,1))
+        UX0 = ca.reshape(U0[:2,:],-1,1)
         p = ca.vertcat(xi, xf, ca.reshape(U0[:2,:],-1,1))
         sol = solver(x0 = UX0, lbx = lbx, ubx = ubx,
                      lbg = lbg, ubg = ubg, p = p)
