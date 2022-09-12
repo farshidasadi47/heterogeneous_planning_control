@@ -246,7 +246,8 @@ class SwarmSpecs:
         poses = scale*poses[:2*self.n_robot]
         # Rolling robots position in the pattern
         poses= np.roll(poses, 2*roll)
-        shape= [(elem+roll)%self.n_robot for elem in shape]
+        shape= [(elem+roll)%self.n_robot if elem < 999 else elem 
+                                                             for elem in shape]
         # Rotation
         rot = np.array([[np.cos(ang),-np.sin(ang)],[np.sin(ang),np.cos(ang)]])
         poses = np.dot(rot,poses.reshape(-1,2).T).T.flatten()

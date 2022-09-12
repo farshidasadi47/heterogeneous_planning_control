@@ -1095,9 +1095,9 @@ class ControlNode(NodeTemplate):
             try:
                 print("Enter final positions by coordinate or letter:")
                 print(f"Enter goal for {n_robot} robots as x_i, y_i, ... OR")
-                print(f"Enter list of prespecified letters with roll from")
+                print(f"Enter list of prespecified letters with steps from")
                 print(",".join(i for i in self.control.specs.chars)+ " OR")
-                print("Example: A0, B1")
+                print("Example: A2, B1")
                 print("Enter \"q\" for quitting.")
                 # Read user input.
                 in_str = input("Enter values: ").strip()
@@ -1111,7 +1111,7 @@ class ControlNode(NodeTemplate):
                 elif re.fullmatch(regex_ltr, in_str):
                     params = [c for c,_ in groupby(re.split(r", *| +",in_str))]
                     goals= [
-                        self.control.specs.get_letter(c[0], roll= int(c[1]))
+                        self.control.specs.get_letter(c[0])
                         for c in params]
                 else:
                     print("Invalid input. Ignored \"action request\".")
@@ -1135,7 +1135,8 @@ class ControlNode(NodeTemplate):
                 for idx, goal in enumerate(goals):
                     print("*"*72)
                     print(f"Running plan {idx+1:02d} of {n_goal:02d}.")
-                    xg, shape, steps = goal
+                    xg, shape, _ = goal
+                    steps= max(1,int(params[idx][1]))
                     print(shape)
                     print(f"xg: [" + ",".join(f"{i:+07.2f}" for i in xg) +"]")
                     iterator = self.control.plan_line(xg, steps)
