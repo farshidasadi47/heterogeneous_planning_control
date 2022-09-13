@@ -257,10 +257,11 @@ class ShowVideo(NodeTemplate):
     
     def _timer_callback(self):
         img, logs = self.get_subs_values()
-        self._add_logs_to_frame(img,logs)
-        img = self._add_header(img,logs)
-        self._record_video_n_data(img, logs)
-        cv2.imshow('workspace',img)
+        img_m= img.copy()
+        self._add_logs_to_frame(img_m,logs)
+        img_m = self._add_header(img_m,logs)
+        self._record_video_n_data(img, img_m, logs)
+        cv2.imshow('workspace',img_m)
         cv2.waitKey(1)
         if logs[0] == 0:
             self.header= cv2.getTrackbarPos('Header', 'workspace')
@@ -274,13 +275,13 @@ class ShowVideo(NodeTemplate):
         self.counter = (self.counter + 1)%1000000
         print(msg, self.recording)
     
-    def _record_video_n_data(self, img, logs):
+    def _record_video_n_data(self, img, img_m, logs):
         if logs[0] > 0.5:
             # Recording requested, set writers if they are not set.
             if not self.recording:
                 self.recording = True
                 self.dir = self._update_recording_path()
-                self._set_writers(img.shape[:2])
+                self._set_writers(img.shape[:2], img_m.shape[:2])
         else:
             # Stop ongoing recording and release resources.
             if self.recording:
@@ -290,15 +291,18 @@ class ShowVideo(NodeTemplate):
                 self.csv_file = None
                 self.video_writer.close()
                 self.video_writer = None
+                self.video_m_writer.close()
+                self.video_m_writer = None
         #
         if self.recording:
-            self._write_logs_and_video(img,logs)
+            self._write_logs_and_video(img, img_m,logs)
     
-    def _write_logs_and_video(self,img,logs):
+    def _write_logs_and_video(self,img, img_m,logs):
         self.csv_writer.writerow(logs)
         self.video_writer.writeFrame(img[:,:,::-1])
+        self.video_m_writer.writeFrame(img_m[:,:,::-1])
         
-    def _set_writers(self,frame_size):
+    def _set_writers(self,frame_size, frame_m_size):
         self.counter= 1
         os.makedirs(self.dir, exist_ok= True)
         self.csv_file= open(os.path.join(self.dir,"logs.csv"),'w')
@@ -310,6 +314,11 @@ class ShowVideo(NodeTemplate):
             inputdict={'-r': f'{self.rate}'},
             outputdict={'-vcodec': 'libx264', '-crf': '9',
                         '-tune': 'film','-r': f'{self.rate}'}) 
+        video_m_path= os.path.join(self.dir,"logs_m.mp4")
+        self.video_m_writer = skvideo.io.FFmpegWriter(video_m_path,
+            inputdict={'-r': f'{self.rate}'},
+            outputdict={'-vcodec': 'libx264', '-crf': '9',
+                        '-tune': 'film','-r': f'{self.rate}'})
 
     def _add_logs_to_frame(self,img, logs):
         if logs[0] and self.annotation and logs[3] > -1:
