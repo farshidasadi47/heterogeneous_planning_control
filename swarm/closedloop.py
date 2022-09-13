@@ -817,13 +817,9 @@ class Controller():
         n_robot= self.specs.n_robot
         polar_cmd = np.array(polar_cmd).reshape(-1,3)
         # Remove negligible moves
-        polar_cmd = polar_cmd[np.argwhere(polar_cmd[:,0]> 1).squeeze()]
+        polar_cmd = polar_cmd[polar_cmd[:,0]> 1]
         # Remove unnecessary mode changes.
         mode_change_ind = np.argwhere(polar_cmd[:,2]<0).squeeze()
-        index_to_del = np.argwhere(np.diff(mode_change_ind)<2).squeeze()
-        index_to_del = np.hstack((index_to_del,index_to_del +1 ))
-        index_to_del = mode_change_ind[index_to_del]
-        polar_cmd = np.delete(polar_cmd, index_to_del, axis= 0)
         print(polar_cmd)
         goals = self.get_cart_goal(self.pos, self.mode, polar_cmd)
         n_sections = len(polar_cmd)
