@@ -557,7 +557,7 @@ class Planner():
                 break
         return flag
 
-    def solve(self, xi, xf, U0= None, receding = 0):
+    def solve(self, xi, xf, U0= None):
         """
         Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
@@ -568,12 +568,6 @@ class Planner():
             Initial position of robots.
         xf: Numpy nd.array
             Final position of robots.
-        receding: Boolean, default: False
-            Use receding horizon or open loop mode.
-            In receding horizon mode is used. Only first section of the
-            plan plus its related mode change will be returned and the
-            planner shifts shifts the robot modes to the next one
-            in initial given mode sequence.
         """
         lbx, ubx = self.lbx, self.ubx
         lbg, ubg = self.lbg, self.ubg
@@ -599,17 +593,11 @@ class Planner():
         # recovering the solution in appropriate format
         BC = np.vstack((xi,xf)).T
         U_raw, X_raw, UZ, U, X = self._post_process_u(sol)
-        if receding:
-            # Update mode sequences.
-            self.mode_sequence.rotate(-receding)
-            self.next_mode_sequence.rotate(-receding)
-            # Rebuild the optimization problem.
-            self._get_optimization(self.solver_name, self.boundary)
         return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
     
     @classmethod
     def plan(cls,xg, outer_steps, mode_sequence, specs, 
-                 resolve= True,boundary=True, receding= 0, reps= 1):
+                                                  resolve= True,boundary=True):
         """
         Wrapper for planning class simplifying creation and calling
         process.
@@ -619,122 +607,31 @@ class Planner():
         xg: array of final position [x_i, y_i, ...]
         outer_steps: minimum value of outer steps to be used.
         mode_sequence: list, sequence to be used.
-        receding: int, numbers of step inputs applied in receding mode.
-                       default: 0, applies all input, no receding mode.
-        reps: Number of times repeating a full cycle of solutions.
         specs: instance of model.SwarmSpecs containing swarm info.
         ----------
         Yields
         ----------
         polar_cmd: 2D array of polar input  [[r, phi, mode], ... ]
         """
-        # Adjust parameters
-        stop_early= True
-        stop_early_flag= False
-        early_threshold= 3
-        n_mode_seq= len(mode_sequence)
-        n_total = outer_steps*n_mode_seq
-        receding= n_mode_seq if (receding == 999) else receding
-        receding= receding if receding else n_total
-        reps= 1 if reps < 1 else reps
-        U_raw_p= np.zeros((2,n_total),dtype= float)
-        U_p= np.zeros((3,2*n_total),dtype= float)
-        first_step= True
         # Build planner
         planner = cls(specs, mode_sequence= mode_sequence, steps= outer_steps,
                                 solver_name='knitro', boundary=boundary)
-        for _ in range(reps):
-            for _ in range(0, n_total, receding):
-                # Get new initial condition.
-                xi = yield None
-                # Stop if threshold is met.
-                if ((np.linalg.norm(xg-np.tile(xg[:2],specs.n_robot)
-                                  - xi+np.tile(xi[:2],specs.n_robot), np.inf)
-                                                            < early_threshold)
-                                                            and stop_early):
-                    stop_early_flag= True
-                    break
-                #
-                _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg,
-                                  U_raw_p,receding= receding*int(not resolve))
-                print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
-                if isfeasible:
-                    if resolve:
-                        r_raw = np.linalg.norm(U_raw[:2,:],axis=0)
-                        print(r_raw)
-                        print(U_raw)
-                        U_raw = U_raw.T
-                        U_raw[np.argwhere(
-                          r_raw<specs.tumbling_length).squeeze(),:2] = np.zeros(2)
-                        U_raw= U_raw.T
-                        _, U_raw, _, _, _, U, _, isfeasible= planner.solve(
-                                                            xi,xg,U_raw,
-                                                            receding= receding)
-                    U_raw_p= U_raw
-                    U_p= U
-                    first_step= False
-                else:
-                    if first_step:
-                        raise RuntimeError
-                #
-                print(U.T)
-                yield U_p[:,:2*receding].T
-                U_raw_p= np.roll(U_raw_p,-receding)
-                U_raw_p[:,-receding:]= 0.0
-                U_p= np.roll(U_p,-2*receding)
-                U_p[:,-2*receding:]= 0.0
-            if stop_early_flag:
-                print('Stopped early.')
-                break
-        # Tumble to the goal if stopped early due to matched shape.
-        if ((np.linalg.norm(xg[:2] - xi[:2], np.inf) > 1.2*early_threshold)
-                                                          and stop_early_flag):
-            U_p = np.zeros((3,2))
-            U_p[:2,:] = planner._accurate_rotation(xg[:2] - xi[:2])
-            # Convert to polar
-            for i in range(U_p.shape[1]):
-                U_p[:2,i] = planner._cartesian_to_polar(U_p[:2,i])
-                if U_p[2,i] == 0:
-                    # If this is rotation round it for numerical purposes.
-                    U_p[0,i] = int(U_p[0,i]*1000)/1000
-            print("Tumble since stopped early.")
-            yield U_p.T
-        else:
-            yield np.zeros((2,3),dtype=float)
+        # Get new initial condition.
+        xi = yield None
+        _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg)
+        print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
+        if isfeasible:
+            if resolve:
+                r_raw = np.linalg.norm(U_raw[:2,:],axis=0)
+                print(r_raw)
+                U_raw = U_raw.T
+                print(U_raw)
+                U_raw[np.argwhere(
+                    r_raw<specs.tumbling_length).squeeze(),:2] = np.zeros(2)
+                U_raw= U_raw.T
+                _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg,U_raw)
+        yield U.T
         return planner
-
-def receding_example():
-    s1 = np.array([-30,  0,   0,  0, +30,  0],dtype=float)
-    s2 = np.array([+30,+30,   0,  0,   0,+30],dtype=float)
-    s3 = np.array([-30,  0, -30,-30,   0,  0],dtype=float)
-    s4 = np.array([  0,  0,   0,-30, -30,-30],dtype=float)
-    s5 = np.array([+30,-30,   0,  0,  30,  0],dtype=float)
-    s6 = np.array([  0,  0, +30,  0, -30,  0],dtype=float)
-    xi = s2*4/3
-    xf = s5*4/3
-    #
-    threshold = 3.0
-    outer = 3
-    boundary = True
-    last_section = False
-    mode_sequence= [1,2,0]
-    specs = model.SwarmSpecs.robo(3)
-    swarm = model.Swarm(xi, 0, mode_sequence[0], specs)
-    receding = 3
-    reps = 3#np.ceil(outer*swarm.specs.n_mode/receding).astype(int)
-    planner = Planner.plan(xf,outer,mode_sequence,specs,False,
-                                                 boundary,receding,reps)
-    for U in planner:
-        if U is None:
-            U= planner.send(xi)
-        print(U)
-        swarm.simplot(U.T,1000, boundary=boundary,
-                                        last_section=last_section)
-        xi= swarm.position
-        noise = np.random.uniform(-3,3,2*swarm.specs.n_robot)
-        xi = swarm.position + 1*noise
-        swarm.position = xi
-        print("noise is: ", noise)
 
 def main3():
     outer = 3
