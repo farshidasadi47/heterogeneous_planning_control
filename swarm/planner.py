@@ -42,7 +42,6 @@ class Planner():
         self.cost_coeff = 10
         self.robot_pairs = self.specs.robot_pairs
         self.d_min = self.specs.d_min
-        self.steps = steps
         self.ubsx = self.specs.ubsx
         self.lbsx = self.specs.lbsx
         self.ubsy = self.specs.ubsy
@@ -54,11 +53,11 @@ class Planner():
         self.boundary = boundary
         self.solver_name = solver_name
         # Build mode sequence
-        self._set_mode_sequence(mode_sequence)
+        self._set_mode_sequence(mode_sequence, steps)
         # Build the optimization problem.
         self._get_optimization(solver_name, boundary)
     
-    def _set_mode_sequence(self, mode_sequence):
+    def _set_mode_sequence(self, mode_sequence, steps):
         """
         Checks mode_sequence, if available.
         Otherwise returns the default sequence.
@@ -67,9 +66,9 @@ class Planner():
         n_mode = self.specs.n_mode
         if mode_sequence is None:
             mode_sequence = list(range(1,n_mode)) + [0]
-        self.mode_sequence = deque(mode_sequence)
+        self.mode_sequence = deque(mode_sequence*steps)
         # Calculate next mode sequence.
-        next_modes= deque([mode for mode in mode_sequence if mode])
+        next_modes= deque([mode for mode in self.mode_sequence if mode])
         next_modes.rotate(-1)
         next_mode_sequence = []
         cnt= 0
@@ -99,34 +98,32 @@ class Planner():
         """
         Constructing optimization variables.
         """
-        steps = self.steps
         mode_seq= self.mode_sequence
         n_robot = self.specs.n_robot
         n_mode_seq = len(mode_seq)
-        U = ca.SX.sym('u',2,steps*n_mode_seq) # U_step_cmdmode
-        U0 = ca.SX.sym('u',2,steps*n_mode_seq) # U_step_cmdmode
-        UU= ca.SX.sym('u',2,self.specs.n_mode)
+        U = ca.SX.sym('u',2,n_mode_seq) # U_step_cmdmode
+        U0 = ca.SX.sym('u0',2,n_mode_seq) # U_step_cmdmode
         BC = ca.SX.sym('bc',2*n_robot,2) # Start and end point.
         counter = 0
         # Build X and U.
-        for step in range(steps):
-            # Construct position and control for current outer loop.
-            for idx, mode in enumerate(mode_seq):
-                # Maps to current mode sequence.
-                varstr = f'{step:01d}_{mode:01d}_{idx:02d}'
-                # Construct current input.
-                U[0,counter] = ca.SX.sym('ux_'+varstr)
-                U[1,counter] = ca.SX.sym('uy_'+varstr)
-                U0[0,counter] = ca.SX.sym('u0x_'+varstr)
-                U0[1,counter] = ca.SX.sym('u0y_'+varstr)
-                counter += 1
+        # Construct position and control for current outer loop.
+        for idx, mode in enumerate(mode_seq):
+            # Maps to current mode sequence.
+            varstr = f'{idx:02d}_{mode:01d}'
+            # Construct current input.
+            U[0,idx] = ca.SX.sym('ux_'+varstr)
+            U[1,idx] = ca.SX.sym('uy_'+varstr)
+            U0[0,idx] = ca.SX.sym('u0x_'+varstr)
+            U0[1,] = ca.SX.sym('u0y_'+varstr)
         # Building P
         for robot in range(n_robot):
             BC[2*robot,0] = ca.SX.sym('xi_{:02d}'.format(robot))
             BC[2*robot + 1,0] = ca.SX.sym('yi_{:02d}'.format(robot))
             BC[2*robot,1] = ca.SX.sym('xf_{:02d}'.format(robot))
             BC[2*robot + 1,1] = ca.SX.sym('yf_{:02d}'.format(robot))
-        return U, U0, BC
+        # Obnjective activation
+        obj_act= ca.SX.sym('obj_act')
+        return U, U0, BC, obj_act
 
     def _get_constraint_inter_robot(self,x,u,mode):
         """
@@ -185,7 +182,6 @@ class Planner():
         mode_seq = self.mode_sequence
         n_mode_seq = len(mode_seq)
         bc_tol = self.specs.bc_tol
-        steps = self.steps
         lbsx, ubsx= self.lbsx, self.ubsx
         lbsy, ubsy= self.lbsy, self.ubsy
         U = self.U
@@ -195,23 +191,20 @@ class Planner():
         g_inter_robot = []
         g_distance = []
         g_coil = []
-        counter = 0
         state = BC[:,0]
-        for _ in range(steps):
-            for mode in mode_seq:
-                control = U[:,counter]
-                state_next = self._fcasadi(state, control, mode)
-                if counter:
-                    g_shooting += [state]
-                    g_coil += self._get_constraint_coil(state)
-                if mode != 0:
-                    # Tumbling, no need to the constraints.
-                    g_inter_robot += self._get_constraint_inter_robot(state,
-                                                                      control,
-                                                                      mode)
-                    g_distance += self._get_constraint_distance(state_next)
-                state = state_next
-                counter += 1
+        for idx, mode in enumerate(mode_seq):
+            control = U[:,idx]
+            state_next = self._fcasadi(state, control, mode)
+            if idx:
+                g_shooting += [state]
+                g_coil += self._get_constraint_coil(state)
+            if mode != 0:
+                # Tumbling, no need to the constraints.
+                g_inter_robot += self._get_constraint_inter_robot(state,
+                                                                    control,
+                                                                    mode)
+                g_distance += self._get_constraint_distance(state_next)
+            state = state_next
         # Add shooting constraint of terminal position.
         g_terminal += [BC[:,1] - state]
         # Configure bounds of g
@@ -235,8 +228,8 @@ class Planner():
             lbg = np.hstack((lbg,np.zeros(n_g_coil)))
             ubg = np.hstack((ubg,np.inf*np.ones(n_g_coil)))
             g= ca.vertcat(g,*g_shooting)
-            lbg = np.hstack((lbg,[lbsx,lbsy]*n_robot*(steps*n_mode_seq-1)))
-            ubg = np.hstack((ubg,[ubsx,ubsy]*n_robot*(steps*n_mode_seq-1)))
+            lbg = np.hstack((lbg,[lbsx,lbsy]*n_robot*(n_mode_seq-1)))
+            ubg = np.hstack((ubg,[ubsx,ubsy]*n_robot*(n_mode_seq-1)))
         return g, lbg, ubg
 
     def _get_optim_vars(self,boundary = False):
@@ -245,7 +238,7 @@ class Planner():
         U = self.U
         U0 = self.U0
         BC  = self.BC
-        steps = self.steps
+        obj_act = self.obj_act
         n_mode_seq = len(self.mode_sequence)
         width = self.ubsx - self.lbsx
         height = self.ubsy - self.lbsy
@@ -260,11 +253,11 @@ class Planner():
             lbu = [-np.inf, -np.inf]
             ubu = [ np.inf,  np.inf]
         # concatenating X and U bounds
-        lbx = np.array((lbu)*steps*n_mode_seq)
-        ubx = np.array((ubu)*steps*n_mode_seq)
+        lbx = np.array((lbu)*n_mode_seq)
+        ubx = np.array((ubu)*n_mode_seq)
         # concatenating optimization parameter
         p = ca.vertcat(ca.reshape(BC,-1,1),
-                       ca.reshape(U0,-1,1))
+                       ca.reshape(U0,-1,1), obj_act)
         return optim_var, lbx, ubx, p
 
     def _get_objective(self):
@@ -272,25 +265,23 @@ class Planner():
         If sparse = True, then it returns first norm objective function
         that favors sparsity.
         """
-        steps = self.steps
         n_mode_seq = len(self.mode_sequence)
-        U = self.U - self.U0
+        n_mode= self.specs.n_mode
+        U = self.U #- self.U0
+        obj_act= self.obj_act
         obj = 0
-        for step in range(0,steps):
-            for mode in range(n_mode_seq):
-                i = step*n_mode_seq + mode
-                if i >0:
-                    u = U[:,i]
-                    obj += step**2*ca.sum1(u*u)#step*ca.norm_inf(u)#
+        for idx, mode in enumerate(range(n_mode_seq)):
+            u = U[:,idx]
+            obj+= (idx//n_mode)**2*ca.sum1(u*u)#(idx//n_mode)**2*ca.norm_inf(u)#
         """ for i in range(U.shape[1]):
             u = U[:,i]
             obj += ca.sum1(u*u) """
-        return obj
+        return obj*obj_act
 
     def _get_optimization(self, solver_name = 'ipopt', boundary = False):
         """Sets up and returns a CASADI optimization object."""
         # Construct optimization symbolic vars in CASADI.
-        self.U, self.U0, self.BC = self._construct_vars()
+        self.U, self.U0, self.BC, self.obj_act = self._construct_vars()
         # Construct all constraints.
         g, lbg, ubg = self._get_constraints(boundary)
         self.g, self.lbg, self.ubg = g, lbg, ubg
@@ -389,15 +380,14 @@ class Planner():
         n_mode_seq_nz= np.count_nonzero(mode_seq)
         n_mode_seq= len(mode_seq)
         mode_start = mode_seq[np.nonzero(mode_seq)[0][0]]
-        steps = self.steps
         n_robot = self.specs.n_robot
         xi = self.xi
         U_raw = ca.reshape(sol['x'],2,-1)[:2,:].full()
-        U_raw= np.vstack((U_raw,mode_seq*steps))
-        X_raw = np.zeros((2*n_robot, 2*n_mode_seq*steps + 1))
+        U_raw= np.vstack((U_raw,mode_seq))
+        X_raw = np.zeros((2*n_robot, 2*n_mode_seq + 1))
         X_raw[:,0]= xi
-        UZ = np.zeros((3,2*n_mode_seq*steps))
-        X = np.zeros((2*n_robot, 2*n_mode_seq*steps + 1))
+        UZ = np.zeros((3,2*n_mode_seq))
+        X = np.zeros((2*n_robot, 2*n_mode_seq + 1))
         X[:,0] = xi
         U = np.zeros_like(UZ)
         # Adjust mode_change parameters.
@@ -406,32 +396,29 @@ class Planner():
         mode_change_remainder  = ((n_mode_seq_nz)%2)*mode_change
         # Recovering input with transitions
         counter = 0
-        for step in range(steps):
-            for idx, mode in enumerate(mode_seq):
-                if mode == 0:
-                    # This tumbling.
-                    U_tumbled = self._accurate_rotation(
-                       U_raw[:2,step*n_mode_seq + idx] - mode_change_remainder)
-                    UZ[:2,counter:counter+2] = U_tumbled
-                    UZ[2,counter:counter+2] = mode
-                else:
-                    # This is pivot_walking and needs mode change.
-                    UZ[:2,counter] = U_raw[:2,step*n_mode_seq + idx]
-                    UZ[2,counter] = mode
-                    # Calculate next mode and perform it.
-                    next_mode = self.next_mode_sequence[idx]
-                    UZ[:2,counter+1] = mode_change
-                    UZ[2,counter+1] = -next_mode
-                    mode_change *= -1
-                # Calculate positions.
-                X_raw[:,step*n_mode_seq + idx+1]= self._f(
-                                    X_raw[:,step*n_mode_seq + idx],
-                                    U_raw[:2,step*n_mode_seq + idx], mode)
-                X[:,counter+1] = self._f(X[:,counter], UZ[:2,counter],
-                                                                 UZ[2,counter])
-                X[:,counter+2] = self._f(X[:,counter+1], UZ[:2,counter+1],
-                                                               UZ[2,counter+1])
-                counter += 2
+        for idx, mode in enumerate(mode_seq):
+            if mode == 0:
+                # This tumbling.
+                U_tumbled = self._accurate_rotation(
+                    U_raw[:2,idx] - mode_change_remainder)
+                UZ[:2,counter:counter+2] = U_tumbled
+                UZ[2,counter:counter+2] = mode
+            else:
+                # This is pivot_walking and needs mode change.
+                UZ[:2,counter] = U_raw[:2, idx]
+                UZ[2,counter] = mode
+                # Calculate next mode and perform it.
+                next_mode = self.next_mode_sequence[idx]
+                UZ[:2,counter+1] = mode_change
+                UZ[2,counter+1] = -next_mode
+                mode_change *= -1
+            # Calculate positions.
+            X_raw[:,idx+1]= self._f(X_raw[:, idx], U_raw[:2, idx], mode)
+            X[:,counter+1] = self._f(X[:,counter], UZ[:2,counter],
+                                                                UZ[2,counter])
+            X[:,counter+2] = self._f(X[:,counter+1], UZ[:2,counter+1],
+                                                            UZ[2,counter+1])
+            counter += 2
         # Calculate the corresponding polar coordinate inputs.
         U[2,:] = UZ[2,:]
         for i in range(UZ.shape[1]):
@@ -522,7 +509,7 @@ class Planner():
         UU_raw= np.roll(UU_raw,1, axis=1)
         width = self.ubsx - self.lbsx
         height = self.ubsy - self.lbsy
-        counts= Counter(self.mode_sequence*self.steps)
+        counts= Counter(self.mode_sequence)
         flag= True
         for i, count in counts.items():
             print(f'{i=}, {count=}')
@@ -558,7 +545,7 @@ class Planner():
         # Solve unconstrained
         UU_raw, XU_raw, UUZ,  UU, XU= self.solve_unconstrained(xi, xf)
         self._isfeasible_from_unconstrained(UU_raw)
-        p = ca.vertcat(xi, xf, ca.reshape(U0[:2,:],-1,1))
+        p = ca.vertcat(xi, xf, ca.reshape(U0[:2,:],-1,1),0.0)
         sol = solver(x0 = UX0, lbx = lbx, ubx = ubx,
                      lbg = lbg, ubg = ubg, p = p)
         UX_raw = sol['x'].full().squeeze()
