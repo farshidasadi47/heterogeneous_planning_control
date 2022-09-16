@@ -384,6 +384,8 @@ class Planner():
         xi = self.xi
         U_raw = ca.reshape(sol['x'],2,-1)[:2,:].full()
         U_raw= np.vstack((U_raw,mode_seq))
+        r_raw= np.zeros_like(U_raw)
+        r_raw[2,:]= mode_seq
         X_raw = np.zeros((2*n_robot, 2*n_mode_seq + 1))
         X_raw[:,0]= xi
         UZ = np.zeros((3,2*n_mode_seq))
@@ -412,6 +414,7 @@ class Planner():
                 UZ[:2,counter+1] = mode_change
                 UZ[2,counter+1] = -next_mode
                 mode_change *= -1
+            r_raw[:2,idx]= self._cartesian_to_polar(U_raw[:2,idx])
             # Calculate positions.
             X_raw[:,idx+1]= self._f(X_raw[:, idx], U_raw[:2, idx], mode)
             X[:,counter+1] = self._f(X[:,counter], UZ[:2,counter],
@@ -426,7 +429,7 @@ class Planner():
             if U[2,i] == 0:
                 # If this is rotation round it for numerical purposes.
                 U[0,i] = int(U[0,i]*1000)/1000
-        return U_raw, X_raw, UZ,  U, X
+        return U_raw, r_raw, X_raw, UZ,  U, X
 
     def solve_unconstrained(self,xi,xf):
         """This function solved the unconstrained case from
@@ -520,7 +523,24 @@ class Planner():
                 break
         return flag
 
-    def solve(self, xi, xf, U0= None):
+    def _solve(self, xi, xf, U0, obj_act= 1):
+        """
+        Low level function for solving the optimization.
+        """
+        lbx, ubx = self.lbx, self.ubx
+        lbg, ubg = self.lbg, self.ubg
+        self.xi, self.xf= xi, xf
+        solver = self.solver
+        UX0 = ca.reshape(U0[:2,:],-1,1)
+        p = ca.vertcat(xi, xf, ca.reshape(U0[:2,:],-1,1),obj_act)
+        sol = solver(x0 = UX0, lbx = lbx, ubx = ubx,
+                     lbg = lbg, ubg = ubg, p = p)
+        UX_raw = sol['x'].full().squeeze()
+        g_raw = sol['g'].full().squeeze()
+        isfeasible = self._isfeasible(UX_raw,g_raw)
+        return sol, isfeasible
+
+    def solve(self, xi, xf, U0= None, resolve= True):
         """
         Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
@@ -532,29 +552,28 @@ class Planner():
         xf: Numpy nd.array
             Final position of robots.
         """
-        lbx, ubx = self.lbx, self.ubx
-        lbg, ubg = self.lbg, self.ubg
-        solver = self.solver
-        self.xi = xi
-        self.xf = xf
+        threshold= np.ceil(self.specs.pivot_length.min())
+        obj_act= 0 if resolve else 1.0
+        # Solve unconstrained
+        UU_raw, XU_raw, UUZ,  UU, XU= self.solve_unconstrained(xi, xf)
+        self._isfeasible_from_unconstrained(UU_raw)
+        # Solve for feasibility with constant objective function.
         if U0 is None:
             U0 = ca.DM.zeros(self.U.shape)
         else:
             U0 = ca.DM(U0)
         UX0 = ca.reshape(U0[:2,:],-1,1)
-        # Solve unconstrained
-        UU_raw, XU_raw, UUZ,  UU, XU= self.solve_unconstrained(xi, xf)
-        self._isfeasible_from_unconstrained(UU_raw)
-        p = ca.vertcat(xi, xf, ca.reshape(U0[:2,:],-1,1),0.0)
-        sol = solver(x0 = UX0, lbx = lbx, ubx = ubx,
-                     lbg = lbg, ubg = ubg, p = p)
-        UX_raw = sol['x'].full().squeeze()
-        g_raw = sol['g'].full().squeeze()
-        isfeasible = self._isfeasible(UX_raw,g_raw)
-        #sol = solver(x0 = x0, lbg = lbg, ubg = ubg, p = p)
-        # recovering the solution in appropriate format
+        sol, isfeasible= self._solve(xi,xf, U0, obj_act= obj_act)
         BC = np.vstack((xi,xf)).T
-        U_raw, X_raw, UZ, U, X = self._post_process_u(sol)
+        U_raw, r_raw, X_raw, UZ, U, X = self._post_process_u(sol)
+        print(r_raw.T)
+        if resolve and isfeasible:
+            # Solve with non_constant objective.
+            sol_n, isfeasible_n= self._solve(xi,xf, U_raw, obj_act= 1.0)
+            if isfeasible_n:
+                isfeasible= isfeasible_n
+                sol= sol_n
+                U_raw, r_raw, X_raw, UZ, U, X = self._post_process_u(sol)
         return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
     
     @classmethod
@@ -582,16 +601,8 @@ class Planner():
         xi = yield None
         _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg)
         print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
-        if isfeasible:
-            if resolve:
-                r_raw = np.linalg.norm(U_raw[:2,:],axis=0)
-                print(r_raw)
-                U_raw = U_raw.T
-                print(U_raw)
-                U_raw[np.argwhere(
-                    r_raw<specs.tumbling_length).squeeze(),:2] = np.zeros(2)
-                U_raw= U_raw.T
-                _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg,U_raw)
+        if not isfeasible:
+            raise RuntimeError
         yield U.T
         return planner
 
