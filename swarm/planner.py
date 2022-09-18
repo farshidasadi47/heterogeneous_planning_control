@@ -540,7 +540,7 @@ class Planner():
         isfeasible = self._isfeasible(UX_raw,g_raw)
         return sol, isfeasible
 
-    def solve(self, xi, xf, U0= None, resolve= True):
+    def solve(self, xi, xf, resolve= True):
         """
         Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
@@ -558,10 +558,7 @@ class Planner():
         UU_raw, XU_raw, UUZ,  UU, XU= self.solve_unconstrained(xi, xf)
         self._isfeasible_from_unconstrained(UU_raw)
         # Solve for feasibility with constant objective function.
-        if U0 is None:
-            U0 = ca.DM.zeros(self.U.shape)
-        else:
-            U0 = ca.DM(U0)
+        U0 = ca.DM.zeros(self.U.shape)
         UX0 = ca.reshape(U0[:2,:],-1,1)
         sol, isfeasible= self._solve(xi,xf, U0, obj_act= obj_act)
         BC = np.vstack((xi,xf)).T
@@ -599,7 +596,7 @@ class Planner():
                                 solver_name='knitro', boundary=boundary)
         # Get new initial condition.
         xi = yield None
-        _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg)
+        _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg,resolve)
         print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
         if not isfeasible:
             raise RuntimeError

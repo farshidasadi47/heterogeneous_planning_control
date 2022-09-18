@@ -899,8 +899,9 @@ class Controller():
         ----------
         msg: string for showing statistics of the motion.
         """
+        XG= np.around(XG,1)
         # Set up the planner.
-        mode_sequence = self.mode_sequence + deque([0])
+        mode_sequence = deque([0]) + self.mode_sequence
         plan = planner.Planner.plan(XG,outer_steps,mode_sequence,self.specs)
         msg= ""
         for polar_cmd in plan:

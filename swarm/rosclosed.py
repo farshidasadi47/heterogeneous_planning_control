@@ -1103,10 +1103,19 @@ class ControlNode(NodeTemplate):
         if self.cmd_mode == "idle":
             self.cmd_mode == "busy"
             try:
+                # Get current position
+                _, feedback = self.get_subs_values()
+                state_fb=self.control.process_robots(feedback,any_robot= False)
+                xi, theta_i = state_fb
+                msg_i = f"xi: [" + ",".join(f"{i:+07.2f}" for i in xi) + "]"
+                msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
+                print(msg_i)
                 print("Enter final positions by coordinate or letter:")
                 print(f"Enter goal for {n_robot} robots as x_i, y_i, ... OR")
                 print(f"Enter list of prespecified letters with steps from")
-                print(",".join(i for i in self.control.specs.chars)+ " OR")
+                print(",".join(k+str(v['steps']) 
+                                for k,v in self.control.specs.chars.items())
+                       + " OR")
                 print("Example: A2, B1")
                 print("Enter \"q\" for quitting.")
                 # Read user input.
@@ -1126,17 +1135,10 @@ class ControlNode(NodeTemplate):
                 else:
                     print("Invalid input. Ignored \"action request\".")
                     raise ValueError
-                # Get current position
-                _, feedback = self.get_subs_values()
-                state_fb=self.control.process_robots(feedback,any_robot= False)
-                xi, theta_i = state_fb
-                msg_i = f"xi: [" + ",".join(f"{i:+07.2f}" for i in xi) + "]"
-                msg_i += f", theta_i: {np.rad2deg(theta_i):+07.2f}"
-                print(msg_i)
                 user_input = input("Enter \"y\" if you want to save data.\n")
                 save = 1 if re.match("y|Y",user_input) else -1
                 # Reset state
-                self.control.reset_state(pos = xi, theta = theta_i)
+                self.control.reset_state(pos = xi, theta = theta_i, mode= 1)
                 self.publish_field(field)
                 state = self.control.get_state()[:4]
                 self.rate.sleep()
@@ -1175,12 +1177,13 @@ class ControlNode(NodeTemplate):
                     except StopIteration as e:
                         # Get current position
                         field_fb, feedback = self.get_subs_values()
-                        state_fb = self.control.process_robots(feedback)
+                        state_fb = self.control.process_robots(feedback,False)
                         self.publish_logs(record= cnt*save, state= state,
                                           initial= xi, goal= xg,shape= shape)
                         self.rate.sleep()
                         _, feedback = self.get_subs_values()
-                        xf,theta_f = self.control.process_robots(feedback)
+                        xf,theta_f= self.control.process_robots(feedback,False)
+                        self.publish_field(field)
                         msg= f"xg: ["+",".join(f"{i:+07.2f}" for i in xg) 
                         msg+= "]\n"
                         msg+= f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf)
@@ -1188,7 +1191,7 @@ class ControlNode(NodeTemplate):
                         msg+= f", theta_f: {np.rad2deg(theta_f):+07.2f}"
                         print(e.value)
                         print(msg)
-                        time.sleep(2.0)
+                        time.sleep(10.0)
                         pass
                     except RuntimeError as exc:
                         print(type(exc).__name__,exc.args)
