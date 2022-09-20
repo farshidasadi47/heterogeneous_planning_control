@@ -522,6 +522,17 @@ class Planner():
                 print("Increase the steps.")
                 break
         return flag
+    
+    def _threshold_mode_sequence(self, U_raw, r_raw):
+        """
+        This function looks into a given raw solution, threshold it
+        and returns a new mode_sequence withouth thresholded modes.
+        The purpose of this function is to reduce unnecessary steps.
+        """
+        threshold= max(self.specs.tumbling_length,15.0)
+        U_raw= U_raw[:,r_raw[0,:]> threshold]
+        mode_sequence= U_raw[2,:].astype(int)
+        return U_raw, mode_sequence
 
     def _solve(self, xi, xf, U0, obj_act= 1):
         """
@@ -540,7 +551,7 @@ class Planner():
         isfeasible = self._isfeasible(UX_raw,g_raw)
         return sol, isfeasible
 
-    def solve(self, xi, xf, resolve= True):
+    def solve(self, xi, xf, resolve= True, threshold= False):
         """
         Solves the optimization problem, sorts and post processes the
         answer and returns the answer.
@@ -552,7 +563,6 @@ class Planner():
         xf: Numpy nd.array
             Final position of robots.
         """
-        threshold= np.ceil(self.specs.pivot_length.min())
         obj_act= 0 if resolve else 1.0
         # Solve unconstrained
         UU_raw, XU_raw, UUZ,  UU, XU= self.solve_unconstrained(xi, xf)
@@ -565,17 +575,26 @@ class Planner():
         U_raw, r_raw, X_raw, UZ, U, X = self._post_process_u(sol)
         print(r_raw.T)
         if resolve and isfeasible:
+            if threshold:
+                U0, mode_sequence= self._threshold_mode_sequence(U_raw, r_raw)
+                # Build mode sequence
+                self._set_mode_sequence(mode_sequence, 1)
+                # Build the optimization problem.
+                self._get_optimization(self.solver_name, self.boundary)
+            else:
+                U0= U_raw
             # Solve with non_constant objective.
-            sol_n, isfeasible_n= self._solve(xi,xf, U_raw, obj_act= 1.0)
+            sol_n, isfeasible_n= self._solve(xi,xf, U0, obj_act= 1.0)
             if isfeasible_n:
                 isfeasible= isfeasible_n
                 sol= sol_n
                 U_raw, r_raw, X_raw, UZ, U, X = self._post_process_u(sol)
+                print(r_raw.T)
         return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
     
     @classmethod
     def plan(cls,xg, outer_steps, mode_sequence, specs, 
-                                                  resolve= True,boundary=True):
+                                resolve= True,boundary=True, threshold= False):
         """
         Wrapper for planning class simplifying creation and calling
         process.
@@ -596,7 +615,8 @@ class Planner():
                                 solver_name='knitro', boundary=boundary)
         # Get new initial condition.
         xi = yield None
-        _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg,resolve)
+        _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg,resolve,
+                                                                 threshold)
         print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
         if not isfeasible:
             raise RuntimeError
