@@ -25,7 +25,7 @@ class Planner():
     """
 
     def __init__(self, specs, mode_sequence = None, steps = 3,
-                                          solver_name='ipopt', boundary=True):
+                             solver_name='ipopt', feastol= 3.5, boundary=True):
         """
         ----------
         Parameters
@@ -49,7 +49,7 @@ class Planner():
         self.rscoil = self.specs.rscoil
         self.lbg, self.ubg = [None]*2
         self.lbx, self.ubx = [None]*2
-        self.solver_opt = self._solvers()
+        self.solver_opt = self._solvers(feastol)
         self.boundary = boundary
         self.solver_name = solver_name
         # Build mode sequence
@@ -298,7 +298,7 @@ class Planner():
         self.solver = solver
         return solver
 
-    def _solvers(self):
+    def _solvers(self, feastol):
         """This function build a dictionary of different solvers and
         their corresponding options.
         """
@@ -335,7 +335,7 @@ class Planner():
         # Feasibility tolerance
         solvers['knitro']['opts']['knitro.feastol'] = 1000
         # This will be enforced.
-        solvers['knitro']['opts']['knitro.feastolabs'] = .1
+        solvers['knitro']['opts']['knitro.feastolabs'] = feastol
         return solvers
 
     @staticmethod
@@ -515,10 +515,10 @@ class Planner():
         counts= Counter(self.mode_sequence)
         flag= True
         for i, count in counts.items():
-            print(f'{i=}, {count=}')
             if (   (abs(UU_raw[0,i]) > width/count)
                 or (abs(UU_raw[1,i]) > height/count)):
                 flag= False
+                print(f'Might be infeasible in mode {i}, at {count} steps.')
                 print("Increase the steps.")
                 break
         return flag
@@ -593,7 +593,7 @@ class Planner():
         return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
     
     @classmethod
-    def plan(cls,xg, outer_steps, mode_sequence, specs, 
+    def plan(cls,xg, outer_steps, mode_sequence, specs, feastol,
                                 resolve= True,boundary=True, threshold= False):
         """
         Wrapper for planning class simplifying creation and calling
@@ -612,7 +612,7 @@ class Planner():
         """
         # Build planner
         planner = cls(specs, mode_sequence= mode_sequence, steps= outer_steps,
-                                solver_name='knitro', boundary=boundary)
+                     solver_name='knitro', feastol= feastol, boundary=boundary)
         # Get new initial condition.
         xi = yield None
         _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg,resolve,

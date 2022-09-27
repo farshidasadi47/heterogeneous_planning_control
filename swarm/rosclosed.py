@@ -294,7 +294,7 @@ class ShowVideo(NodeTemplate):
                 self.video_m_writer.close()
                 self.video_m_writer = None
         #
-        if self.recording:
+        if self.recording and (logs[0]<16777215):
             self._write_logs_and_video(img, img_m,logs)
     
     def _write_logs_and_video(self,img, img_m,logs):
@@ -1045,7 +1045,7 @@ class ControlNode(NodeTemplate):
                         state_fb = self.control.process_robots(feedback, False)
                     if from_control is None:
                         from_control = iterator.send(state_fb)
-                    field, input_cmd, xi, xg = from_control
+                    field, input_cmd, xi, xg, _ = from_control
                     field.append(self.control.power)
                     state = self.control.get_state()[:4]
                     self.print_stats(field, field_fb, state, state_fb,cnt)
@@ -1135,6 +1135,8 @@ class ControlNode(NodeTemplate):
                 else:
                     print("Invalid input. Ignored \"action request\".")
                     raise ValueError
+                user_input = input("Enter \"y\" to consider fine steps.\n")
+                fine_steps = True if re.match("y|Y",user_input) else False
                 user_input = input("Enter \"y\" if you want to save data.\n")
                 save = 1 if re.match("y|Y",user_input) else -1
                 # Reset state
@@ -1151,7 +1153,7 @@ class ControlNode(NodeTemplate):
                     steps= max(1,int(params[idx][1]))
                     print(shape)
                     print(f"xg: [" + ",".join(f"{i:+07.2f}" for i in xg) +"]")
-                    iterator = self.control.plan_line(xg, steps)
+                    iterator = self.control.plan_line(xg, steps, fine_steps)
                     self.rate.sleep()
                     try:
                         while True:
@@ -1161,18 +1163,23 @@ class ControlNode(NodeTemplate):
                             if abs(state[2]) <0.1:
                                 state_fb = self.control.process_robots(
                                                                feedback, False)
+                            # Send feedback if requested.
                             if from_control is None:
                                 from_control = iterator.send(state_fb)
-                            field, input_cmd, xi, xg = from_control
+                            field, input_cmd, xi, xg, pause_rec = from_control
+                            # Check if pause_record requested.
+                            if pause_rec:
+                                rec_cnt= 16777215
+                            else:
+                                rec_cnt= cnt
+                                cnt += 1
                             field.append(self.control.power)
                             state = self.control.get_state()[:4]
-                            #self.print_stats(field, field_fb, state, state_fb,cnt)
-                            self.publish_logs(record= cnt*save,
+                            self.publish_logs(record= rec_cnt*save,
                                               polar_cmd= input_cmd,
                                               state= state,
                                               initial= xi, goal= xg)
                             self.publish_field(field)
-                            cnt += 1
                             self.rate.sleep()
                     except StopIteration as e:
                         # Get current position

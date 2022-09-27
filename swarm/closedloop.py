@@ -6,6 +6,7 @@
 ########## Libraries ###################################################
 from collections import deque
 from math import remainder
+import re
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -841,7 +842,7 @@ class Controller():
                 if field is None:
                     state_fb = yield None
                     field = iterator.send(state_fb)
-                yield field, input_cmd, xi, xg
+                yield field, input_cmd, xi, xg, False
             xf = self.pos
             eg = xf - xg     # Realized general error.
             d = np.linalg.norm((xf - xi).reshape(-1,2), axis = 1)
@@ -866,8 +867,9 @@ class Controller():
                 std_ratio[i,:]= np.std(ratios[polar_cmd[:,2]==i],
                                                               axis=0)[:n_robot]
         cv_ratio= np.zeros_like(avg_ratio)
-        for cv, avg, std in zip(cv_ratio, avg_ratio, std_ratio):
-            cv= std/avg if np.all(avg!=0) else cv
+        for idx, (avg, std) in enumerate(zip(avg_ratio, std_ratio)):
+            if np.all(avg!=0):
+                cv_ratio[idx,:]= std/avg
         stat_ratio = np.hstack((avg_ratio, cv_ratio))
         #ratios = ratios[polar_cmd[:,2].argsort()]
         msg += "ratios:\n"
@@ -877,10 +879,25 @@ class Controller():
         msg += "\nthm_ratios:\n"
         msg += "\n".join(
                    ",".join(f"{i:+09.4f}" for i in j) for j in self.specs.beta)
-        msg += "\n"+"="*72
-        return msg
+        msg += "\n"+"="*72+"\n"
+        return msg, (field, input_cmd, xi, xg, False)
     
-    def plan_line(self, XG, outer_steps):
+    def _plan_line(self, XG, outer_steps, mode_sequence, feastol= 3.5):
+        """This is single iteration of plan_line."""
+        XG= np.around(XG,1)
+        plan = planner.Planner.plan(XG,outer_steps,mode_sequence,
+                                                           self.specs, feastol)
+        msg= ""
+        for polar_cmd in plan:
+            if polar_cmd is None:
+                polar_cmd = plan.send(self.pos)
+            iterator = self.closed_line(polar_cmd,average=True)
+            msg_i, from_control= yield from iterator
+            msg += msg_i
+        return msg, from_control
+
+
+    def plan_line(self, XG, outer_steps, fine_steps):
         """
         Plans swarm motion for a given goal and executes it.
         ----------
@@ -899,17 +916,34 @@ class Controller():
         ----------
         msg: string for showing statistics of the motion.
         """
-        XG= np.around(XG,1)
-        # Set up the planner.
-        mode_sequence = deque([0]) + self.mode_sequence
-        plan = planner.Planner.plan(XG,outer_steps,mode_sequence,self.specs)
+        tolerance= 5.0
+        mode_seq = deque([0]) + self.mode_sequence
         msg= ""
-        for polar_cmd in plan:
-            if polar_cmd is None:
-                polar_cmd = plan.send(self.pos)
-            iterator = self.closed_line(polar_cmd,average=True)
-            msg_i = yield from iterator
-            msg += msg_i
+        # Execute the first iteration.
+        feastol= 3.5 if fine_steps else 1.0
+        iterator= self._plan_line(XG, outer_steps, mode_seq, feastol)
+        msg_i, (field,input_cmd,xi,xg,_)= yield from iterator
+        msg += msg_i
+        # Execute fine step iterations.
+        feastol= 1.0
+        if fine_steps:
+            for i in range(1,10):
+                yield (field,input_cmd,xi,xg,True)
+                print(f"Trying fine steps iteration {i:01d}")
+                user_input = input("Enter \"y\" to take fine steps.\n")
+                fine_steps = True if re.match("y|Y",user_input) else False
+                if not fine_steps:
+                    break
+                for outer in range(1,outer_steps+1):
+                    try:
+                        iterator= self._plan_line(XG, outer, mode_seq,feastol)
+                        msg_i, (field,input_cmd,xi,xg,_)= yield from iterator
+                        msg += msg_i
+                        break
+                    except RuntimeError:
+                        pass
+                if outer == outer_steps:
+                    break
         return msg
 
 ########## test section ################################################
