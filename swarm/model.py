@@ -40,7 +40,7 @@ class SwarmSpecs:
                       theta_inc = np.deg2rad(5), alpha_inc = np.deg2rad(5),
                       rot_inc = np.deg2rad(5), pivot_inc = np.deg2rad(5),
                       tumble_inc = np.deg2rad(2), theta_sweep = np.deg2rad(30),
-                      alpha_sweep = np.deg2rad(30)):
+                      alpha_sweep = np.deg2rad(33)):
         msg = '\"pivot_length\" should be a 2D numpy array.'
         assert pivot_length.ndim == 2, msg
         msg = "Robots should have even number of sides."
@@ -79,14 +79,14 @@ class SwarmSpecs:
         self.uby = 90
         self.lbx = -self.ubx
         self.lby = -self.uby
-        self.rcoil = 90
+        self.rcoil = 95
         # Some parameters related to planning
         self.robot_pairs = list(combinations(range(self.n_robot),2))
         self.d_min = 20#self.tumbling_length*1.5
         # Adjusted space boundaries for planning.
-        self.ubsx = self.ubx-self.tumbling_length*1.5
+        self.ubsx = self.ubx-(self.tumbling_length+4)
         self.lbsx = -self.ubsx
-        self.ubsy = self.uby - self.tumbling_length*1.1
+        self.ubsy = self.uby - 10
         self.lbsy = -self.ubsy
         self.rscoil = self.rcoil - self.tumbling_length
         # Plotting and vision markers.
@@ -165,72 +165,78 @@ class SwarmSpecs:
                       'steps': 3}
         #
         chars5= dict()
-        chars5['*']= {'poses': [-80,  0, -40,  0,   0,  0,  40,  0,  80,  0],
+        chars5['*']= {'poses': [-60,  0, -30,  0,   0,  0,  30,  0,  60,  0],
                       'shape': [0,1, 1,2, 2,3, 3,4, 4,5],
                       'steps': 3}
-        chars5['A']= {'poses': [-30,-40, -15,  0,   0, 40,  15,  0,  30,-40],
-                      'shape': [0,1, 1,2, 1,3, 2,3, 3,4],
+        chars5['A']= {'poses': [  0, 40, -15,  0, -30,-40,  30,-40,  15,  0],
+                      'shape': [0,1, 0,4, 1,2, 1,4, 3,4],
+                      'steps': 5}
+        chars5['B']= {'poses': [-30,-40, -30,  0, -30, 40,  20, 20,  30 ,-30],
+                      'shape': [0,2, 0,4, 1,3, 1,4, 2,3],
                       'steps': 3}
-        chars5['B']= {'poses': [-30, 40, -30,  0, -30,-40,  20, 20,  30,-30],
-                      'shape': [0,1, 0,3, 1,4, 2,3, 2,4],
+        chars5['C']= {'poses': [-30,  0,   0, 40,  40, 40,   0,-40,  40,-40],
+                      'shape': [0,1, 0,3, 1,2, 3,4, 999,999],
                       'steps': 3}
-        chars5['C']= {'poses': [-30, 20, -30, -20,  0, 40,  30, 20,  30,-20],
-                      'shape': [0,1, 0,2, 1,3, 2,4, 999,999],
+        chars5['D']= {'poses': [-40, 40,   0, 40,  30,  0, -40,-40,   0,-40],
+                      'shape': [0,1, 0,3, 1,2, 2,4, 3,4],
                       'steps': 3}
-        chars5['D']= {'poses': [-30, 40, -30,-40,  10, 40,  10,-40,  30,  0],
-                      'shape': [0,1, 0,2, 1,3, 2,4, 3,4],
-                      'steps': 3}
-        chars5['F']= {'poses': [-30, 40, -30,  0, -30,-40,  10,  0,  30, 40],
+        chars5['E']= {'poses': [-30,-30, -30, 30, -10,  0,  30, 30,  30,-30],                               
+                      'shape': [0,2, 0,4, 1,2, 1,3, 999,999],
+                      'steps': 4}
+        chars5['F']= {'poses': [-30, 40, -30,  0, -30,-40,  15,  0,  30, 40],
                       'shape': [0,1, 0,4, 1,2, 1,3, 999,999],
                       'steps': 3}
-        chars5['I']= {'poses': [  0, 70,   0, 35,   0,  0,   0,-35,   0,-70],
+        chars5['I']= {'poses': [  0, 60,   0, 30,   0,  0,   0,-30,   0,-60],
+                      'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
+                      'steps': 4}
+        chars5['J']= {'poses': [-30,-20,   0,-40,  30, -20,  30, 20,  30, 60],
                       'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
                       'steps': 3}
-        chars5['J']= {'poses': [-30,-20,   0,-40,  30, 50,  30, 15,  30,-20],
-                      'shape': [0,1, 1,4, 2,3, 3,4, 999,999],
-                      'steps': 3}
-        chars5['K']= {'poses': [-30, 40, -30,  0, -30,-40,  20, 40,  30,-40],
+        chars5['K']= {'poses': [-30,-40, -30,  0, -30, 40,  30, 30,  30,-40],
                       'shape': [0,1, 1,2, 1,3, 1,4, 999,999],
-                      'steps': 3}
+                      'steps': 4}
         chars5['L']= {'poses': [-35, 50, -35,  0, -35,-50,   0,-50,  35,-50],
                       'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
                       'steps': 3}
-        chars5['M']= {'poses': [-20, 40, -30,-40,   0,-30,  30, 40,  20,-40],
-                      'shape': [0,1, 0,2, 2,3, 3,4, 999,999],
-                      'steps': 3}
-        chars5['N']= {'poses': [-30, 40, -30,-40,   0,  0,  30, 40,  30,-40],
-                      'shape': [0,1, 0,2, 2,4, 3,4, 999,999],
-                      'steps': 3}
-        chars5['O']= {'poses': [-30, 20, -30,-40,   0, 40,  30, 40, 30,-40],
-                      'shape': [0,1, 0,2, 1,4, 2,3, 3,4],
-                      'steps': 3}
-        chars5['P']= {'poses': [-30, 40, -30,  0, -30,-40,  30, 40,  30,  0],
-                      'shape': [0,1, 0,3, 1,2, 1,4, 3,4],
-                      'steps': 3}
-        chars5['R']= {'poses': [-30, 40, -30,  0, -30,-40,  30, 20,  30,-40],
-                      'shape': [0,1, 0,3, 1,2, 1,3, 1,4],
-                      'steps': 3}
-        chars5['S']= {'poses': [-30, 20, -30,-40,   0, 40,  30, 20,  30,-40],
-                      'shape': [0,2, 0,4, 1,4, 2,3, 999,999],
-                      'steps': 3}
-        chars5['T']= {'poses': [-40, 40,   0, 40,  40, 40,   0,  0, -40,  0],
-                      'shape': [0,1, 1,2, 1,4, 2,3, 999,999],
-                      'steps': 3}
-        chars5['U']= {'poses': [-30, 40, -30,-20,   0,-40,  30, 40,  30,-20],
-                      'shape': [0,1, 1,2, 2,4, 3,4, 999,999],
-                      'steps': 3}
-        chars5['V']= {'poses': [-30, 40, -15,  0,   0,-40,  15,  0,  30, 40],
+        chars5['M']= {'poses': [-50,-40, -30, 40,   0,  0,  30, 40,  50,-40],
                       'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
                       'steps': 3}
-        chars5['W']= {'poses': [-30, 40, -20,-40,   0,  0,  20, 40,  30,-40],
+        chars5['N']= {'poses': [-30,-40, -30, 40,   0,  0,  30, 40,  30,-40],
                       'shape': [0,1, 1,2, 2,4, 3,4, 999,999],
+                      'steps': 5}
+        chars5['O']= {'poses': [-40, 40, -40,-10,   0,-40,  40,-10,  40, 40],
+                      'shape': [0,1, 0,4, 1,2, 2,3, 3,4],
+                      'steps': 4}
+        chars5['P']= {'poses': [-30, 40, -30,  0, -30,-40,  10,  0,  10, 40],
+                      'shape': [0,1, 0,4, 1,2, 1,3, 3,4],
+                      'steps': 4}
+        chars5['R']= {'poses': [-30,-40, -30,  0, -30, 40,  20, 20,  30,-40],
+                      'shape': [0,1, 1,2, 1,3, 1,4, 2,3],
+                      'steps': 4}
+        chars5['S']= {'poses': [-30, 30,   0, 50,  30, 30, -30,-40,  30,-40],
+                      'shape': [0,1, 0,4, 1,2, 3,4, 999,999],
                       'steps': 3}
-        chars5['X']= {'poses': [-30, 40, -30,-40,   0,  0,  30, 40,  30,-40],
+        chars5['T']= {'poses': [-35, 35,   0, 35,  35, 35,   0,  0,  0,-35],
+                      'shape': [0,1, 1,2, 1,3, 3,4, 999,999],
+                      'steps': 4}
+        chars5['U']= {'poses': [-30,-30,   0,-50, 30,-30, -30, 30,  30, 30],
+                      'shape': [0,1, 0,3, 1,2, 2,4, 999,999],
+                      'steps': 3}
+        chars5['V']= {'poses': [-40, 40, -20,  0,   0,-40,  20,  0,  40, 40],
+                      'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
+                      'steps': 3}
+        chars5['W']= {'poses': [-50, 40, -30,-40,   0,  0,  30,-40,  50, 40],
+                      'shape': [0,1, 1,2, 2,3, 3,4, 999,999],
+                      'steps': 3}
+        chars5['X']= {'poses': [-30,-40, -30, 40,   0,  0,  30, 40,  30,-40],
                       'shape': [0,2, 1,2, 2,3, 2,4, 999,999],
-                      'steps': 3}
-        chars5['Z']= {'poses': [-30, 40, -30,-40, -10,  0,  20, 40,  30,-40],
-                      'shape': [0,3, 1,2, 1,4, 2,3, 999,999],
-                      'steps': 3}
+                      'steps': 5}
+        chars5['Y']= {'poses': [-35, 40,   0, 20,   0,-10,   0,-40,  35, 40],
+                      'shape': [0,1, 1,2, 2,3, 1,4, 999,999],
+                      'steps': 4}
+        chars5['Z']= {'poses': [-30,-40, -30, 40,   0,  0,  30, 40,  30,-40],
+                      'shape': [0,2, 0,4, 1,3, 2,3, 999,999],
+                      'steps': 5}
         #
         chars= {3: chars3, 4:chars4, 5: chars5}
         self.chars= chars.get(self.n_robot, 3)
@@ -285,24 +291,11 @@ class SwarmSpecs:
 
     @classmethod
     def robo5p(cls):
-        pivot_length = np.array([[6.36,4.76,4.67,4.69,6.31],
-                                 [4.66,4.73,4.72,6.71,6.31],
-                                 [4.59,4.68,6.49,6.70,4.70],
-                                 [4.70,6.71,6.56,4.81,4.80]])
-        pivot_length = np.array([[6.36,4.84,4.79,4.76,6.17],
-                                 [4.66,4.87,4.92,7.10,6.45],
-                                 [4.59,4.75,6.65,6.82,4.66],
-                                 [4.70,6.99,6.67,4.79,4.51]])
-        return cls(pivot_length,14.16)
-        """ pivot_length= np.array([[7.17,4.84,4.72,4.80,6.99],
-                                [4.80,4.74,4.72,7.07,7.00],
-                                [4.72,4.76,7.17,7.03,4.71],
-                                [4.77,7.03,7.27,4.75,4.72]]) """
-        """ pivot_length= np.array([[7.17,4.80,4.82,4.84,7.00],
-                                [4.80,4.72,4.83,7.16,7.10],
-                                [4.72,4.72,7.15,7.08,4.68],
-                                [4.77,7.22,7.22,4.77,4.65]])
-        return cls(pivot_length, 13.78) """
+        pivot_length = np.array([[4.80,7.90,7.90,4.90,4.80],
+                                 [8.00,8.00,4.90,4.90,4.90],
+                                 [8.00,4.90,4.90,5.00,8.10],
+                                 [5.00,5.00,5.10,8.00,8.20]])
+        return cls(pivot_length,15.24)
 
     @classmethod
     def robo(cls, n_robot):
@@ -683,19 +676,19 @@ def main5p():
     xi = np.array([-60,0,-30,0,0,0,30,0,60,0],dtype= float)
     mode = 1
     swarm = Swarm(xi, 0, mode, specs)
-    input_series = np.array([[4*14,-np.pi/2,0],
-                             [100,np.pi/2,1],
+    input_series = np.array([[4*15.24,-np.pi/2,0],
+                             [80,np.pi/2,1],
                              [10,0,-2],
-                             [6*14,-np.pi/2,0],
-                             [50,np.pi*3/4,2],
-                             [10,0,-3],
-                             [50,0,3],
-                             [10,np.pi/2,-4],
-                             [50,np.pi*4/4,4],
+                             [4*15.24,-np.pi/2,0],
+                             [50,np.pi/2,2],
+                             [10,np.pi,-3],
+                             [45,-np.pi/2,3],
+                             [10,np.pi,-4],
+                             [40,np.pi/2,4],
                             ]).T
     length = 10000
     swarm.simplot(input_series,length, boundary=False, last_section=False)
     #anim = swarm.simanimation(input_series,length,boundary=False, last_section=True, save = False)
 ########## test section ################################################
 if __name__ == '__main__':
-    main4p()
+    main5p()

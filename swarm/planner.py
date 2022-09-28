@@ -666,21 +666,25 @@ def main3():
 
 def main5p():
     outer = 1
-    boundary = True#False#
+    boundary = True
     last_section = False
-    mode_sequence= [1,2,3,4,0]*3
+    mode_sequence= [0,1,2,3,4]*4
     specs = model.SwarmSpecs.robo(5)
-    specs.bc_tol= 0
-    specs.d_min= 8
-    xi = specs.get_letter('*', ang= 0, roll= 0)[0]*3/4.0
-    xf= specs.get_letter('T', ang= 0, roll= 0)[0]
+    scale= 1.0#3.0/4.0
+    xi = specs.get_letter('*', ang= 0, roll= 0)[0]*scale
+    xf = specs.get_letter('R', ang= 0, roll= 0)[0]*scale
+    #xi= np.array([-033.91,+030.73,-002.33,+045.42,+033.42,+028.77,-030.12,-042.60,+032.24,-037.84])
+    #xi= np.array([-031.37,-034.74,-030.59,+000.13,-027.67,+038.20,+019.83,+018.12,+028.40,-041.87])
+    print(xi)
     print(xf)
     swarm = model.Swarm(xi, 0, 1, specs)
-    resolve = False
-    planner = Planner.plan(xf,outer,mode_sequence,specs,resolve,boundary)
+    resolve = True
+    threshold= False
+    planner = Planner.plan(xf,outer,mode_sequence,specs,3.5, resolve,boundary, threshold)
     U = next(planner)
     if U is None:
         U = planner.send(xi)
+        print(U)
         U = U.T
     swarm.reset_state(xi,0,1)
     #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
@@ -688,36 +692,37 @@ def main5p():
     swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
 
 def main5o():
-    outer = 3
+    outer = 1
     boundary = True
     last_section = False
-    mode_sequence= [1,2,3,4,0]
-    a= 9.0
+    mode_sequence= [0,1,2,3,4]*3
+    a= 8.0
     b= 5.0
     pivot_length = np.array([[b, a, a, b, b],
                              [a, a, b, b, b],
                              [a, b, b, b, a],
                              [b, b, b, a, a]])
-    """pivot_length= np.array([[5.00, 9.00, 5.00, 5.00, 9.00],
-                            [9.00, 5.00, 5.00, 9.00, 5.00],
-                            [5.00, 5.00, 9.00, 5.00, 9.00],
-                            [5.00, 9.00, 5.00, 9.00, 5.00]])"""
-    specs = model.SwarmSpecs(pivot_length,13.63)
+    pivot_length = np.array([[4.80,7.90,7.90,4.90,4.80],
+                             [8.00,8.00,4.90,4.90,4.90],
+                             [8.00,4.90,4.90,5.00,8.10],
+                             [5.00,5.00,5.10,8.00,8.20]])
+
+    specs = model.SwarmSpecs(pivot_length,15.24)
     #specs= model.SwarmSpecs.robo5p()
-    #specs.ubx = 150
-    #specs.uby = 115
+    #specs.ubx = 115*1.0
+    #specs.uby = 90*1.0
     #specs.lbx = -specs.ubx
     #specs.lby = -specs.uby
     specs.d_min= 20
-    #specs.rcoil = 90*1
-    #specs.ubsx = specs.ubx - specs.tumbling_length*1.5
+    #specs.rcoil = 95*1.0
+    #specs.ubsx = specs.ubx - (specs.tumbling_length+4)#*1.5
     #specs.lbsx = -specs.ubsx
-    #specs.ubsy = specs.uby - specs.tumbling_length*1.1
+    #specs.ubsy = specs.uby - 10#specs.tumbling_length*1.1
     #specs.lbsy = -specs.ubsy
     #specs.rscoil = specs.rcoil - specs.tumbling_length
-    scale= 3.0/4.0
-    xi = specs.get_letter('*', ang= 0, roll= 0)[0]*scale
-    xf= specs.get_letter('F', ang= 0, roll= 0)[0]*3.0/4.0
+    scale= 1.0
+    xi = specs.get_letter('*', ang= 0, roll= 0)[0]#*scale
+    xf= specs.get_letter('S', ang= 0, roll= 0)[0]
     A = np.array([-15,0]+[-15,30]+[0,60]+[15,30]+ [15,0])
     A= np.array([-40,-40, -40,  0,   0, 40,  40,  0,  40,-40],dtype= float)
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
@@ -726,11 +731,12 @@ def main5o():
     print(xi)
     print(xf)
     swarm = model.Swarm(xi, 0, 1, specs)
-    resolve = False
-    planner = Planner.plan(xf,outer,mode_sequence,specs,resolve,boundary)
+    resolve = True
+    planner = Planner.plan(xf,outer,mode_sequence,specs,3.5, resolve,boundary)
     U = next(planner)
     if U is None:
         U = planner.send(xi)
+        print(U)
         U = U.T
     swarm.reset_state(xi,0,1)
     #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
@@ -739,7 +745,7 @@ def main5o():
 ########## test section ################################################
 if __name__ == '__main__':
     try:
-        main5o()
+        main5p()
         pass
     except RuntimeError:
         pass
