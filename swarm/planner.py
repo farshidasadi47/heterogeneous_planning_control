@@ -437,11 +437,13 @@ class Planner():
         to be used as initial guess."""
         n_mode = self.specs.n_mode
         n_robot = self.specs.n_robot
-        B = np.zeros((2*n_robot,2*n_mode))
-        for mode in range(n_mode):
+        B = np.zeros((2*n_robot,2*n_robot))
+        for mode in range(n_robot):
             B[:,2*mode:2*mode +2] = self.specs.B[mode,:,:]
         UU_raw = np.dot(np.linalg.inv(B),xf - xi)
-        UU_raw = np.reshape(UU_raw,(-1,2)).T
+        if n_robot< n_mode:
+            UU_raw= np.append(UU_raw, (n_mode-n_robot)*[0.0,0.0])
+        UU_raw = np.reshape(UU_raw,(-1,2)).T  
         UU_raw= np.roll(np.vstack((UU_raw, range(n_mode))),-1,axis= 1)
         XU_raw= np.zeros((2*n_robot,n_mode+1))
         XU_raw[:,0]= xi
