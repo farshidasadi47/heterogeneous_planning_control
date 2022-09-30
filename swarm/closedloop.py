@@ -897,7 +897,7 @@ class Controller():
         return msg, from_control
 
 
-    def plan_line(self, XG, outer_steps, fine_steps):
+    def plan_line(self, XG, outer_steps, fine_steps, feastol=3.5):
         """
         Plans swarm motion for a given goal and executes it.
         ----------
@@ -920,7 +920,7 @@ class Controller():
         mode_seq = deque([0]) + self.mode_sequence
         msg= ""
         # Execute the first iteration.
-        feastol= 3.5 if fine_steps else 1.0
+        feastol= feastol if fine_steps else 1.0
         iterator= self._plan_line(XG, outer_steps, mode_seq, feastol)
         msg_i, (field,input_cmd,xi,xg,_)= yield from iterator
         msg += msg_i

@@ -1135,6 +1135,13 @@ class ControlNode(NodeTemplate):
                 else:
                     print("Invalid input. Ignored \"action request\".")
                     raise ValueError
+                # Get initial feasibility tolerance.
+                user_input = input("Enter initial feasibility tolerance.\n")
+                if re.fullmatch(r"[+]?\d(\.\d+)+", user_input):
+                    feastol = float(user_input)
+                else:
+                    feastol= 3.5
+                # Get other user inputs.
                 user_input = input("Enter \"y\" to consider fine steps.\n")
                 fine_steps = True if re.match("y|Y",user_input) else False
                 user_input = input("Enter \"y\" if you want to save data.\n")
@@ -1153,7 +1160,8 @@ class ControlNode(NodeTemplate):
                     steps= max(1,int(params[idx][1]))
                     print(shape)
                     print(f"xg: [" + ",".join(f"{i:+07.2f}" for i in xg) +"]")
-                    iterator = self.control.plan_line(xg, steps, fine_steps)
+                    iterator = self.control.plan_line(xg, steps, fine_steps,
+                                                                 feastol)
                     self.rate.sleep()
                     try:
                         while True:
