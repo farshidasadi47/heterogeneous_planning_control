@@ -105,18 +105,18 @@ class Localization():
             hsv_ranges['k'] = {'lb': [np.array([  0,  0,  0],dtype=np.uint8)],
                                'ub': [np.array([179,255, 70],dtype=np.uint8)]}
             # Red or 'r'
-            hsv_ranges['r'] = {'lb': [np.array([  0,100, 80],dtype=np.uint8),
-                                      np.array([175,100, 80],dtype=np.uint8)],
+            hsv_ranges['r'] = {'lb': [np.array([  0,100, 50],dtype=np.uint8),
+                                      np.array([175,100, 50],dtype=np.uint8)],
                                'ub': [np.array([ 20,255,255],dtype=np.uint8),
                                       np.array([179,255,255],dtype=np.uint8)]}
             # Blue or 'b0
             hsv_ranges['b'] = {'lb': [np.array([ 90,140, 60],dtype=np.uint8)],
                                'ub': [np.array([115,255,255],dtype=np.uint8)]}
             # Green or 'g'
-            hsv_ranges['g'] = {'lb': [np.array([ 30, 70, 80],dtype=np.uint8)],
-                               'ub': [np.array([ 55,255,255],dtype=np.uint8)]}
+            hsv_ranges['g'] = {'lb': [np.array([ 35, 70, 80],dtype=np.uint8)],
+                               'ub': [np.array([ 65,255,255],dtype=np.uint8)]}
             # White or 'm'
-            hsv_ranges['m'] = {'lb': [np.array([155, 80, 80],dtype=np.uint8)],
+            hsv_ranges['m'] = {'lb': [np.array([155, 80, 70],dtype=np.uint8)],
                                'ub': [np.array([175,255,255],dtype=np.uint8)]}
         #
         self._hsv_ranges = hsv_ranges
