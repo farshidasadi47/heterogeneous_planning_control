@@ -654,10 +654,43 @@ def main3():
     #sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf)
     #print(isfeasible)
     resolve = True
-    planner = Planner.plan(xf,outer,mode_sequence,specs,resolve,boundary)
+    planner = Planner.plan(xf,outer,mode_sequence,specs,3.5, resolve,boundary)
     U = next(planner)
     if U is None:
         U = planner.send(xi)
+        print(U)
+        U = U.T
+    swarm.reset_state(xi,0,1)
+    #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
+    swarm.reset_state(xi,0,1)
+    swarm.simplot(U,1000,boundary=boundary,last_section=last_section)
+
+def main4p():
+    outer = 1
+    boundary = True
+    last_section = False
+    mode_sequence= [0,1,2,3,4]*3
+    specs= model.SwarmSpecs.robo(4)
+    scale= 1#3.0/4.0
+    xi = specs.get_letter('*', ang= 0, roll= 0)[0]*scale
+    xf = specs.get_letter('Z', ang= 0, roll= 2)[0]*scale
+    A = np.array([-15,0]+[-15,30]+[0,60]+[15,30]+ [15,0])
+    A= np.array([-40,-40, -40,  0,   0, 40,  40,  0,  40,-40],dtype= float)
+    F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
+    M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
+    Y= np.array([ 0,0.0, 0,-50, 30,40, -30,40])
+    #xf= Y
+    #xf= np.array([20.0,0.0, -20.0,0, -40,0, 40,0])
+    print(xi)
+    print(xf)
+    swarm = model.Swarm(xi, 0, 1, specs)
+    resolve = True
+    threshold= False
+    planner = Planner.plan(xf,outer,mode_sequence,specs,3.5, resolve,boundary,threshold)
+    U = next(planner)
+    if U is None:
+        U = planner.send(xi)
+        print(U)
         U = U.T
     swarm.reset_state(xi,0,1)
     #anim =swarm.simanimation(U,1000,boundary=boundary,last_section=last_section,save = False)
