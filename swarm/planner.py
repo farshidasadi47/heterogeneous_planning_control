@@ -625,25 +625,25 @@ class Planner():
         yield U.T
         return planner
 
-def main3():
+def main3p():
     outer = 3
     boundary = True
     last_section = False
 
-    pivot_length = np.array([[10,9,8],[9,8,10]])
-    mode_sequence= [1,2,0]
-    specs=model.SwarmSpecs(pivot_length,10)
+    #pivot_length = np.array([[10,9,8],[9,8,10]])
+    mode_sequence= [0,1,2]
+    #specs=model.SwarmSpecs(pivot_length,10)
     specs = model.SwarmSpecs.robo(3)
-    xi = specs.get_letter('1',0)[0]
-    #xf = specs.get_letter('C',360)[0]
+    xi = specs.get_letter('e', ang= 0, roll= 0)[0]
+    xf = specs.get_letter('f', ang= 0, roll= 0)[0]
     s1 = np.array([-30,  0,   0,  0, +30,  0],dtype=float)
     s2 = np.array([+30,+30,   0,  0,   0,+30],dtype=float)
     s3 = np.array([-30,  0, -30,-30,   0,  0],dtype=float)
     s4 = np.array([  0,  0,   0,-30, -30,-30],dtype=float)
     s5 = np.array([+30,-30,   0,  0,  30,  0],dtype=float)
     s6 = np.array([  0,  0, +30,  0, -30,  0],dtype=float)
-    xi = s4*4/3
-    xf = s5*4/3
+    #xi = s2*4/3
+    #xf = s5*4/3
     swarm = model.Swarm(xi, 0, 1, specs)
     #planner = Planner(specs, mode_sequence , steps = outer,
     #                        solver_name='knitro', boundary=boundary)
@@ -778,7 +778,7 @@ def main5o():
 ########## test section ################################################
 if __name__ == '__main__':
     try:
-        main5p()
+        main3p()
         pass
     except RuntimeError:
         pass
