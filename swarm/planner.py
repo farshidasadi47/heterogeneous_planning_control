@@ -272,7 +272,7 @@ class Planner():
         obj = 0
         for idx, mode in enumerate(range(n_mode_seq)):
             u = U[:,idx]
-            obj+= (idx//n_mode)**2*ca.sum1(u*u)#(idx//n_mode)**2*ca.norm_inf(u)#
+            obj+= (idx//n_mode)**1*ca.sum1(u*u)#(idx//n_mode)**2*ca.norm_inf(u)#
         """ for i in range(U.shape[1]):
             u = U[:,i]
             obj += ca.sum1(u*u) """
@@ -315,9 +315,11 @@ class Planner():
         
         # Debuging info level.
         solvers['knitro']['opts']['knitro.debug'] = 0
+        solvers['knitro']['opts']['knitro.alg'] = 3
+        #solvers['knitro']['opts']['knitro.ma_terminate'] = 1
         # Printing level.
-        solvers['knitro']['opts']['knitro.outlev'] = 0
-        solvers['knitro']['opts']['knitro.outmode'] = 0
+        #solvers['knitro']['opts']['knitro.outlev'] = 0
+        #solvers['knitro']['opts']['knitro.outmode'] = 0
         # Max time for each start point in seconds
         solvers['knitro']['opts']['knitro.maxtime_real'] = 3
         # Choose multistart.
@@ -386,7 +388,7 @@ class Planner():
         U_raw= np.vstack((U_raw,mode_seq))
         r_raw= np.zeros_like(U_raw)
         r_raw[2,:]= mode_seq
-        X_raw = np.zeros((2*n_robot, 2*n_mode_seq + 1))
+        X_raw = np.zeros((2*n_robot, n_mode_seq + 1))
         X_raw[:,0]= xi
         UZ = np.zeros((3,2*n_mode_seq))
         X = np.zeros((2*n_robot, 2*n_mode_seq + 1))
