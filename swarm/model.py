@@ -74,21 +74,10 @@ class SwarmSpecs:
             dist = (self.tumbling_length
                    *np.sqrt(2-2*np.cos(self.mode_rel_ang[i])))/2
             self.mode_rel_length.append(dist)
-        # Space boundaries
-        self.ubx = 115
-        self.uby = 90
-        self.lbx = -self.ubx
-        self.lby = -self.uby
-        self.rcoil = 95
         # Some parameters related to planning
         self.robot_pairs = list(combinations(range(self.n_robot),2))
         self.d_min = 20#self.tumbling_length*1.5
-        # Adjusted space boundaries for planning.
-        self.ubsx = self.ubx-(self.tumbling_length+4)
-        self.lbsx = -self.ubsx
-        self.ubsy = self.uby - 10
-        self.lbsy = -self.ubsy
-        self.rscoil = self.rcoil - self.tumbling_length
+        self.set_space()
         # Plotting and vision markers.
         define_colors(self)
         self._colors = list(self._colors.keys())
@@ -104,6 +93,31 @@ class SwarmSpecs:
         self.bc_tol = 0*2.0
         # Drawing latters
         self._set_letters()
+
+    def set_space(self, *, ubx= 115, lbx= -115, uby= 90, lby= -90, rcoil= 100):
+        """
+        Sets space boundaries available.
+        ----------
+        Parameters
+        ----------
+        ubx: x axis upper limit
+        lbx: x axis lower limit
+        uby: y axis upper limit
+        lby: y axis lower limit
+        rcoil: radius of small magnetic coil
+        """
+        # Space boundaries
+        self.ubx = ubx
+        self.uby = uby
+        self.lbx = lbx
+        self.lby = lby
+        self.rcoil = rcoil
+        # Adjusted space boundaries for planning.
+        self.ubsx = self.ubx-(self.tumbling_length+4)
+        self.lbsx = self.lbx+(self.tumbling_length+4)
+        self.ubsy = self.uby - 10
+        self.lbsy = self.lby + 10
+        self.rscoil = self.rcoil - self.tumbling_length
 
     def _set_letters(self):
         chars3= dict()
@@ -423,8 +437,8 @@ class Swarm:
     def _simplot_set(self, ax, boundary = False):
         """Sets the plot configuration. """
         if boundary is True:
-            ax.set_ylim([-self.specs.uby,self.specs.uby])
-            ax.set_xlim([-self.specs.ubx,self.specs.ubx])
+            ax.set_ylim([self.specs.lby,self.specs.uby])
+            ax.set_xlim([self.specs.lbx,self.specs.ubx])
         ax.set_title('Swarm transition')
         ax.set_xlabel('x axis')
         ax.set_ylabel('y axis')
@@ -530,10 +544,10 @@ class Swarm:
             ax.add_patch(rect)
             ax.add_patch(circle)
         # Draw usable space boundaries
-        rectangle = plt.Rectangle([-(self.specs.ubx-tumbling_length/2),
-                                   -(self.specs.uby-tumbling_length/2)],
-                                  2*(self.specs.ubx-tumbling_length/2),
-                                  2*(self.specs.uby-tumbling_length/2),
+        rectangle = plt.Rectangle([self.specs.lbx+tumbling_length/2,
+                                   self.specs.lby+tumbling_length/2],
+                                 self.specs.ubx-self.specs.lbx-tumbling_length,
+                                 self.specs.uby-self.specs.lby-tumbling_length,
                                   linestyle='--', linewidth=1,
                                   edgecolor='k', facecolor='none')
         coil = plt.Circle((0,0),radius=self.specs.rcoil,
