@@ -1099,6 +1099,8 @@ class ControlNode(NodeTemplate):
         chars = "".join(char for char in self.control.specs.chars)
         regex_ltr = r"[%s]\d((, *| +)[%s]\d)* *" %(chars, chars)
         field = [0.0,0.0,0.0]
+        # original space boundaries.
+        oubx, olbx= self.control.specs.ubx, self.control.specs.lbx
         self.rate.sleep()
         if self.cmd_mode == "idle":
             self.cmd_mode == "busy"
@@ -1126,21 +1128,49 @@ class ControlNode(NodeTemplate):
                     raise ValueError
                 elif re.fullmatch(regex_num, in_str):
                     params =list(map(float,re.split(r", *| +",in_str)))
-                    goals = [(np.array(params),None, 3)]
+                    # Get shape.
+                    in_str = input("Enter shape indices: ").strip()
+                    regex_cr= r'((\d(, *| +)){2})*(\d(, *| +)\d)'
+                    if re.fullmatch(regex_cr,in_str) is not None:
+                        shape =np.array(
+                                  list(map(int,re.split(r", *| +",in_str))))
+                        if np.any(shape>=self.control.specs.n_robot):
+                            raise ValueError("Wrong input.")
+                        shape= shape[:2*self.control.specs.n_robot]
+                        shape_append= self.control.specs.n_robot-len(shape)//2
+                        shape= np.append(shape, [999]*shape_append*2)
+                    else:
+                        shape= None
+                    # Get number of steps.
+                    in_str = input("Enter number of steps: ").strip()
+                    if re.match(r'[+]?\d+',in_str) is not None:
+                        steps= int(in_str)
+                    else:
+                        raise ValueError("Wrong input.")
+                    goals = [(np.array(params),shape, steps)]
                 elif re.fullmatch(regex_ltr, in_str):
                     params = [c for c,_ in groupby(re.split(r", *| +",in_str))]
-                    goals= [
+                    goals_raw= [
                         self.control.specs.get_letter(c[0])
                         for c in params]
+                    goals= [(g[0],g[1],max(1,int(p[1]))) 
+                                       for g,p in zip(goals_raw,params)]
                 else:
                     print("Invalid input. Ignored \"action request\".")
                     raise ValueError
                 # Get initial feasibility tolerance.
                 user_input = input("Enter initial feasibility tolerance.\n")
-                if re.fullmatch(r"[+]?\d(\.\d+)+", user_input):
+                if re.fullmatch(r"[+]?\d+(\.\d*)?", user_input):
                     feastol = float(user_input)
                 else:
                     feastol= 3.5
+                # Get space bounds.
+                user_input= "Enter lbx, ubx or press enter to use default.\n"
+                user_input = input(user_input)
+                regex_cr= r"([+-]?\d+(\.\d*)*)(, *| +)([+-]?\d+(\.\d*)*)"
+                if re.fullmatch(regex_cr, user_input):
+                    lbx, ubx= list(map(float,re.split(r", *| +",user_input)))
+                    self.control.specs.set_space(lbx= lbx, ubx= ubx)
                 # Get other user inputs.
                 user_input = input("Enter \"y\" to consider fine steps.\n")
                 fine_steps = True if re.match("y|Y",user_input) else False
@@ -1156,8 +1186,7 @@ class ControlNode(NodeTemplate):
                 for idx, goal in enumerate(goals):
                     print("*"*72)
                     print(f"Running plan {idx+1:02d} of {n_goal:02d}.")
-                    xg, shape, _ = goal
-                    steps= max(1,int(params[idx][1]))
+                    xg, shape, steps = goal
                     print(shape)
                     print(f"xg: [" + ",".join(f"{i:+07.2f}" for i in xg) +"]")
                     iterator = self.control.plan_line(xg, steps, fine_steps,
@@ -1228,6 +1257,7 @@ class ControlNode(NodeTemplate):
         # Neutral magnetic field.
         goal_handle.succeed()
         result = RotateAbsolute.Result()
+        self.control.specs.set_space(lbx= olbx, ubx= oubx)
         self.publish_logs(record = 0)
         self.publish_field([0.0]*3)
         self.cmd_mode = "idle"
