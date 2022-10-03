@@ -1010,8 +1010,15 @@ class ControlNode(NodeTemplate):
                              [50,np.pi/4,0],
                              [10,np.pi/4,-1],
                              ])
+        polar_cmd= np.array([[8*self.control.specs.tumbling_length,np.pi,0],
+                             ])
+        shape= [0,1, 1,2, 999,999, 999,999, 999,999]
+        shape= shape[:2*self.control.specs.n_robot]
         field = [0.0,0.0,0.0]
-        mode_s= polar_cmd[polar_cmd[:,2]>0,2][0]
+        if polar_cmd[polar_cmd[:,2]>0,2].size:
+            mode_s= polar_cmd[polar_cmd[:,2]>0,2][0]
+        else:
+            mode_s= 1
         self.rate.sleep()
         if self.cmd_mode == "idle":
             self.cmd_mode == "busy"
@@ -1048,7 +1055,7 @@ class ControlNode(NodeTemplate):
                     field, input_cmd, xi, xg, _ = from_control
                     field.append(self.control.power)
                     state = self.control.get_state()[:4]
-                    self.print_stats(field, field_fb, state, state_fb,cnt)
+                    #self.print_stats(field, field_fb, state, state_fb,cnt)
                     self.publish_logs(record = cnt*save, polar_cmd=input_cmd,
                                       state = state, initial=xi, goal=xg)
                     self.publish_field(field)
@@ -1057,19 +1064,21 @@ class ControlNode(NodeTemplate):
             except StopIteration as e:
                 # Get current position
                 field_fb, feedback = self.get_subs_values()
-                state_fb = self.control.process_robots(feedback)
-                self.print_stats(field, field_fb, state, state_fb,cnt)
+                state_fb = self.control.process_robots(feedback,False)
+                self.publish_logs(record= cnt*save, state= state,
+                                    initial= xi, goal= xg,shape= shape)
                 self.rate.sleep()
-                time.sleep(2.0)
                 _, feedback = self.get_subs_values()
-                xf, theta_f = self.control.process_robots(feedback)
-                msg = f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf) + "]"
-                msg += f", theta_f: {np.rad2deg(theta_f):+07.2f}"
+                xf,theta_f= self.control.process_robots(feedback,False)
+                self.publish_field(field)
+                msg= f"xg: ["+",".join(f"{i:+07.2f}" for i in xg) 
+                msg+= "]\n"
+                msg+= f"xf: [" + ",".join(f"{i:+07.2f}" for i in xf)
+                msg+= "]"
+                msg+= f", theta_f: {np.rad2deg(theta_f):+07.2f}"
+                print(e.value[0])
                 print(msg)
-                print(e.value)
-                self.publish_logs(record = 0)
-                self.publish_field([0.0]*3)
-                self.rate.sleep()
+                time.sleep(10.0)
                 pass
             except KeyboardInterrupt:
                 pass
