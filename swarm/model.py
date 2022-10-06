@@ -291,9 +291,9 @@ class SwarmSpecs:
     
     @classmethod
     def robo3p(cls):
-        pivot_length = np.array([[7.78,5.85,4.49],[6.37,4.39,7.46]])
-        #pivot_length = np.array([[8,5,5.0],[5,8,5.0]])
-        return cls(pivot_length,11.40)
+        pivot_length = np.array([[8.46,6.61,4.79],[6.67,4.75,8.18]])
+        #pivot_length = np.array([[7.54,4.84,4.69],[4.84,7.49,4.75]])
+        return cls(pivot_length,11.44)#10.59)#
     
     @classmethod
     def robo4p(cls):

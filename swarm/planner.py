@@ -628,7 +628,7 @@ class Planner():
         return planner
 
 def main3p():
-    outer = 3
+    outer = 4
     boundary = True
     last_section = False
 
@@ -636,6 +636,7 @@ def main3p():
     mode_sequence= [0,1,2]
     #specs=model.SwarmSpecs(pivot_length,10)
     specs = model.SwarmSpecs.robo(3)
+    specs.set_space(ubx=-3, lbx= -115, rcoil= 100)
     xi = specs.get_letter('e', ang= 0, roll= 0)[0]
     xf = specs.get_letter('f', ang= 0, roll= 0)[0]
     s1 = np.array([-30,  0,   0,  0, +30,  0],dtype=float)
@@ -646,6 +647,13 @@ def main3p():
     s6 = np.array([  0,  0, +30,  0, -30,  0],dtype=float)
     #xi = s2*4/3
     #xf = s5*4/3
+    xi = np.array([+40,+30, +40,  0, +40,-30],dtype=float)
+    xf = np.array([+25,+10, +55,-10, +85,+10],dtype=float)
+    xi = np.array([-70,+10, -40,-10, -10,+10],dtype=float)
+    xf = np.array([-40,+30, -40,  0, -40,-30],dtype=float)
+    #xf = np.array([+026.20,+011.02,+054.60,-010.77,+083.74,+009.79],dtype=float)
+    #xi = np.array([-065.13,+012.24,-039.18,-006.37,-008.81,+013.71],dtype=float)
+    
     swarm = model.Swarm(xi, 0, 1, specs)
     #planner = Planner(specs, mode_sequence , steps = outer,
     #                        solver_name='knitro', boundary=boundary)
