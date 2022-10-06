@@ -4,9 +4,9 @@
     The pin connection are Arduino Uno compatible.
     The "Coil" class is designed specifically to work with the following
     drivers connected to the specified pins.
-    1- Pins 2,3 to Roboteq sdc2160s at 30.6 Volts.
-    2- Pins 4,5 to Roboteq sdc2160s at 43.05 Volts.
-    3- Pins 8,9,10 to Pololu VNH5019 Motor Driver 24v24 at 20.2 Volts.
+    1- Pins 2,3 to Roboteq sdc2160s at 34 Volts.
+    2- Pins 4,5 to Roboteq sdc2160s at 48 Volts.
+    3- Pins 8,9,10 to Pololu VNH5019 Motor Driver 24v24 at 22 Volts.
     Positive directions are considerred from terminal A to B of drivers.
     Author: Farshid Asadi, farshidasadi47@yahoo.com
     August 2022.
