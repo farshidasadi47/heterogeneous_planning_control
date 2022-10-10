@@ -1010,9 +1010,9 @@ class ControlNode(NodeTemplate):
                              [50,np.pi/4,0],
                              [10,np.pi/4,-1],
                              ])
-        polar_cmd= np.array([[8*self.control.specs.tumbling_length,np.pi,0],
+        polar_cmd= np.array([[6*self.control.specs.tumbling_length,np.pi,0],
                              ])
-        shape= [0,1, 1,2, 999,999, 999,999, 999,999]
+        shape= [0,1, 1,2, 2,3, 999,999, 999,999]
         shape= shape[:2*self.control.specs.n_robot]
         field = [0.0,0.0,0.0]
         if polar_cmd[polar_cmd[:,2]>0,2].size:

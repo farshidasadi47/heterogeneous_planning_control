@@ -272,7 +272,7 @@ class Planner():
         obj = 0
         for idx, mode in enumerate(range(n_mode_seq)):
             u = U[:,idx]
-            obj+= (idx//n_mode)**1*ca.sum1(u*u)#(idx//n_mode)**2*ca.norm_inf(u)#
+            obj+= (idx//n_mode)**0*ca.sum1(u*u)#(idx//n_mode)**2*ca.norm_inf(u)#
         """ for i in range(U.shape[1]):
             u = U[:,i]
             obj += ca.sum1(u*u) """
@@ -679,16 +679,21 @@ def main4p():
     outer = 1
     boundary = True
     last_section = False
-    mode_sequence= [0,1,2,3,4]*3
+    mode_sequence= [0,1,2,3,4]*4
     specs= model.SwarmSpecs.robo(4)
+    specs.set_space(ubx= -3, lbx= -115, rcoil= 100)
     scale= 1#3.0/4.0
     xi = specs.get_letter('*', ang= 0, roll= 0)[0]*scale
-    xf = specs.get_letter('Z', ang= 0, roll= 2)[0]*scale
+    xf = specs.get_letter('Z', ang= 0, roll= 0)[0]*scale
     A = np.array([-15,0]+[-15,30]+[0,60]+[15,30]+ [15,0])
     A= np.array([-40,-40, -40,  0,   0, 40,  40,  0,  40,-40],dtype= float)
     F = np.array([0,0]+[0,30]+[0,50]+[25,50]+ [20,30])
     M = np.array([-30,0]+[-15,60]+[0,40]+[15,60]+ [30,0])
     Y= np.array([ 0,0.0, 0,-50, 30,40, -30,40])
+    xi = np.array([+40,+45, +40,+15, +40,-15, +40,-45],dtype=float)
+    xf = np.array([+10,+10, +30,-10, +50,+10, +70,-10],dtype=float)
+    xi = np.array([-72,+10, -52,-10, -32,+10, -12,-10],dtype=float)
+    xf = np.array([-40,+45, -40,+15, -40,-15, -40,-45],dtype=float)
     #xf= Y
     #xf= np.array([20.0,0.0, -20.0,0, -40,0, 40,0])
     print(xi)
