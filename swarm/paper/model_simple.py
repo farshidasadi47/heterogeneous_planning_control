@@ -109,18 +109,71 @@ class Swarm:
         self._simulate_result = (cum_position, cum_input)
         return cum_position, cum_input
 
+    def _regroup_sim_result(self, paired= False, n_section= 1):
+        """
+        This function joins consequtive motion sequence based on having
+        same mode consequtively, or a given number of sequences.
+        """
+        # Get the simulation results.
+        cum_position, cum_input = self._simulate_result
+        g_position= []
+        g_input= []
+        # Combine consequtive sections with similar mode if requested.
+        if paired:
+            # Find start and end indexes.
+            mode_seq= [i[0,2] for i in cum_input]
+            distinct_mode_idx= []
+            i, id_s= 0, 0 
+            for i in range(1,len(mode_seq)):
+                if mode_seq[i]-mode_seq[i-1]:
+                    # If mode has changed.
+                    distinct_mode_idx.append((id_s,i-1))
+                    id_s= i
+            distinct_mode_idx.append((id_s,i))
+            # Combine sections.
+            for idx_s, idx_e in distinct_mode_idx:
+                sec_position= cum_position[idx_s]
+                sec_input= cum_input[idx_s]
+                for sec_pos, sec_inp in zip(cum_position[idx_s+1:idx_e+1],
+                                           cum_input[idx_s+1:idx_e+1]):
+                    sec_position= np.vstack((sec_position[0:-1,:], sec_pos))
+                    sec_input= np.vstack((sec_input[0:-1,:], sec_inp))
+                g_position.append(sec_position)
+                g_input.append(sec_input)
+            cum_position= g_position
+            cum_input= g_input
+            g_posiiton= []
+            g_input= []
+        # Combine each N sections in requested.
+        indexes= list(range(0,len(cum_input), n_section)) + [len(cum_input)]
+        indexes= [(i,j) for i,j in zip(indexes[:-1],indexes[1:])]
+        # Combine sections.
+        for idx_s, idx_e in indexes:
+            sec_position= cum_position[idx_s]
+            sec_input= cum_input[idx_s]
+            for sec_pos, sec_inp in zip(cum_position[idx_s+1:idx_e],
+                                        cum_input[idx_s+1:idx_e]):
+                sec_position= np.vstack((sec_position[0:-1,:], sec_pos))
+                sec_input= np.vstack((sec_input[0:-1,:], sec_inp))
+            g_position.append(sec_position)
+            g_input.append(sec_input)
+        return g_position, g_input
+
 def main():
     specs = SwarmSpecs(np.array([[10,5,5],[5,5,10]]), 10)
     #specs = SwarmSpecs.robo3()
     xi = np.array([-20,0,0,0,20,0])
     mode = 1
     swarm = Swarm(xi, specs)
-    input_series = np.array([[70,np.pi/2,1],
-                             [70,np.pi,2],
+    input_series = np.array([[60,np.pi/2,1],
+                             [70,np.pi,1],
                              [70,0,0],
+                             [70,0,2],
+                             [70,np.pi/2,2],
                              ])
-    step_size= None
+    step_size= 20
     cum_position, cum_input= swarm.simulate(input_series, xi, step_size)
+    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
 
 ########## test section ################################################
 if __name__ == '__main__':
