@@ -31,7 +31,13 @@ def define_colors(self):
     self._colors = {'k':(  0,  0,  0), 'r':(  0,  0,255), 'b':(255,  0,  0),
                     'g':(  0,255,  0), 'm':(255,  0,255), 'w':(255,255,255),
                     'y':(  0,255,255), 'c':(255,255,  0)}
-    self._markers = ['o','s','P','h','*','+','x','d']
+    self._markers = ['o','s','D','h','*','+','x','d']
+    self._styles= [('solid', 'solid'),
+                   ('dashed',                (0, (5, 5))),
+                   ('dashdotted',            (0, (3, 5, 1, 5))),
+                   ('dashdotdotted',         (0, (3, 5, 1, 5, 1, 5))),
+                   ('loosely dotted',        (0, (1, 10))),
+                   ]
 ########## Classes #####################################################
 class SwarmSpecs:
     """This class stores specifications of swarm of milirobots."""
