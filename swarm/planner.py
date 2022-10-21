@@ -384,9 +384,10 @@ class Planner():
         mode_start = mode_seq[np.nonzero(mode_seq)[0][0]]
         n_robot = self.specs.n_robot
         xi = self.xi
-        U_raw = ca.reshape(sol['x'],2,-1)[:2,:].full()
-        U_raw= np.vstack((U_raw,mode_seq))
-        r_raw= np.zeros_like(U_raw)
+        UZ_raw = ca.reshape(sol['x'],2,-1)[:2,:].full()
+        UZ_raw= np.vstack((UZ_raw,mode_seq))
+        U_raw= np.zeros_like(UZ_raw)
+        r_raw= np.zeros_like(UZ_raw)
         r_raw[2,:]= mode_seq
         X_raw = np.zeros((2*n_robot, n_mode_seq + 1))
         X_raw[:,0]= xi
@@ -404,21 +405,21 @@ class Planner():
             if mode == 0:
                 # This tumbling.
                 U_tumbled = self._accurate_rotation(
-                    U_raw[:2,idx] - mode_change_remainder)
+                    UZ_raw[:2,idx] - mode_change_remainder)
                 UZ[:2,counter:counter+2] = U_tumbled
                 UZ[2,counter:counter+2] = mode
             else:
                 # This is pivot_walking and needs mode change.
-                UZ[:2,counter] = U_raw[:2, idx]
+                UZ[:2,counter] = UZ_raw[:2, idx]
                 UZ[2,counter] = mode
                 # Calculate next mode and perform it.
                 next_mode = self.next_mode_sequence[idx]
                 UZ[:2,counter+1] = mode_change
                 UZ[2,counter+1] = -next_mode
                 mode_change *= -1
-            r_raw[:2,idx]= self._cartesian_to_polar(U_raw[:2,idx])
+            r_raw[:2,idx]= self._cartesian_to_polar(UZ_raw[:2,idx])
             # Calculate positions.
-            X_raw[:,idx+1]= self._f(X_raw[:, idx], U_raw[:2, idx], mode)
+            X_raw[:,idx+1]= self._f(X_raw[:, idx], UZ_raw[:2, idx], mode)
             X[:,counter+1] = self._f(X[:,counter], UZ[:2,counter],
                                                                 UZ[2,counter])
             X[:,counter+2] = self._f(X[:,counter+1], UZ[:2,counter+1],
@@ -431,7 +432,13 @@ class Planner():
             if U[2,i] == 0:
                 # If this is rotation round it for numerical purposes.
                 U[0,i] = int(U[0,i]*1000)/1000
-        return U_raw, r_raw, X_raw, UZ,  U, X
+        U_raw[2,:] = UZ_raw[2,:]
+        for i in range(UZ_raw.shape[1]):
+            U_raw[:2,i] = self._cartesian_to_polar(UZ_raw[:2,i])
+            if U_raw[2,i] == 0:
+                # If this is rotation round it for numerical purposes.
+                U_raw[0,i] = int(U_raw[0,i]*1000)/1000
+        return UZ_raw, U_raw, r_raw, X_raw, UZ,  U, X
 
     def solve_unconstrained(self,xi,xf):
         """This function solved the unconstrained case from
@@ -442,16 +449,16 @@ class Planner():
         B = np.zeros((2*n_robot,2*n_robot))
         for mode in range(n_robot):
             B[:,2*mode:2*mode +2] = self.specs.B[mode,:,:]
-        UU_raw = np.dot(np.linalg.inv(B),xf - xi)
+        UUZ_raw = np.dot(np.linalg.inv(B),xf - xi)
         if n_robot< n_mode:
-            UU_raw= np.append(UU_raw, (n_mode-n_robot)*[0.0,0.0])
-        UU_raw = np.reshape(UU_raw,(-1,2)).T  
-        UU_raw= np.roll(np.vstack((UU_raw, range(n_mode))),-1,axis= 1)
+            UUZ_raw= np.append(UUZ_raw, (n_mode-n_robot)*[0.0,0.0])
+        UUZ_raw = np.reshape(UUZ_raw,(-1,2)).T  
+        UUZ_raw= np.roll(np.vstack((UUZ_raw, range(n_mode))),-1,axis= 1)
         XU_raw= np.zeros((2*n_robot,n_mode+1))
         XU_raw[:,0]= xi
         XU= np.zeros((2*n_robot,2*n_mode+1))
         XU[:,0]= xi
-        mode_seq= UU_raw[2,:].astype(int)
+        mode_seq= UUZ_raw[2,:].astype(int)
         next_mode_seq= np.append(np.roll(mode_seq[mode_seq !=0], -1),0)
         UUZ= np.zeros((3,2*n_mode),dtype= float)
         # Adjust mode_change parameters.
@@ -463,12 +470,12 @@ class Planner():
             if mode == 0:
                 # This tumbling.
                 U_tumbled = self._accurate_rotation(
-                                UU_raw[:2, idx] - mode_change_remainder)
+                                UUZ_raw[:2, idx] - mode_change_remainder)
                 UUZ[:2,counter:counter+2] = U_tumbled
                 UUZ[2,counter:counter+2] = mode
             else:
                 # This is pivot_walking and needs mode change.
-                UUZ[:2,counter] = UU_raw[:2,idx]
+                UUZ[:2,counter] = UUZ_raw[:2,idx]
                 UUZ[2,counter] = mode
                 # Calculate next mode and perform it.
                 next_mode = next_mode_seq[idx]
@@ -476,8 +483,8 @@ class Planner():
                 UUZ[2,counter+1] = -next_mode
                 mode_change *= -1
             # Calculate positions.
-            XU_raw[:,idx+1]= self._f(XU_raw[:,idx], UU_raw[:2,idx],
-                                                    UU_raw[2,idx])
+            XU_raw[:,idx+1]= self._f(XU_raw[:,idx], UUZ_raw[:2,idx],
+                                                    UUZ_raw[2,idx])
             XU[:,counter+1] = self._f(XU[:,counter], UUZ[:2,counter],
                                                      UUZ[2,counter])
             XU[:,counter+2] = self._f(XU[:,counter+1], UUZ[:2,counter+1],
@@ -491,7 +498,14 @@ class Planner():
             if UU[2,i] == 0:
                 # If this is rotation round it for numerical purposes.
                 UU[0,i] = int(UU[0,i]*1000)/1000
-        return UU_raw, XU_raw, UUZ,  UU, XU
+        UU_raw= np.zeros_like(UUZ_raw)
+        UU_raw[2,:] = UUZ_raw[2,:]
+        for i in range(UUZ_raw.shape[1]):
+            UU_raw[:2,i] = self._cartesian_to_polar(UUZ_raw[:2,i])
+            if UU_raw[2,i] == 0:
+                # If this is rotation round it for numerical purposes.
+                UU_raw[0,i] = int(UU_raw[0,i]*1000)/1000
+        return UUZ_raw, UU_raw, XU_raw, UUZ,  UU, XU
     
     def _isfeasible(self,UX,g):
         """
@@ -512,31 +526,31 @@ class Planner():
             flag = False
         return flag
     
-    def _isfeasible_from_unconstrained(self, UU_raw):
-        UU_raw= np.roll(UU_raw,1, axis=1)
+    def _isfeasible_from_unconstrained(self, UUZ_raw):
+        UUZ_raw= np.roll(UUZ_raw,1, axis=1)
         width = self.ubsx - self.lbsx
         height = self.ubsy - self.lbsy
         counts= Counter(self.mode_sequence)
         flag= True
         for i, count in counts.items():
-            if (   (abs(UU_raw[0,i]) > width/count)
-                or (abs(UU_raw[1,i]) > height/count)):
+            if (   (abs(UUZ_raw[0,i]) > width/count)
+                or (abs(UUZ_raw[1,i]) > height/count)):
                 flag= False
                 print(f'Might be infeasible in mode {i}, at {count} steps.')
                 print("Increase the steps.")
                 break
         return flag
     
-    def _threshold_mode_sequence(self, U_raw, r_raw):
+    def _threshold_mode_sequence(self, UZ_raw, r_raw):
         """
         This function looks into a given raw solution, threshold it
         and returns a new mode_sequence withouth thresholded modes.
         The purpose of this function is to reduce unnecessary steps.
         """
         threshold= max(self.specs.tumbling_length,15.0)
-        U_raw= U_raw[:,r_raw[0,:]> threshold]
-        mode_sequence= U_raw[2,:].astype(int)
-        return U_raw, mode_sequence
+        UZ_raw= UZ_raw[:,r_raw[0,:]> threshold]
+        mode_sequence= UZ_raw[2,:].astype(int)
+        return UZ_raw, mode_sequence
 
     def _solve(self, xi, xf, U0, obj_act= 1):
         """
@@ -569,32 +583,32 @@ class Planner():
         """
         obj_act= 0 if resolve else 1.0
         # Solve unconstrained
-        UU_raw, XU_raw, UUZ,  UU, XU= self.solve_unconstrained(xi, xf)
-        self._isfeasible_from_unconstrained(UU_raw)
+        UUZ_raw,UU_raw, XU_raw, UUZ,  UU, XU= self.solve_unconstrained(xi, xf)
+        self._isfeasible_from_unconstrained(UUZ_raw)
         # Solve for feasibility with constant objective function.
         U0 = ca.DM.zeros(self.U.shape)
         UX0 = ca.reshape(U0[:2,:],-1,1)
         sol, isfeasible= self._solve(xi,xf, U0, obj_act= obj_act)
         BC = np.vstack((xi,xf)).T
-        U_raw, r_raw, X_raw, UZ, U, X = self._post_process_u(sol)
+        UZ_raw, U_raw, r_raw, X_raw, UZ,  U, X= self._post_process_u(sol)
         print(r_raw.T)
         if resolve and isfeasible:
             if threshold:
-                U0, mode_sequence= self._threshold_mode_sequence(U_raw, r_raw)
+                U0, mode_sequence= self._threshold_mode_sequence(UZ_raw, r_raw)
                 # Build mode sequence
                 self._set_mode_sequence(mode_sequence, 1)
                 # Build the optimization problem.
                 self._get_optimization(self.solver_name, self.boundary)
             else:
-                U0= U_raw
+                U0= UZ_raw
             # Solve with non_constant objective.
             sol_n, isfeasible_n= self._solve(xi,xf, U0, obj_act= 1.0)
             if isfeasible_n:
                 isfeasible= isfeasible_n
                 sol= sol_n
-                U_raw, r_raw, X_raw, UZ, U, X = self._post_process_u(sol)
+                UZ_raw,U_raw,r_raw,X_raw,UZ,U,X= self._post_process_u(sol)
                 print(r_raw.T)
-        return sol, U_raw, X_raw, BC, UZ, U, X, isfeasible
+        return sol,UZ_raw, U_raw, X_raw, BC, UZ, U, X, isfeasible
     
     @classmethod
     def plan(cls,xg, outer_steps, mode_sequence, specs, feastol,
@@ -619,7 +633,7 @@ class Planner():
                      solver_name='knitro', feastol= feastol, boundary=boundary)
         # Get new initial condition.
         xi = yield None
-        _, U_raw, _, _, _, U, _, isfeasible= planner.solve(xi,xg,resolve,
+        _, UZ_raw, _, _, _, _, U, _, isfeasible= planner.solve(xi,xg,resolve,
                                                                  threshold)
         print(f"{isfeasible = } at {outer_steps:01d} outer_steps.")
         if not isfeasible:
@@ -661,7 +675,7 @@ def main3p():
     #optim_var, lbx, ubx, p = planner._get_optim_vars(boundary)
     #obj = planner._get_objective()
     #solver = planner._get_optimization(solver_name='knitro', boundary=boundary)
-    #sol, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf)
+    #sol, UZ_raw, U_raw, X_raw, P, UZ, U, X, isfeasible = planner.solve(xi, xf)
     #print(isfeasible)
     resolve = True
     planner = Planner.plan(xf,outer,mode_sequence,specs,3.5, resolve,boundary)
