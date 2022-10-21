@@ -22,6 +22,7 @@ plt.rcParams['text.usetex'] = False
 mpl.rcParams['hatch.linewidth'] = .5
 
 from swarm.model import SwarmSpecs
+from swarm.planner import Planner
 ########## Functions ###################################################
 class Swarm:
     """This class holds current state of swarm of milirobots."""
@@ -311,6 +312,45 @@ def main():
     fig, ax= swarm.single_plot(g_position,g_input,legend= True,title= title,save= False)
     plt.show()
 
+def case2():
+    specs = SwarmSpecs.robo3p()
+    specs = SwarmSpecs(np.array([[10,5,5],[5,5,10]]), 10)
+    save= True
+    specs.d_min= 14
+    xi = np.array([-20,0,0,0,20,0])
+    mode_sequence= [1,1,2,2,0]*1
+    xi = np.array([000,000, -20,000, +20,000],dtype=float)
+    xf = np.array([+72,+53, +26,+40, +66,+72],dtype=float)
+    swarm = Swarm(xi, specs)
+    step_size= 10
+    planner = Planner(specs, mode_sequence , steps = 1,
+                      solver_name='knitro', boundary= True)
+    #
+    UU_raw= np.array([[57,np.deg2rad(24),1],
+                      [30,np.deg2rad(90),2],
+                      [20,np.deg2rad(0),0],
+                      ])
+    _, UU_raw, _, _ , _, _= planner.solve_unconstrained(xi,xf)
+    UU_raw= UU_raw.T
+    print(UU_raw)
+    cum_position, cum_input= swarm.simulate(UU_raw, xi, step_size)
+    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
+    title= "Robot transition: Controlability solution"
+    fif1, ax1= swarm.single_plot(g_position,g_input,legend= True,title= title,save= save)
+    print(swarm.position)
+    #
+    _, _, U_raw, X_raw, _, _, _, _, _ = planner.solve(xi, xf)
+    U_raw= U_raw.T
+    swarm.reset_state(xi)
+    cum_position, cum_input= swarm.simulate(U_raw, xi, step_size)
+    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
+    title= "Robot transition: Divided part 1"
+    fig2,ax2= swarm.single_plot(g_position[0:1],g_input[0:1],legend= True,title= title,save= save)
+    title= "Robot transition: Divided part 2"
+    fig2,ax2= swarm.single_plot(g_position[1:3],g_input[1:3],legend= True,title= title,save= save)
+    print(swarm.position)
+    plt.show()
+
 ########## test section ################################################
 if __name__ == '__main__':
-    main()
+    case2()
