@@ -125,7 +125,7 @@ class Swarm:
         # Combine consequtive sections with similar mode if requested.
         if paired:
             # Find start and end indexes.
-            mode_seq= [i[0,2] for i in cum_input]
+            mode_seq= [int(i[0,2]) for i in cum_input]
             distinct_mode_idx= []
             i, id_s= 0, 0 
             for i in range(1,len(mode_seq)):
@@ -146,7 +146,7 @@ class Swarm:
                 g_input.append(sec_input)
             cum_position= g_position
             cum_input= g_input
-            g_posiiton= []
+            g_position= []
             g_input= []
         # Combine each N sections in requested.
         indexes= list(range(0,len(cum_input), n_section)) + [len(cum_input)]
@@ -199,8 +199,6 @@ class Swarm:
         fig, ax = plt.subplots(constrained_layout=True)
         fontsize= None
         self._simplot_set(ax, fontsize, title)
-        # Set space limits
-        lbx, ubx, lby, uby= 0, 0, 0, 0
         # Draw lines
         for robot in range(self.specs.n_robot):
             section_iterator= zip(data_position, data_input)
@@ -208,11 +206,6 @@ class Swarm:
             ang= sec_input[0,1]- np.pi/2
             mode= int(sec_input[0,2])
             modes_used.add(mode)
-            # Update space limits
-            lbx= min(lbx,sec_position[:,::2].min()-self.specs.tumbling_length)
-            ubx= max(ubx,sec_position[:,::2].max()+self.specs.tumbling_length)
-            lby= min(lby,sec_position[:,1::2].min()-self.specs.tumbling_length)
-            uby= max(uby,sec_position[:,1::2].max()+self.specs.tumbling_length)
             # Draw robot at start.
             x = -(w*np.cos(ang) - h*np.sin(ang))/2
             y = -(w*np.sin(ang) + h*np.cos(ang))/2
@@ -255,6 +248,16 @@ class Swarm:
                         hatch= 'xx',
                                  )
             ax.add_patch(rect)
+        # Calculate plot boundaries
+        lbx, ubx, lby, uby= np.inf, -np.inf, np.inf, -np.inf
+        for sec_position in data_position:
+            # Update space limits
+            lbx= min(lbx,sec_position[:,::2].min()-self.specs.tumbling_length)
+            ubx= max(ubx,sec_position[:,::2].max()+self.specs.tumbling_length)
+            lby= min(lby,sec_position[:,1::2].min()-self.specs.tumbling_length)
+            uby= max(uby,sec_position[:,1::2].max()+self.specs.tumbling_length)
+        ax.set_xlim(lbx,ubx)
+        ax.set_ylim(lby,uby)
         # Add robot legends.
         handles= [legend_line(self.specs._styles[robot][1],
                    self.specs._colors[robot], 
@@ -276,7 +279,7 @@ class Swarm:
                          for robot in range(self.specs.n_robot))]
         labels+= ["End"]
         if legend:
-            plt.legend(handles= handles, labels= labels,
+            ax.legend(handles= handles, labels= labels,
                        handler_map={tuple: HandlerTuple(ndivide=None)},
                        fontsize= fontsize,
                        )
@@ -318,13 +321,13 @@ def case2():
     save= True
     specs.d_min= 14
     xi = np.array([-20,0,0,0,20,0])
-    mode_sequence= [1,1,2,2,0]*1
+    mode_sequence= [1,1,2,2]*1
     xi = np.array([000,000, -20,000, +20,000],dtype=float)
-    xf = np.array([+72,+53, +26,+40, +66,+72],dtype=float)
+    xf = np.array([+52,+53, + 6,+40, +46,+67],dtype=float)
     swarm = Swarm(xi, specs)
     step_size= 10
     planner = Planner(specs, mode_sequence , steps = 1,
-                      solver_name='knitro', boundary= True)
+                      solver_name='knitro', feastol= 0.1,boundary= True)
     #
     UU_raw= np.array([[57,np.deg2rad(24),1],
                       [30,np.deg2rad(90),2],
@@ -332,6 +335,7 @@ def case2():
                       ])
     _, UU_raw, _, _ , _, _= planner.solve_unconstrained(xi,xf)
     UU_raw= UU_raw.T
+    UU_raw= UU_raw[UU_raw[:,2]>0]
     print(UU_raw)
     cum_position, cum_input= swarm.simulate(UU_raw, xi, step_size)
     g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
