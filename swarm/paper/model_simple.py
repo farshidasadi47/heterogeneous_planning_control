@@ -355,6 +355,50 @@ def case2():
     print(swarm.position)
     plt.show()
 
+def case3():
+    specs = SwarmSpecs.robo3p()
+    specs = SwarmSpecs(np.array([[10,5,5],[5,5,10]]), 10)
+    save= True
+    specs.d_min= 14
+    xi = np.array([-40,0,0,0,40,0])
+    mode_sequence= [1,2,1,2]*1
+    xi = np.array([ 000,000,-30,000, +30,000],dtype=float)
+    xf = np.array([+19,+34, -23,+29, - 8,+53],dtype=float)
+    xf = np.array([+46,+41, -17,+35, +23,+64],dtype=float)
+    xf = np.array([+30,+17, -29,+11, + 3,+16],dtype=float)
+    swarm = Swarm(xi, specs)
+    step_size= 10
+    planner = Planner(specs, mode_sequence , steps = 1,
+                      solver_name='knitro', feastol= .01, boundary= True)
+    #
+    UU_raw= np.array([[58.5,np.deg2rad(11.46),1],
+                      [28.5,np.deg2rad(169.60),2],
+                      #[20,np.deg2rad(0),0],
+                      ])
+    _, UU_raw, _, _ , _, _= planner.solve_unconstrained(xi,xf)
+    UU_raw= UU_raw.T
+    UU_raw= UU_raw[UU_raw[:,2]>0]
+    print(UU_raw)
+    cum_position, cum_input= swarm.simulate(UU_raw, xi, step_size)
+    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
+    title= "Robot transition: Controlability solution"
+    fig1, ax1= swarm.single_plot(g_position,g_input,legend= True,title= title,save= save)
+    print(swarm.position)
+    xf= np.round(swarm.position)
+    #
+    _, _, U_raw, X_raw, _, _, _, _, _ = planner.solve(xi, xf)
+    U_raw= U_raw.T
+    swarm.reset_state(xi)
+    step_size= 10
+    cum_position, cum_input= swarm.simulate(U_raw, xi, step_size)
+    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
+    title= "Robot transition: Divided and rearranged part 1"
+    fig2,ax2= swarm.single_plot(g_position[0:2],g_input[0:2],legend= True,title= title,save= save)
+    title= "Robot transition: Divided and rearranged part 2"
+    fig2,ax2= swarm.single_plot(g_position[2:4],g_input[2:4],legend= True,title= title,save= save)
+    print(swarm.position)
+    plt.show()
+
 ########## test section ################################################
 if __name__ == '__main__':
-    case2()
+    case3()
