@@ -174,7 +174,7 @@ class Swarm:
         ax.grid()
 
     def single_plot(self, data_position, data_input, 
-                          legend= True, title= None, save= False):
+                          legend= True, pad=0, title= None, save= False):
         """Plots a 2D series of given position."""
         title= 'Swarm transition' if title is None else title
         tumbling_length = self.specs.tumbling_length
@@ -256,6 +256,9 @@ class Swarm:
             ubx= max(ubx,sec_position[:,::2].max()+self.specs.tumbling_length)
             lby= min(lby,sec_position[:,1::2].min()-self.specs.tumbling_length)
             uby= max(uby,sec_position[:,1::2].max()+self.specs.tumbling_length)
+        if pad:
+            lby= min(lby,lby+pad)
+            uby= max(uby,uby+pad)
         ax.set_xlim(lbx,ubx)
         ax.set_ylim(lby,uby)
         # Add robot legends.
@@ -382,7 +385,7 @@ def case3():
     cum_position, cum_input= swarm.simulate(UU_raw, xi, step_size)
     g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
     title= "Robot transition: Controlability solution"
-    fig1, ax1= swarm.single_plot(g_position,g_input,legend= True,title= title,save= save)
+    fig1, ax1= swarm.single_plot(g_position,g_input,legend= True, pad= 17, title= title,save= save)
     print(swarm.position)
     xf= np.round(swarm.position)
     #
@@ -393,9 +396,9 @@ def case3():
     cum_position, cum_input= swarm.simulate(U_raw, xi, step_size)
     g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
     title= "Robot transition: Divided and rearranged part 1"
-    fig2,ax2= swarm.single_plot(g_position[0:2],g_input[0:2],legend= True,title= title,save= save)
+    fig2,ax2= swarm.single_plot(g_position[0:2],g_input[0:2],legend= True, pad= -6, title= title,save= save)
     title= "Robot transition: Divided and rearranged part 2"
-    fig2,ax2= swarm.single_plot(g_position[2:4],g_input[2:4],legend= True,title= title,save= save)
+    fig2,ax2= swarm.single_plot(g_position[2:4],g_input[2:4],legend= True, pad= -21, title= title,save= save)
     print(swarm.position)
     plt.show()
 
