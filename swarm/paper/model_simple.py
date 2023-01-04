@@ -10,7 +10,7 @@ from collections import deque
 from math import remainder
 
 import numpy as np
-np.set_printoptions(precision=4, suppress=True)
+np.set_printoptions(precision=6, suppress=False)
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.colors import to_rgba
@@ -163,27 +163,33 @@ class Swarm:
             g_input.append(sec_input)
         return g_position, g_input
 
-    def _simplot_set(self, ax, fontsize= None, title= None):
+    def _simplot_set(self, ax, fontsize= None, title= None,
+                           showx=True, showy=True):
         """Sets the plot configuration."""
         title= 'Swarm transition' if title is None else title
-        ax.set_title(title, fontsize= fontsize)
-        ax.set_xlabel('x axis',fontsize= fontsize)
-        ax.set_ylabel('y axis',fontsize= fontsize)
+        xlabel= 'x axis' if showx else None
+        ylabel= 'y axis' if showy else None
+        ax.set_title(title, fontsize= fontsize, pad= 7)
+        ax.set_xlabel(xlabel, fontsize= fontsize)
+        ax.set_ylabel(ylabel, fontsize= fontsize)
         ax.set_aspect('equal', adjustable='box')
-        ax.tick_params(grid_alpha=0.5,labelsize= fontsize)
+        ax.tick_params(grid_alpha=0.5,labelsize= fontsize, 
+                       labelbottom=showx, labelleft=showy)
         ax.grid()
 
     def single_plot(self, data_position, data_input, 
-                          legend= True, pad=0, title= None, save= False):
+                          legend= True, showx=True, showy=True,
+                          lbx= None, ubx= None, lby=None, uby= None,
+                          title= None, save= False):
         """Plots a 2D series of given position."""
         title= 'Swarm transition' if title is None else title
         tumbling_length = self.specs.tumbling_length
         alpha_s= 0.2
         modes_used= set()
         legend_marker= lambda m,c,l: plt.plot([],[],marker=m, color=c,
-                                                    markerfacecolor=c,#'none',
+                                                    markerfacecolor=c,ms=6,
                                                     ls="none", label= l)[0]
-        legend_line= lambda s,c,l: plt.plot([],[],ls=s, color=c, label= l)[0]
+        legend_line= lambda s,c,l: plt.plot([],[],ls=s,color=c,label=l,lw=2)[0]
         # Geometry of robot symbols.
         aspect_ratio = 2
         h = np.sqrt(tumbling_length**2/(aspect_ratio**2+1))
@@ -197,8 +203,8 @@ class Swarm:
                                  )
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
-        fontsize= None
-        self._simplot_set(ax, fontsize, title)
+        fontsize= 24
+        self._simplot_set(ax, fontsize, title, showx, showy)
         # Draw lines
         for robot in range(self.specs.n_robot):
             section_iterator= zip(data_position, data_input)
@@ -223,7 +229,7 @@ class Swarm:
                     linewidth=2,
                     linestyle= self.specs._styles[robot][1],
                     marker= self.specs._markers[mode],
-                    markerfacecolor= self.specs._colors[robot])#'none')
+                    markerfacecolor= self.specs._colors[robot],ms= 8)
             # Draw other sections.
             for sec_position, sec_input in section_iterator:
                 ang= sec_input[-1,1]- np.pi/2
@@ -249,16 +255,17 @@ class Swarm:
                                  )
             ax.add_patch(rect)
         # Calculate plot boundaries
-        lbx, ubx, lby, uby= np.inf, -np.inf, np.inf, -np.inf
+        lbxx, ubxx, lbyy, ubyy= np.inf, -np.inf, np.inf, -np.inf
         for sec_position in data_position:
             # Update space limits
-            lbx= min(lbx,sec_position[:,::2].min()-self.specs.tumbling_length)
-            ubx= max(ubx,sec_position[:,::2].max()+self.specs.tumbling_length)
-            lby= min(lby,sec_position[:,1::2].min()-self.specs.tumbling_length)
-            uby= max(uby,sec_position[:,1::2].max()+self.specs.tumbling_length)
-        if pad:
-            lby= min(lby,lby+pad)
-            uby= max(uby,uby+pad)
+            lbxx= min(lbxx,sec_position[:,::2].min()-(tumbling_length/2+1))
+            ubxx= max(ubxx,sec_position[:,::2].max()+(tumbling_length/2+1))
+            lbyy= min(lbyy,sec_position[:,1::2].min()-(tumbling_length/2+1))
+            ubyy= max(ubyy,sec_position[:,1::2].max()+(tumbling_length/2+1))
+        lbx= lbxx if lbx is None else lbx
+        ubx= ubxx if ubx is None else ubx
+        lby= lbyy if lby is None else lby
+        uby= ubyy if uby is None else uby
         ax.set_xlim(lbx,ubx)
         ax.set_ylim(lby,uby)
         # Add robot legends.
@@ -297,7 +304,7 @@ class Swarm:
                 # name exists.
                 index_for_saving += 1
                 fig_name = title+f"_{index_for_saving:02d}.pdf"
-            fig.savefig(fig_name,bbox_inches='tight')
+            fig.savefig(fig_name,bbox_inches='tight', pad_inches= 0.05)
         return fig, ax
 
 def main():
@@ -319,86 +326,102 @@ def main():
     plt.show()
 
 def case2():
-    specs = SwarmSpecs.robo3p()
     specs = SwarmSpecs(np.array([[10,5,5],[5,5,10]]), 10)
     save= True
     specs.d_min= 14
-    xi = np.array([-20,0,0,0,20,0])
     mode_sequence= [1,1,2,2]*1
-    xi = np.array([000,000, -20,000, +20,000],dtype=float)
-    xf = np.array([+52,+53, + 6,+40, +46,+67],dtype=float)
+    xi = np.array([000,000, 000,-20, 000,+20],dtype=float)
+    xf = np.array([-53,+52, -40,+ 6, -67,+46],dtype=float)
     swarm = Swarm(xi, specs)
     step_size= 10
     planner = Planner(specs, mode_sequence , steps = 1,
                       solver_name='knitro', feastol= 0.1,boundary= True)
     #
-    UU_raw= np.array([[57,np.deg2rad(24),1],
-                      [30,np.deg2rad(90),2],
-                      [20,np.deg2rad(0),0],
-                      ])
+    UU_raw= np.array([[58.137767, 2.034444, 1],
+                      [27       , 3.141593, 2],
+                     ],dtype= float)
     _, UU_raw, _, _ , _, _= planner.solve_unconstrained(xi,xf)
     UU_raw= UU_raw.T
     UU_raw= UU_raw[UU_raw[:,2]>0]
     print(UU_raw)
     cum_position, cum_input= swarm.simulate(UU_raw, xi, step_size)
     g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
-    title= "Robot transition: Controlability solution"
-    fif1, ax1= swarm.single_plot(g_position,g_input,legend= True,title= title,save= save)
+    title= "(a): Controlability Solution."
+    fig1, ax1= swarm.single_plot(g_position,g_input,legend= True,
+                                 lby= -27, uby= 60, lbx= -75,
+                                 title= title,save= save)
     print(swarm.position)
     #
+    U_raw= np.array([[43.123117,  2.371032, 1],
+                     [22.512195,  1.349482, 1],
+                     [18.75    , -2.214297, 2],
+                     [21.75    ,  2.38058 , 2],
+                    ],dtype= float)
     _, _, U_raw, X_raw, _, _, _, _, _ = planner.solve(xi, xf)
     U_raw= U_raw.T
     swarm.reset_state(xi)
     cum_position, cum_input= swarm.simulate(U_raw, xi, step_size)
     g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
-    title= "Robot transition: Divided part 1"
-    fig2,ax2= swarm.single_plot(g_position[0:1],g_input[0:1],legend= True,title= title,save= save)
-    title= "Robot transition: Divided part 2"
-    fig2,ax2= swarm.single_plot(g_position[1:3],g_input[1:3],legend= True,title= title,save= save)
+    title= "(b): Divided, Part 1."
+    fig2,ax2= swarm.single_plot(g_position[0:1],g_input[0:1],legend= True,
+                                lby= -27, uby= 60, lbx= -50, showy= False,
+                                title= title,save= save)
+    title= "(c): Divided, Part 2."
+    fig2,ax2= swarm.single_plot(g_position[1:3],g_input[1:3],legend= True,
+                                lby= -27, uby= 60, lbx= -77,showy= False,
+                                title= title,save= save)
     print(swarm.position)
     plt.show()
 
 def case3():
-    specs = SwarmSpecs.robo3p()
     specs = SwarmSpecs(np.array([[10,5,5],[5,5,10]]), 10)
     save= True
     specs.d_min= 14
-    xi = np.array([-40,0,0,0,40,0])
     mode_sequence= [1,2,1,2]*1
-    xi = np.array([ 000,000,-30,000, +30,000],dtype=float)
+    xi = np.array([ 000,000,000,-30, 000,+30],dtype=float)
     xf = np.array([+19,+34, -23,+29, - 8,+53],dtype=float)
     xf = np.array([+46,+41, -17,+35, +23,+64],dtype=float)
-    xf = np.array([+30,+17, -29,+11, + 3,+16],dtype=float)
+    xf = np.array([-17,+30, -11,-29, -16,+ 3],dtype=float)
     swarm = Swarm(xi, specs)
     step_size= 10
     planner = Planner(specs, mode_sequence , steps = 1,
                       solver_name='knitro', feastol= .01, boundary= True)
     #
-    UU_raw= np.array([[58.5,np.deg2rad(11.46),1],
-                      [28.5,np.deg2rad(169.60),2],
-                      #[20,np.deg2rad(0),0],
-                      ])
+    UU_raw= np.array([[59.228372,  1.774814, 1],
+                      [28.442925, -1.747505, 2],
+                      ],dtype= float)
     _, UU_raw, _, _ , _, _= planner.solve_unconstrained(xi,xf)
     UU_raw= UU_raw.T
     UU_raw= UU_raw[UU_raw[:,2]>0]
     print(UU_raw)
     cum_position, cum_input= swarm.simulate(UU_raw, xi, step_size)
     g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
-    title= "Robot transition: Controlability solution"
-    fig1, ax1= swarm.single_plot(g_position,g_input,legend= True, pad= 17, title= title,save= save)
+    title= "(a): Controlability Solution."
+    fig1, ax1= swarm.single_plot(g_position,g_input,legend= True,
+                                 lby= -36, uby= 63, lbx= -58,
+                                 title= title,save= save)
     print(swarm.position)
     xf= np.round(swarm.position)
     #
+    U_raw= np.array([[18.954072,  1.085278, 1],
+                     [14.012177, -0.478136, 2],
+                     [46.205665,  2.038839, 1],
+                     [27.725384, -2.251132, 2],
+                     ],dtype= float)
     _, _, U_raw, X_raw, _, _, _, _, _ = planner.solve(xi, xf)
     U_raw= U_raw.T
     swarm.reset_state(xi)
     step_size= 10
     cum_position, cum_input= swarm.simulate(U_raw, xi, step_size)
     g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
-    title= "Robot transition: Divided and rearranged part 1"
-    fig2,ax2= swarm.single_plot(g_position[0:2],g_input[0:2],legend= True, pad= -6, title= title,save= save)
-    title= "Robot transition: Divided and rearranged part 2"
-    fig2,ax2= swarm.single_plot(g_position[2:4],g_input[2:4],legend= True, pad= -21, title= title,save= save)
+    title= "(b): Divided and Rearranged, Part 1."
+    fig2,ax2= swarm.single_plot(g_position[0:2],g_input[0:2],legend= True,
+                                lby= -36, uby= 63, lbx= -41, showy= False,
+                                title= title,save= save)
+    title= "(c): Divided and Rearranged, Part 2."
+    fig2,ax2= swarm.single_plot(g_position[2:4],g_input[2:4],legend= True,
+                                lby= -36, uby= 63, lbx= -58, showy= False,
+                                title= title,save= save)
     print(swarm.position)
     plt.show()
 
