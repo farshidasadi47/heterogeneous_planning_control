@@ -6,6 +6,7 @@
 ########## Libraries ###################################################
 import os
 import sys
+import string
 
 import cv2
 
@@ -258,14 +259,21 @@ class ProcessVideo:
         # Frame parameters and center.
         f_height, f_width= frame.shape[:2]
         center= (xc, yc)
-        return f_width, f_height, center
+        return f_width, f_height, center, (x,y,w,h)
 
     def _process_video(self, sections, vid_path):
         """
         Gets frames for each section.
         """
+        crop_flag= True
         cap= cv2.VideoCapture(vid_path)
         frames= []
+        # Find center and limits
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        _, frame= cap.read()
+        frame= frame[:,:,::-1]
+        self.f_width,self.f_height,self._center,bound= self._find_center(frame)
+        x,y,w,h= bound
         for section in sections:
             frame_sec= []
             for line in section:
@@ -273,11 +281,13 @@ class ProcessVideo:
                 # Set frame index and store frame.
                 cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
                 _, frame= cap.read()
+                if crop_flag:
+                    frame= frame[y:y+h,x:x+w]
                 frame_sec.append(frame[:,:,::-1])
             frames.append(frame_sec)
-        # Find center and limits
-        frame= frame[:,:,::-1]
-        self.f_width, self.f_height, self._center= self._find_center(frame)
+        if crop_flag:
+            self.f_height, self.f_width= frame.shape[:-1]
+            self._center= (int(self.f_width/2), int(self.f_height/2))
         return frames
 
     def _blend_frames(self, frames, sections):
@@ -308,7 +318,7 @@ class ProcessVideo:
 
     def _simplot_set(self, ax, title, fontsize= None):
         """Sets the plot configuration."""
-        ax.set_title(title, fontsize= fontsize, pad= 7)
+        ax.set_title(title, fontsize= fontsize, pad= 12)
         ax.set_xlabel('x axis',fontsize= fontsize)
         ax.set_ylabel('y axis',fontsize= fontsize)
         ax.axis("off")
@@ -318,45 +328,49 @@ class ProcessVideo:
         # Put legends.
         # Add robot legends.
         if path:
-            ls= self._styles[1][1]
+            ls= self._styles[0][1]
         else:
             ls= "none"
         legends= lambda ls,c,m,ms,mfc,mec,l: plt.plot([],[],
                                               linestyle=ls,
-                                              linewidth= 2.5,
+                                              linewidth= 3.5,
                                               color=c,
                                               marker=m,
                                               markersize= ms,
                                               markerfacecolor=mfc,
                                               markeredgecolor= mec,
-                                              label= l)[0]
+                                              label= l,
+                                              )[0]
         # Robots and path.
         handles= [legends(ls, 
                           self.light(self._colors[robot]), 
                           self._markers[robot],
-                          15,
+                          22,
                           self.light(self._colors[robot],light),
                           #self.light(self._colors[robot],light),
                           'k',
                           f"Robot {robot}"
                   ) for robot in range(n_robot)]
-        labels= [f"Robot {robot}" for robot in range(n_robot)]
-        handlelength= 3
+        labels= [f"R{robot}" for robot in range(n_robot)]
+        handlelength= 1.5
         # Shape
         if shape:
-            handlelength= 2
-            ls= self._styles[2][1]
-            handles+= [legends(ls, "orange", "o", 7, "orange",
+            handlelength= 1.5
+            ls= self._styles[0][1]
+            handles+= [legends(ls, "orange", "o", 20, "orange",
                                    "orange", f"Target shape")]
-            labels+= [f"Target shape"]
+            labels+= [f"Desired"]
         ax.legend(handles= handles, labels= labels,
                 handler_map={tuple: HandlerTuple(ndivide=None)},
-                fontsize= 24,
+                fontsize= 40,
                 framealpha= .8,
                 facecolor= "w",
                 handlelength= handlelength,
-                handletextpad=0.05,
-                labelspacing= 0.05,
+                handletextpad=0.15,
+                labelspacing= 0.01,
+                borderpad= .15,
+                borderaxespad= .1,
+                loc= "best",
         )
         return ax
 
@@ -380,16 +394,17 @@ class ProcessVideo:
                         marker= self._markers[robot],
                         markerfacecolor= self.light(self._colors[robot],light),
                         markeredgecolor= "k",#self.light(self._colors[robot],.75),
-                        markersize= 15,
+                        markersize= 22,
                         zorder= 3,
                     )
         return ax
 
     def plot_single(self, blend, section, step, light, marker_spacing= 30,
-                                                                   title=None):
+                                                title=None, legend=False):
         """
         Plots single section of movements.
         """
+        letter= string.ascii_letters[step]
         fig, ax = plt.subplots(layout="constrained")
         # Plot the blended frame.
         ax.imshow(blend)
@@ -406,7 +421,7 @@ class ProcessVideo:
         for robot in range(int(len(pixes)/2)):
             ax.plot(pixels[:-1,2*robot], pixels[:-1,2*robot+1],
                 color= self.light(self._colors[robot]),
-                linewidth=2.5,
+                linewidth=7.0,
                 linestyle= self._styles[1][1],
             )
         # Draw arrowed part.
@@ -424,7 +439,7 @@ class ProcessVideo:
                     connectionstyle="arc3",
                     shrinkB=10,
                     color= self.light(self._colors[robot]),
-                    linewidth= 2.5,
+                    linewidth= 7.0,
                     linestyle= self._styles[1][1],
                 ),
             )
@@ -437,7 +452,7 @@ class ProcessVideo:
                         (self.f_height-pixels[-2,2*robot+1]-.5)/self.f_height),
                 textcoords="axes fraction",
                 arrowprops=dict(
-                    arrowstyle="-|>,head_length=1.0,head_width=0.4",
+                    arrowstyle="-|>,head_length=1.15,head_width=0.8",
                     connectionstyle="arc3",
                     facecolor= self.light(self._colors[robot],light),
                     edgecolor=self.light("k",0),
@@ -446,14 +461,15 @@ class ProcessVideo:
             )
         # Plot markers.
         ax= self._plot_markers(ax, pixels, section, light, )#marker_spacing)
-        # Plot legends.
-        ax= self._plot_legends(ax,int(len(pixes)/2), light)
+        if legend and (step<1):
+            # Plot legends.
+            ax= self._plot_legends(ax,int(len(pixes)/2), light)
         # Set plot border and title
         if title is None:
             mode= int(input_cmd[2])
-            move_name= "pivot walking" if mode else "tumbling"
-            title=f'Swarm transition step {step}: {move_name} in mode {mode:1d}'
-        ax= self._simplot_set(ax, title,28)
+            move_name= "Walking" if mode else "Tumbling"
+            title=f'({letter}): {move_name} in Mode {mode:1d}.'
+        ax= self._simplot_set(ax, title,60)
         return fig, ax
     
     def _save_plot(self, fig, name):
@@ -461,7 +477,7 @@ class ProcessVideo:
         fig_name = os.path.join(os.getcwd(), f"{name}.pdf")
         fig.savefig(fig_name,bbox_inches='tight',pad_inches=0.05)
     
-    def plot_transition(self, name= "example", title= None, 
+    def plot_transition(self, name= "example", title= None, legend= False,
                                                save= False, light= 0.6):
         FIG_AX= []
         sections= self.sections
@@ -470,7 +486,8 @@ class ProcessVideo:
             input_cmd, mode, X, XI, XG, SHAPE= self._itemize(section[-1])
             if np.any(input_cmd == 999):
                 continue
-            fig, ax= self.plot_single(blend, section, i, light, title=title)
+            fig, ax=self.plot_single(blend,section,i,light,
+                                     title=title,legend= legend)
             # Add frame to whole plot.
             fig.patch.set_edgecolor((0, 0, 0, 1.0))
             fig.patch.set_linewidth(2)
@@ -479,8 +496,8 @@ class ProcessVideo:
             FIG_AX.append((fig,ax))
         return FIG_AX
     
-    def plot_shape(self, name, title, light= 0.6,
-                         save= False, desired= False, initial= False,shrink= 0):
+    def plot_shape(self, name, title,  light= 0.6, save= False,  legend= True,
+                         desired= False, initial= False,shrink= 0):
         """
         Draws final pattern of the robots.
         """
@@ -509,7 +526,7 @@ class ProcessVideo:
                 marker= self._markers[robot],
                 markerfacecolor= self.light(self._colors[robot],light),
                 markeredgecolor= "k",#self.light(self._colors[robot],.75),
-                markersize= 15,
+                markersize= 22,
                 zorder= 3,
             )
         # Plot shapes.
@@ -520,8 +537,8 @@ class ProcessVideo:
             pixes= np.reshape(pixes, (-1,2)).astype(int)
         for inds in SHAPE:
             ax.plot(pixes[inds,0], pixes[inds,1],
-                ls= self._styles[2][1], lw= 2.5, c="orange",
-                marker= "o", markersize= 7,
+                ls= self._styles[2][1], lw= 6.0, c="orange",
+                marker= "o", markersize= 20,
                 zorder= 1,
             )
             """ ax.annotate("",
@@ -543,14 +560,10 @@ class ProcessVideo:
                 zorder= 1,
             ) """
         # Plot legends.
-        ax= self._plot_legends(ax,int(len(pixes)),light,
-                               path=False,shape=desired)
-        #
-        if initial:
-            title= f"Swarm transition: initial positions{title}"
-        else:
-            title= f"Swarm transition: desired positions{title}"
-        ax= self._simplot_set(ax, title,28)
+        if legend:
+            ax= self._plot_legends(ax,int(len(pixes)),light,
+                                   path=False,shape=desired)
+        ax= self._simplot_set(ax, title,60)
         # Add frame to whole plot.
         fig.patch.set_edgecolor((0, 0, 0, 1.0))
         fig.patch.set_linewidth(2)
@@ -617,7 +630,7 @@ def progression():
     #
     process= ProcessVideo(path_lists, length= 28)
     name= "progression_0"
-    title= "Swarm transition: Tumbling via mode 0"
+    title= "(a): Tumbling in Mode 0."
     FIG_AX= process.plot_transition(name,title=title, save=save, light=light)
     # Mode 1
     file_dir= os.path.join(os.getcwd(), "fine_steps", "three", 
@@ -627,7 +640,7 @@ def progression():
     #
     process= ProcessVideo(path_lists, stride= 5)
     name= "progression_1"
-    title= "Swarm transition: Pivot walking via mode 1"
+    title= "(b): Walking in Mode 1."
     FIG_AX+= process.plot_transition(name,title=title, save=save, light=light)
     # Mode 2
     file_dir= os.path.join(os.getcwd(), "fine_steps", "three", 
@@ -637,8 +650,9 @@ def progression():
     #
     process= ProcessVideo(path_lists, stride= 5)
     name= "progression_2"
-    title= "Swarm transition: Pivot walking via mode 2"
-    FIG_AX+= process.plot_transition(name,title=title, save=save, light=light)
+    title= "(c): Walking in Mode 2."
+    FIG_AX+= process.plot_transition(name,title=title, legend= True,
+                                          save=save, light=light)
     plt.show()
 
 def example1():
@@ -651,7 +665,7 @@ def example1():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_1"
     FIG_AX= process.plot_transition(name,save= save,light= light)
-    title= ""
+    title= "(k): Final Positions."
     FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
     plt.show()
 
@@ -666,8 +680,8 @@ def example2():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_2_i"
-    title= ", first repetition"
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    title= "(a): First Repetition."
+    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True)
     # Fifth repetition.
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "five", "QtoR_5iter", "R2_3toR2_4")
@@ -675,7 +689,7 @@ def example2():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_2_l"
-    title= ", last repetition"
+    title= "(b): Last Repetition."
     FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
     # Error plot
     data= np.array([
@@ -687,7 +701,7 @@ def example2():
       #[ -0.92, +2.97, +1.61, -0.70, -1.34, -1.07, -1.68, -0.90, -0.52, +1.73],
     ])
     name="example_2_error"
-    title="Errors versus repeating the algorithm"
+    title="(c): Errors vs Algorithm Repetitions."
     xlabel="Number of iterations $N$ in each repetition"
     ticks= np.array([4,2,2,2,2])
     FIG_AX+= error_plot(name, title, xlabel, data, ticks, save= save)
@@ -704,8 +718,8 @@ def example3():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_3_s"
-    title= ", S shaped target"
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    title= "(a): S-Shaped Target."
+    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True)
     # S to M4M2
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "five", "SMU", "StoM4M2")
@@ -713,8 +727,8 @@ def example3():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_3_m"
-    title= ", M shaped target"
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    title= "(b): M-Shaped Target."
+    FIG_AX+= process.plot_shape(name, title, light, save, False,desired= True)
     # M to U4U3U2
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "five", "SMU", "MtoU4U3U2")
@@ -722,8 +736,8 @@ def example3():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_3_u"
-    title= ", U shaped target"
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    title= "(c): U-Shaped Target."
+    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True)
     # U to Q3Q2
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "five", "SMU", "UtoQ3Q2")
@@ -731,7 +745,7 @@ def example3():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_3_i"
-    title= ", back to initial state"
+    title= "(d): Back to Initials."
     FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
     plt.show()
 
@@ -746,8 +760,8 @@ def example4():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_4_i"
-    title= ""
-    FIG_AX+= process.plot_shape(name, title, light, save, initial=True)
+    title= "(a): Initial Positions."
+    FIG_AX+= process.plot_shape(name, title, light, save,False, initial=True)
     # Q to R
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "four", "passage", "QtoR4")
@@ -755,8 +769,8 @@ def example4():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_4_1"
-    title= ", first stage"
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    title= "(b): First Stage."
+    FIG_AX+= process.plot_shape(name, title, light, save,False, desired= True)
     # R to L
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "four", "passage", "R4toL1")
@@ -764,8 +778,8 @@ def example4():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_4_2"
-    title= ", second stage"
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    title= "(c): Second Stage."
+    FIG_AX+= process.plot_shape(name, title, light, save,False, desired= True)
     # L to Q
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "four", "passage", "L1toQ4")
@@ -773,10 +787,10 @@ def example4():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_4_3"
-    title= ", thrid stage"
+    title= "(d): Final Positions."
     FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
     plt.show()
 
 ########## test section ################################################
 if __name__ == '__main__':
-    example4()
+    progression()
