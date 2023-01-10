@@ -5,6 +5,7 @@
 # Author: Farshid Asadi, farshidasadi47@yahoo.com
 ########## Libraries ###################################################
 import os
+import sys
 from itertools import combinations
 from collections import deque
 from math import remainder
@@ -21,8 +22,14 @@ plt.rcParams['font.family'] = 'Times New Roman'
 plt.rcParams['text.usetex'] = False
 mpl.rcParams['hatch.linewidth'] = .5
 
-from swarm.model import SwarmSpecs
-from swarm.planner import Planner
+try:
+    from swarm.model import SwarmSpecs
+    from swarm.planner import Planner
+except ModuleNotFoundError:
+    # Add parent directory and import modules.
+    sys.path.append(os.path.abspath(".."))
+    from model import SwarmSpecs
+    from planner import Planner
 ########## Functions ###################################################
 class Swarm:
     """This class holds current state of swarm of milirobots."""
@@ -327,7 +334,7 @@ def main():
 
 def case2():
     specs = SwarmSpecs(np.array([[10,5,5],[5,5,10]]), 10)
-    save= True
+    save= False
     specs.d_min= 14
     mode_sequence= [1,1,2,2]*1
     xi = np.array([000,000, 000,-20, 000,+20],dtype=float)
@@ -375,7 +382,7 @@ def case2():
 
 def case3():
     specs = SwarmSpecs(np.array([[10,5,5],[5,5,10]]), 10)
-    save= True
+    save= False
     specs.d_min= 14
     mode_sequence= [1,2,1,2]*1
     xi = np.array([ 000,000,000,-30, 000,+30],dtype=float)
