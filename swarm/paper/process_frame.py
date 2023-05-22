@@ -53,6 +53,7 @@ class ProcessVideo:
         # From camera calibration, localization module. 
         self._p2mm= 0.48970705
         self._mm2p= 1/self._p2mm
+        self._fps = 20
         define_colors(self)
         self._colors = list(self._colors.keys())
         # Replace colors if you want.
@@ -398,9 +399,68 @@ class ProcessVideo:
                         zorder= 3,
                     )
         return ax
+    
+    def _plot_scalebar(self, ax, pos=(70,-80), scale=20, unit="mm"):
+        """Draws a scale bar on the plot."""
+        pos_t = np.array(pos, dtype = float)
+        pos_t[1] += 10
+        pix_t = self._cart2pixel(pos_t)
+        pos_l = np.array(pos, dtype = float)
+        pos_l[0] -= scale/2
+        pos_r = np.array(pos, dtype = float)
+        pos_r[0] += scale/2
+        pix_l = self._cart2pixel(pos_l)
+        pix_r = self._cart2pixel(pos_r)
+        # Text.
+        ax.text(pix_t[0], pix_t[1], f"{scale:02d} {unit}",
+                fontsize= 50, ha="center", va="center")
+        # Scale bar body.
+        ax.annotate("",
+            xy=((pix_r[0]+.5)/self.f_width,
+                (self.f_height-pix_r[1]-0.5)/self.f_height),
+            xycoords="axes fraction",
+            xytext=((pix_l[0]+.5)/self.f_width,
+                    (self.f_height-pix_l[1]-0.5)/self.f_height),
+            textcoords="axes fraction",
+            arrowprops=dict(
+                arrowstyle="-",
+                connectionstyle="arc",
+                color='k',
+                linewidth= 7.0,
+                joinstyle='miter',
+                capstyle='butt',
+            ),
+        )
+        # Scale bar heads.
+        ax.annotate("",
+            xy=((pix_r[0]+.5)/self.f_width,
+                (self.f_height-pix_r[1]-1.0)/self.f_height),
+            xycoords="axes fraction",
+            xytext=((pix_l[0]-0.5)/self.f_width,
+                    (self.f_height-pix_l[1]-1.0)/self.f_height),
+            textcoords="axes fraction",
+            arrowprops=dict(
+                arrowstyle="|-|, widthA=0.5, widthB=.5",
+                connectionstyle="arc",
+                color='k',
+                linewidth= 4.0,
+                joinstyle='miter',
+                capstyle='butt',
+            ),
+        )
+        return ax
+    
+    def _plot_timestamp(self, ax, timestamp, pos= (-100, 75)):
+        """Draws time stamp on the plot."""
+        pix = self._cart2pixel(pos)
+        ax.text(pix[0], pix[1], f"{int(timestamp)} s",
+                        fontsize= 50, ha="left", va="center")
+        return ax
 
     def plot_single(self, blend, section, step, light, marker_spacing= 30,
-                                                title=None, legend=False):
+                                                title=None, legend=False,
+                                                scalebar=False,
+                                                timestamp=False):
         """
         Plots single section of movements.
         """
@@ -461,6 +521,11 @@ class ProcessVideo:
             )
         # Plot markers.
         ax= self._plot_markers(ax, pixels, section, light, )#marker_spacing)
+        # Plot scalebar.
+        if scalebar:
+            ax = self._plot_scalebar(ax)
+        if timestamp:
+            ax = self._plot_timestamp(ax, sect[0]/self._fps)
         if legend and (step<1):
             # Plot legends.
             ax= self._plot_legends(ax,int(len(pixes)/2), light)
@@ -478,7 +543,9 @@ class ProcessVideo:
         fig.savefig(fig_name,bbox_inches='tight',pad_inches=0.05)
     
     def plot_transition(self, name= "example", title= None, legend= False,
-                                               save= False, light= 0.6):
+                                               save= False, light= 0.6,
+                                               scalebar=False,
+                                               timestamp=False):
         FIG_AX= []
         sections= self.sections
         blends= self.blends
@@ -487,7 +554,10 @@ class ProcessVideo:
             if np.any(input_cmd == 999):
                 continue
             fig, ax=self.plot_single(blend,section,i,light,
-                                     title=title,legend= legend)
+                                     title=title,legend= legend,
+                                     scalebar=scalebar,
+                                     timestamp=timestamp)
+            scalebar &= False
             # Add frame to whole plot.
             fig.patch.set_edgecolor((0, 0, 0, 1.0))
             fig.patch.set_linewidth(2)
@@ -497,7 +567,8 @@ class ProcessVideo:
         return FIG_AX
     
     def plot_shape(self, name, title,  light= 0.6, save= False,  legend= True,
-                         desired= False, initial= False,shrink= 0):
+                         desired= False, initial= False,shrink= 0,
+                         scalebar=False, timestamp=-1):
         """
         Draws final pattern of the robots.
         """
@@ -559,6 +630,11 @@ class ProcessVideo:
                 ),
                 zorder= 1,
             ) """
+        # Plot scalebar.
+        if scalebar:
+            ax = self._plot_scalebar(ax)
+        if timestamp >= 0:
+            ax = self._plot_timestamp(ax, timestamp)
         # Plot legends.
         if legend:
             ax= self._plot_legends(ax,int(len(pixes)),light,
@@ -596,7 +672,8 @@ def error_plot(name, title, xlabel, data, ticks, save= False):
     ax.set_title(title,fontsize= 38, pad= 11)
     # Set legends.
     handles, labels=[], []
-    handles+= [plt.plot([],[],ls="",markerfacecolor= "r", marker="D", markersize=10)[0]]
+    handles+= [plt.plot([],[],ls="",markerfacecolor= "r",
+                        marker="D", markersize=10)[0]]
     labels+=["Mean"]
     handles+= [plt.plot([],[],ls="-",color= "b", lw= 4)[0]]
     labels+=["One standard deviation range"]
@@ -631,7 +708,8 @@ def progression():
     process= ProcessVideo(path_lists, length= 28)
     name= "progression_0"
     title= "(a): Tumbling in Mode 0."
-    FIG_AX= process.plot_transition(name,title=title, save=save, light=light)
+    FIG_AX= process.plot_transition(name,title=title, save=save, light=light,
+                                    scalebar=True)
     # Mode 1
     file_dir= os.path.join(os.getcwd(), "fine_steps", "three", 
                                         "modes","mode_1")
@@ -664,9 +742,11 @@ def example1():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_1"
-    FIG_AX= process.plot_transition(name,save= save,light= light)
+    FIG_AX= process.plot_transition(name,save= save,light= light,
+                                    scalebar=True, timestamp=True)
     title= "(k): Final Positions."
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save, desired= True, 
+                                timestamp=171)
     plt.show()
 
 def example2():
@@ -681,7 +761,8 @@ def example2():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_2_i"
     title= "(a): First Repetition."
-    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True,
+                                scalebar=True, timestamp=190)
     # Fifth repetition.
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "five", "QtoR_5iter", "R2_3toR2_4")
@@ -689,8 +770,9 @@ def example2():
                  os.path.join(file_dir,"logs.csv")]
     process= ProcessVideo(path_lists, length= 30)
     name= "example_2_l"
-    title= "(b): Last Repetition."
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    title= "(b): Fifth Repetition."
+    FIG_AX+= process.plot_shape(name, title, light, save, desired= True,
+                                timestamp=415)
     # Error plot
     data= np.array([
       [ -0.60,+12.42, +0.14, -1.68, +5.51,-14.78, +3.64, +6.19, -7.62, +0.44],
@@ -719,7 +801,8 @@ def example3():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_3_s"
     title= "(a): S-Shaped Target."
-    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True,
+                                scalebar=True, timestamp=195)
     # S to M4M2
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "five", "SMU", "StoM4M2")
@@ -728,7 +811,8 @@ def example3():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_3_m"
     title= "(b): M-Shaped Target."
-    FIG_AX+= process.plot_shape(name, title, light, save, False,desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save, False,desired= True,
+                                timestamp=486)
     # M to U4U3U2
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "five", "SMU", "MtoU4U3U2")
@@ -737,7 +821,8 @@ def example3():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_3_u"
     title= "(c): U-Shaped Target."
-    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save, False, desired= True,
+                                timestamp=876)
     # U to Q3Q2
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "five", "SMU", "UtoQ3Q2")
@@ -746,7 +831,8 @@ def example3():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_3_i"
     title= "(d): Back to Initials."
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save, desired= True,
+                                timestamp=1028)
     plt.show()
 
 def example4():
@@ -761,7 +847,8 @@ def example4():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_4_i"
     title= "(a): Initial Positions."
-    FIG_AX+= process.plot_shape(name, title, light, save,False, initial=True)
+    FIG_AX+= process.plot_shape(name, title, light, save,False, initial=True,
+                                scalebar=True, timestamp=0)
     # Q to R
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "four", "passage", "QtoR4")
@@ -770,7 +857,8 @@ def example4():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_4_1"
     title= "(b): First Stage."
-    FIG_AX+= process.plot_shape(name, title, light, save,False, desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save,False, desired= True,
+                                timestamp=149)
     # R to L
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "four", "passage", "R4toL1")
@@ -779,7 +867,8 @@ def example4():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_4_2"
     title= "(c): Second Stage."
-    FIG_AX+= process.plot_shape(name, title, light, save,False, desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save,False, desired= True,
+                                timestamp=160)
     # L to Q
     file_dir= os.path.join(os.getcwd(), "fine_steps",
                                         "four", "passage", "L1toQ4")
@@ -788,7 +877,8 @@ def example4():
     process= ProcessVideo(path_lists, length= 30)
     name= "example_4_3"
     title= "(d): Final Positions."
-    FIG_AX+= process.plot_shape(name, title, light, save, desired= True)
+    FIG_AX+= process.plot_shape(name, title, light, save, desired= True,
+                                timestamp=334)
     plt.show()
 
 ########## test section ################################################
