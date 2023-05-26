@@ -184,14 +184,79 @@ class Swarm:
                        labelbottom=showx, labelleft=showy)
         ax.grid()
 
-    def single_plot(self, data_position, data_input, 
+    def _plot_arrow(self, ax, from_pos, to_pos, color):
+        ax.annotate("",
+            xy=to_pos,
+            xytext=from_pos,
+            arrowprops=dict(
+                arrowstyle="-|>,head_length=1.5,head_width=0.5",
+                connectionstyle="arc3",
+                color= color,
+                linewidth= 0.0,
+            ),
+        )
+        return ax
+    
+    def _plot_circle(self, ax, xy, color, lw=2.0, zorder=0):
+        circ = plt.Circle(xy,
+                          radius=self.specs.tumbling_length/2,
+                          fill=False,
+                          ec=to_rgba(color,0.6),
+                          ls = (0, (5, 5)),
+                          lw=lw,
+                          zorder=zorder
+               )
+        ax.add_patch(circ)
+        return ax
+    
+    def _plot_colliding(self, ax, section, draw_circle):
+        res_max = 1
+        tumbling_length = self.specs.tumbling_length
+        # Search for colliding parts of path.
+        n_points = int(np.linalg.norm(section[0,:2]-section[-1,:2])/res_max)
+        points = np.linspace(section[0], section[-1], n_points + 1)
+        points = np.transpose(points.T.reshape(self.specs.n_robot, 2, -1),
+                              (0,2,1))
+        robots_colliding= set()
+        for pairs in self.specs.robot_pairs:
+            distances = np.linalg.norm(points[pairs[0]]-points[pairs[1]], axis=1)
+            ind_colliding = np.argwhere(distances < tumbling_length).flatten()
+            if ind_colliding.size:
+                for robot in pairs:
+                    robots_colliding.add(robot)
+                    if draw_circle:
+                        """ # Start of collision.
+                        self._plot_circle(ax,
+                                            points[robot][ind_colliding[0]],
+                                            self.specs._colors[robot]
+                                            ) """
+                    # End of collision.
+                    """ self._plot_circle(ax,
+                                      points[robot][ind_colliding[-1]],
+                                      self.specs._colors[robot]
+                                      ) """
+                    # Collision section.
+                    xy = points[robot][ind_colliding[[0,-1]]]
+                    c=to_rgba(self.specs._colors[robot], 0.4)
+                    ax.plot(xy[:,0], 
+                            xy[:,1],
+                            c=c,
+                            linewidth=15,
+                            solid_capstyle="butt",
+                            marker="o",mfc=c,ms=4,
+                            zorder=0,
+                            )
+        return robots_colliding
+
+    def single_plot(self, data_position, data_input,
                           legend= True, showx=True, showy=True,
                           lbx= None, ubx= None, lby=None, uby= None,
                           title= None, save= False):
         """Plots a 2D series of given position."""
         title= 'Swarm transition' if title is None else title
         tumbling_length = self.specs.tumbling_length
-        alpha_s= 0.2
+        alpha_s= 0.1
+        alpha_f= 0.7
         modes_used= set()
         legend_marker= lambda m,c,l: plt.plot([],[],marker=m, color=c,
                                                     markerfacecolor=c,ms=6,
@@ -208,6 +273,9 @@ class Swarm:
                                  facecolor = to_rgba(c, a),
                                  hatch= ha,
                                  )
+        # Legend for collisions.
+        legend_collision= lambda c: plt.plot([],[],color=c,lw=12,alpha=0.4,
+                                             solid_capstyle="butt")[0]
         # Set the figure properties
         fig, ax = plt.subplots(constrained_layout=True)
         fontsize= 24
@@ -228,6 +296,7 @@ class Swarm:
                         linestyle='-', linewidth=1.5,
                         edgecolor= to_rgba(self.specs._colors[robot],1.0),
                         facecolor = to_rgba(self.specs._colors[robot],alpha_s),
+                        zorder=2,
                         )
             ax.add_patch(rect)
             # Draw first section path.
@@ -237,6 +306,10 @@ class Swarm:
                     linestyle= self.specs._styles[robot][1],
                     marker= self.specs._markers[mode],
                     markerfacecolor= self.specs._colors[robot],ms= 8)
+            """ ax = self._plot_arrow(ax,
+                                  sec_position[-2, 2*robot:2*robot+2],
+                                  sec_position[-1, 2*robot:2*robot+2],
+                                  self.specs._colors[robot]) """
             # Draw other sections.
             for sec_position, sec_input in section_iterator:
                 ang= sec_input[-1,1]- np.pi/2
@@ -248,6 +321,10 @@ class Swarm:
                         linestyle= self.specs._styles[robot][1],
                         marker= self.specs._markers[mode],
                         markerfacecolor= self.specs._colors[robot])#'none')
+            ax = self._plot_arrow(ax,
+                                    sec_position[-2, 2*robot:2*robot+2],
+                                    sec_position[-1, 2*robot:2*robot+2],
+                                    self.specs._colors[robot])
             # Draw robot at the end.
             ang= sec_input[-1,1]- np.pi/2
             x = -(w*np.cos(ang) - h*np.sin(ang))/2
@@ -257,10 +334,18 @@ class Swarm:
                         width= w, height= h, angle= np.rad2deg(ang),
                         linestyle='-', linewidth=1.5,
                         edgecolor= to_rgba(self.specs._colors[robot],1.0),
-                        facecolor = to_rgba(self.specs._colors[robot],1.0),
-                        hatch= 'xx',
+                        facecolor = to_rgba(self.specs._colors[robot],alpha_f),
+                        #hatch= 'xx',
+                        zorder=2,
                                  )
             ax.add_patch(rect)
+        # Draw colliding sections.
+        draw_circle=True
+        robots_colliding = set()
+        for sec_position in data_position:
+            robots_colliding |= self._plot_colliding(ax, sec_position,
+                                                     draw_circle)
+            draw_circle &= len(robots_colliding)
         # Calculate plot boundaries
         lbxx, ubxx, lbyy, ubyy= np.inf, -np.inf, np.inf, -np.inf
         for sec_position in data_position:
@@ -292,9 +377,14 @@ class Swarm:
                          for robot in range(self.specs.n_robot))]
         labels+= ["Start"]
         # Add end legends.
-        handles+= [tuple(legend_robot(self.specs._colors[robot],1,'xxxx')
+        handles+= [tuple(legend_robot(self.specs._colors[robot],alpha_f,None)#'xxxx')
                          for robot in range(self.specs.n_robot))]
         labels+= ["End"]
+        # Add collision related legends.
+        if len(robots_colliding):
+            handles+= [tuple(legend_collision(self.specs._colors[robot])
+                            for robot in robots_colliding)]
+            labels+= ["Colliding"]
         if legend:
             ax.legend(handles= handles, labels= labels,
                        handler_map={tuple: HandlerTuple(ndivide=None)},
@@ -329,7 +419,7 @@ def main():
     cum_position, cum_input= swarm.simulate(input_series, xi, step_size)
     g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
     title= None
-    fig, ax= swarm.single_plot(g_position,g_input,legend= True,title= title,save= False)
+    fig, ax= swarm.single_plot(cum_position,cum_input,legend= True,title= title,save= False)
     plt.show()
 
 def case2():
@@ -352,10 +442,10 @@ def case2():
     UU_raw= UU_raw[UU_raw[:,2]>0]
     print(UU_raw)
     cum_position, cum_input= swarm.simulate(UU_raw, xi, step_size)
-    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
-    title= "(a): Controlability Solution."
-    fig1, ax1= swarm.single_plot(g_position,g_input,legend= True,
-                                 lby= -27, uby= 60, lbx= -75,
+    title= "(a): Controllability Solution."
+    fig1, ax1= swarm.single_plot(cum_position,cum_input,
+                                 legend= True,
+                                 lby= -27, uby= 60, lbx= -77,
                                  title= title,save= save)
     print(swarm.position)
     #
@@ -368,13 +458,12 @@ def case2():
     U_raw= U_raw.T
     swarm.reset_state(xi)
     cum_position, cum_input= swarm.simulate(U_raw, xi, step_size)
-    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
     title= "(b): Divided, Part 1."
-    fig2,ax2= swarm.single_plot(g_position[0:1],g_input[0:1],legend= True,
+    fig2,ax2= swarm.single_plot(cum_position[0:2],cum_input[0:2],legend= True,
                                 lby= -27, uby= 60, lbx= -50, showy= False,
                                 title= title,save= save)
     title= "(c): Divided, Part 2."
-    fig2,ax2= swarm.single_plot(g_position[1:3],g_input[1:3],legend= True,
+    fig2,ax2= swarm.single_plot(cum_position[2:4],cum_input[2:4],legend= True,
                                 lby= -27, uby= 60, lbx= -77,showy= False,
                                 title= title,save= save)
     print(swarm.position)
@@ -402,10 +491,9 @@ def case3():
     UU_raw= UU_raw[UU_raw[:,2]>0]
     print(UU_raw)
     cum_position, cum_input= swarm.simulate(UU_raw, xi, step_size)
-    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
-    title= "(a): Controlability Solution."
-    fig1, ax1= swarm.single_plot(g_position,g_input,legend= True,
-                                 lby= -36, uby= 63, lbx= -58,
+    title= "(a): Controllability Solution."
+    fig1, ax1= swarm.single_plot(cum_position,cum_input,legend= True,
+                                 lby= -36, uby= 63, lbx= -61,
                                  title= title,save= save)
     print(swarm.position)
     xf= np.round(swarm.position)
@@ -420,13 +508,12 @@ def case3():
     swarm.reset_state(xi)
     step_size= 10
     cum_position, cum_input= swarm.simulate(U_raw, xi, step_size)
-    g_position, g_input= swarm._regroup_sim_result(paired=True, n_section=1)
     title= "(b): Divided and Rearranged, Part 1."
-    fig2,ax2= swarm.single_plot(g_position[0:2],g_input[0:2],legend= True,
+    fig2,ax2= swarm.single_plot(cum_position[0:2],cum_input[0:2],legend= True,
                                 lby= -36, uby= 63, lbx= -41, showy= False,
                                 title= title,save= save)
     title= "(c): Divided and Rearranged, Part 2."
-    fig2,ax2= swarm.single_plot(g_position[2:4],g_input[2:4],legend= True,
+    fig2,ax2= swarm.single_plot(cum_position[2:4],cum_input[2:4],legend= True,
                                 lby= -36, uby= 63, lbx= -58, showy= False,
                                 title= title,save= save)
     print(swarm.position)
@@ -434,4 +521,4 @@ def case3():
 
 ########## test section ################################################
 if __name__ == '__main__':
-    case3()
+    case2()
