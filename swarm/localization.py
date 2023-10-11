@@ -113,10 +113,10 @@ class Localization():
             hsv_ranges['b'] = {'lb': [np.array([ 90,140, 60],dtype=np.uint8)],
                                'ub': [np.array([115,255,255],dtype=np.uint8)]}
             # Green or 'g'
-            hsv_ranges['g'] = {'lb': [np.array([ 35, 70, 80],dtype=np.uint8)],
-                               'ub': [np.array([ 65,255,255],dtype=np.uint8)]}
+            hsv_ranges['lime'] = {'lb': [np.array([ 45, 70, 50],dtype=np.uint8)],
+                                  'ub': [np.array([ 75,255,255],dtype=np.uint8)]}
             # White or 'm'
-            hsv_ranges['m'] = {'lb': [np.array([155, 80, 70],dtype=np.uint8)],
+            hsv_ranges['fuchsia'] = {'lb': [np.array([155, 80, 70],dtype=np.uint8)],
                                'ub': [np.array([175,255,255],dtype=np.uint8)]}
         #
         self._hsv_ranges = hsv_ranges
