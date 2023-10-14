@@ -8,7 +8,7 @@ Videos related to experimental results to this paper can be seen below:
 
 Example 1: Moving robots to a Y-shaped pattern with specified vertices | Example 3: Moving robots to S, M, U-shaped patterns letter by letter and back to initial positions | Example 4: Moving robots through a passage in three stages and aligning them on the other side
 ---|---|---
-[![Video 1](https://img.youtube.com/vi/W2uLVWL6ExQ/0.jpg)](https://www.youtube.com/watch?v=W2uLVWL6ExQ) | [![Video 2](https://img.youtube.com/vi/iNKHVPFBT9M/0.jpg)](https://www.youtube.com/watch?v=iNKHVPFBT9M) | [![Video 3](https://img.youtube.com/vi/ew8mRx_J4xg/0.jpg)](https://www.youtube.com/watch?v=ew8mRx_J4xg)
+[![Video 1](https://img.youtube.com/vi/BO6eU7nUCqg/0.jpg)](https://www.youtube.com/watch?v=BO6eU7nUCqg) | [![Video 2](https://img.youtube.com/vi/xU0tjNfE78E/0.jpg)](https://www.youtube.com/watch?v=xU0tjNfE78E) | [![Video 3](https://img.youtube.com/vi/2hbBFitbgAU/0.jpg)](https://www.youtube.com/watch?v=2hbBFitbgAU)
 
 ## Structure of the code
 The repository is a ROS2 package and the main code is in `swarm` folder.
